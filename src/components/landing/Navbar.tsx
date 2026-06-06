@@ -22,8 +22,8 @@ export function Navbar() {
             <a href="#faq" className="hover:text-foreground transition-colors">FAQ</a>
           </nav>
           <div className="flex items-center gap-2">
-            <Button variant="ghost" size="sm" className="hidden sm:inline-flex">Entrar</Button>
-            <Button variant="hero" size="sm">Começar grátis</Button>
+            <Link to="/app"><Button variant="ghost" size="sm" className="hidden sm:inline-flex">Entrar</Button></Link>
+            <Link to="/app"><Button variant="hero" size="sm">Abrir console</Button></Link>
           </div>
         </div>
       </div>

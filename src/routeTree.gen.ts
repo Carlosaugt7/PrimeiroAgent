@@ -12,6 +12,7 @@ import { Route as rootRouteImport } from './routes/__root'
 import { Route as AppRouteImport } from './routes/app'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as AppIndexRouteImport } from './routes/app.index'
+import { Route as AppKnowledgeRouteImport } from './routes/app.knowledge'
 import { Route as AppInboxRouteImport } from './routes/app.inbox'
 import { Route as AppAgentsRouteImport } from './routes/app.agents'
 import { Route as AppAgentsIdRouteImport } from './routes/app.agents.$id'
@@ -29,6 +30,11 @@ const IndexRoute = IndexRouteImport.update({
 const AppIndexRoute = AppIndexRouteImport.update({
   id: '/',
   path: '/',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppKnowledgeRoute = AppKnowledgeRouteImport.update({
+  id: '/knowledge',
+  path: '/knowledge',
   getParentRoute: () => AppRoute,
 } as any)
 const AppInboxRoute = AppInboxRouteImport.update({
@@ -52,6 +58,7 @@ export interface FileRoutesByFullPath {
   '/app': typeof AppRouteWithChildren
   '/app/agents': typeof AppAgentsRouteWithChildren
   '/app/inbox': typeof AppInboxRoute
+  '/app/knowledge': typeof AppKnowledgeRoute
   '/app/': typeof AppIndexRoute
   '/app/agents/$id': typeof AppAgentsIdRoute
 }
@@ -59,6 +66,7 @@ export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/app/agents': typeof AppAgentsRouteWithChildren
   '/app/inbox': typeof AppInboxRoute
+  '/app/knowledge': typeof AppKnowledgeRoute
   '/app': typeof AppIndexRoute
   '/app/agents/$id': typeof AppAgentsIdRoute
 }
@@ -68,6 +76,7 @@ export interface FileRoutesById {
   '/app': typeof AppRouteWithChildren
   '/app/agents': typeof AppAgentsRouteWithChildren
   '/app/inbox': typeof AppInboxRoute
+  '/app/knowledge': typeof AppKnowledgeRoute
   '/app/': typeof AppIndexRoute
   '/app/agents/$id': typeof AppAgentsIdRoute
 }
@@ -78,16 +87,24 @@ export interface FileRouteTypes {
     | '/app'
     | '/app/agents'
     | '/app/inbox'
+    | '/app/knowledge'
     | '/app/'
     | '/app/agents/$id'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/app/agents' | '/app/inbox' | '/app' | '/app/agents/$id'
+  to:
+    | '/'
+    | '/app/agents'
+    | '/app/inbox'
+    | '/app/knowledge'
+    | '/app'
+    | '/app/agents/$id'
   id:
     | '__root__'
     | '/'
     | '/app'
     | '/app/agents'
     | '/app/inbox'
+    | '/app/knowledge'
     | '/app/'
     | '/app/agents/$id'
   fileRoutesById: FileRoutesById
@@ -118,6 +135,13 @@ declare module '@tanstack/react-router' {
       path: '/'
       fullPath: '/app/'
       preLoaderRoute: typeof AppIndexRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/app/knowledge': {
+      id: '/app/knowledge'
+      path: '/knowledge'
+      fullPath: '/app/knowledge'
+      preLoaderRoute: typeof AppKnowledgeRouteImport
       parentRoute: typeof AppRoute
     }
     '/app/inbox': {
@@ -159,12 +183,14 @@ const AppAgentsRouteWithChildren = AppAgentsRoute._addFileChildren(
 interface AppRouteChildren {
   AppAgentsRoute: typeof AppAgentsRouteWithChildren
   AppInboxRoute: typeof AppInboxRoute
+  AppKnowledgeRoute: typeof AppKnowledgeRoute
   AppIndexRoute: typeof AppIndexRoute
 }
 
 const AppRouteChildren: AppRouteChildren = {
   AppAgentsRoute: AppAgentsRouteWithChildren,
   AppInboxRoute: AppInboxRoute,
+  AppKnowledgeRoute: AppKnowledgeRoute,
   AppIndexRoute: AppIndexRoute,
 }
 

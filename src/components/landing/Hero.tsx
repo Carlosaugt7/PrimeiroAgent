@@ -1,4 +1,5 @@
 import { Button } from "@/components/ui/button";
+import { Link } from "@tanstack/react-router";
 import { ArrowRight, MessageCircle, Zap } from "lucide-react";
 import heroBg from "@/assets/hero-bg.jpg";
 
@@ -32,10 +33,12 @@ export function Hero() {
         </p>
 
         <div className="mt-10 flex flex-col sm:flex-row gap-3 justify-center">
-          <Button variant="hero" size="xl">
-            Iniciar teste grátis
-            <ArrowRight className="size-4" />
-          </Button>
+          <Link to="/app">
+            <Button variant="hero" size="xl">
+              Iniciar teste grátis
+              <ArrowRight className="size-4" />
+            </Button>
+          </Link>
           <Button variant="outline" size="xl">
             <MessageCircle className="size-4" />
             Ver demonstração

@@ -7,17 +7,9 @@ export const Route = createFileRoute("/app/billing")({
   component: Billing,
 });
 
-const plans = [
-  { name: "Starter", price: "R$ 197", features: ["1 agente", "1.000 msgs/mês", "1 número WhatsApp"] },
-  { name: "Pro", price: "R$ 597", current: true, features: ["5 agentes", "10.000 msgs/mês", "5 números WhatsApp", "Automações"] },
-  { name: "Enterprise", price: "Sob consulta", features: ["Ilimitado", "SSO + RBAC", "SLA 99.9%"] },
-];
+const plans: { name: string; price: string; current?: boolean; features: string[] }[] = [];
 
-const invoices = [
-  { id: "INV-2026-006", date: "01/06/2026", amount: "R$ 597,00", status: "pago" },
-  { id: "INV-2026-005", date: "01/05/2026", amount: "R$ 597,00", status: "pago" },
-  { id: "INV-2026-004", date: "01/04/2026", amount: "R$ 597,00", status: "pago" },
-];
+const invoices: { id: string; date: string; amount: string; status: string }[] = [];
 
 function Billing() {
   const { plan } = useAppStore();

@@ -13,7 +13,7 @@ const invoices: { id: string; date: string; amount: string; status: string }[] =
 
 function Billing() {
   const { plan } = useAppStore();
-  const pct = Math.round((plan.messagesUsed / plan.messagesLimit) * 100);
+  const pct = plan.messagesLimit > 0 ? Math.round((plan.messagesUsed / plan.messagesLimit) * 100) : 0;
 
   return (
     <div className="space-y-8">

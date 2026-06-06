@@ -78,7 +78,7 @@ function IntegrationsPage() {
               <div className="mt-4 space-y-3">
                 <label className="block">
                   <span className="text-xs text-muted-foreground">URL de destino</span>
-                  <input defaultValue="https://hooks.acme.com/agent" className="mt-1 w-full h-9 px-3 rounded-lg bg-secondary border border-border text-sm" />
+                  <input placeholder="https://exemplo.com/webhook" className="mt-1 w-full h-9 px-3 rounded-lg bg-secondary border border-border text-sm" />
                 </label>
                 <div className="rounded-lg bg-secondary/60 border border-border p-3">
                   <p className="text-xs text-muted-foreground">Endpoint do agente (entrada)</p>

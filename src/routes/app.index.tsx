@@ -32,7 +32,7 @@ function Overview() {
     <div className="space-y-8">
       <div className="flex items-end justify-between flex-wrap gap-4">
         <div>
-          <h1 className="font-display text-3xl font-bold">Bem-vinda, Ana 👋</h1>
+          <h1 className="font-display text-3xl font-bold">Bem-vindo 👋</h1>
           <p className="text-muted-foreground mt-1">Resumo dos últimos 30 dias da sua operação.</p>
         </div>
         <Link to="/app/agents">

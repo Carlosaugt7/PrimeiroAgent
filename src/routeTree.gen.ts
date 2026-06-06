@@ -13,6 +13,7 @@ import { Route as AppRouteImport } from './routes/app'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as AppIndexRouteImport } from './routes/app.index'
 import { Route as AppAgentsRouteImport } from './routes/app.agents'
+import { Route as AppAgentsIdRouteImport } from './routes/app.agents.$id'
 
 const AppRoute = AppRouteImport.update({
   id: '/app',
@@ -34,31 +35,39 @@ const AppAgentsRoute = AppAgentsRouteImport.update({
   path: '/agents',
   getParentRoute: () => AppRoute,
 } as any)
+const AppAgentsIdRoute = AppAgentsIdRouteImport.update({
+  id: '/$id',
+  path: '/$id',
+  getParentRoute: () => AppAgentsRoute,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/app': typeof AppRouteWithChildren
-  '/app/agents': typeof AppAgentsRoute
+  '/app/agents': typeof AppAgentsRouteWithChildren
   '/app/': typeof AppIndexRoute
+  '/app/agents/$id': typeof AppAgentsIdRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
-  '/app/agents': typeof AppAgentsRoute
+  '/app/agents': typeof AppAgentsRouteWithChildren
   '/app': typeof AppIndexRoute
+  '/app/agents/$id': typeof AppAgentsIdRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/app': typeof AppRouteWithChildren
-  '/app/agents': typeof AppAgentsRoute
+  '/app/agents': typeof AppAgentsRouteWithChildren
   '/app/': typeof AppIndexRoute
+  '/app/agents/$id': typeof AppAgentsIdRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/app' | '/app/agents' | '/app/'
+  fullPaths: '/' | '/app' | '/app/agents' | '/app/' | '/app/agents/$id'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/app/agents' | '/app'
-  id: '__root__' | '/' | '/app' | '/app/agents' | '/app/'
+  to: '/' | '/app/agents' | '/app' | '/app/agents/$id'
+  id: '__root__' | '/' | '/app' | '/app/agents' | '/app/' | '/app/agents/$id'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -96,16 +105,35 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppAgentsRouteImport
       parentRoute: typeof AppRoute
     }
+    '/app/agents/$id': {
+      id: '/app/agents/$id'
+      path: '/$id'
+      fullPath: '/app/agents/$id'
+      preLoaderRoute: typeof AppAgentsIdRouteImport
+      parentRoute: typeof AppAgentsRoute
+    }
   }
 }
 
+interface AppAgentsRouteChildren {
+  AppAgentsIdRoute: typeof AppAgentsIdRoute
+}
+
+const AppAgentsRouteChildren: AppAgentsRouteChildren = {
+  AppAgentsIdRoute: AppAgentsIdRoute,
+}
+
+const AppAgentsRouteWithChildren = AppAgentsRoute._addFileChildren(
+  AppAgentsRouteChildren,
+)
+
 interface AppRouteChildren {
-  AppAgentsRoute: typeof AppAgentsRoute
+  AppAgentsRoute: typeof AppAgentsRouteWithChildren
   AppIndexRoute: typeof AppIndexRoute
 }
 
 const AppRouteChildren: AppRouteChildren = {
-  AppAgentsRoute: AppAgentsRoute,
+  AppAgentsRoute: AppAgentsRouteWithChildren,
   AppIndexRoute: AppIndexRoute,
 }
 

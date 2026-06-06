@@ -1,7 +1,7 @@
 import { Link, useRouterState } from "@tanstack/react-router";
 import {
   LayoutDashboard, Bot, MessagesSquare, Database, Smartphone,
-  CreditCard, Users, Settings, ShieldCheck, Sparkles,
+  CreditCard, Users, Settings, ShieldCheck, Sparkles, Plug, ScrollText, Rocket,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -12,6 +12,9 @@ const nav: NavItem[] = [
   { to: "/app/inbox", label: "Inbox", icon: MessagesSquare },
   { to: "/app/knowledge", label: "Conhecimento", icon: Database },
   { to: "/app/whatsapp", label: "WhatsApp", icon: Smartphone },
+  { to: "/app/integrations", label: "Integrações", icon: Plug },
+  { to: "/app/logs", label: "Logs & Traces", icon: ScrollText },
+  { to: "/app/deploy", label: "Deploy", icon: Rocket },
   { to: "/app/billing", label: "Planos & uso", icon: CreditCard },
   { to: "/app/team", label: "Equipe", icon: Users },
   { to: "/app/settings", label: "Configurações", icon: Settings },

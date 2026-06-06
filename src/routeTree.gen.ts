@@ -15,8 +15,11 @@ import { Route as AppIndexRouteImport } from './routes/app.index'
 import { Route as AppWhatsappRouteImport } from './routes/app.whatsapp'
 import { Route as AppTeamRouteImport } from './routes/app.team'
 import { Route as AppSettingsRouteImport } from './routes/app.settings'
+import { Route as AppLogsRouteImport } from './routes/app.logs'
 import { Route as AppKnowledgeRouteImport } from './routes/app.knowledge'
+import { Route as AppIntegrationsRouteImport } from './routes/app.integrations'
 import { Route as AppInboxRouteImport } from './routes/app.inbox'
+import { Route as AppDeployRouteImport } from './routes/app.deploy'
 import { Route as AppBillingRouteImport } from './routes/app.billing'
 import { Route as AppAgentsRouteImport } from './routes/app.agents'
 import { Route as AppAdminRouteImport } from './routes/app.admin'
@@ -52,14 +55,29 @@ const AppSettingsRoute = AppSettingsRouteImport.update({
   path: '/settings',
   getParentRoute: () => AppRoute,
 } as any)
+const AppLogsRoute = AppLogsRouteImport.update({
+  id: '/logs',
+  path: '/logs',
+  getParentRoute: () => AppRoute,
+} as any)
 const AppKnowledgeRoute = AppKnowledgeRouteImport.update({
   id: '/knowledge',
   path: '/knowledge',
   getParentRoute: () => AppRoute,
 } as any)
+const AppIntegrationsRoute = AppIntegrationsRouteImport.update({
+  id: '/integrations',
+  path: '/integrations',
+  getParentRoute: () => AppRoute,
+} as any)
 const AppInboxRoute = AppInboxRouteImport.update({
   id: '/inbox',
   path: '/inbox',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppDeployRoute = AppDeployRouteImport.update({
+  id: '/deploy',
+  path: '/deploy',
   getParentRoute: () => AppRoute,
 } as any)
 const AppBillingRoute = AppBillingRouteImport.update({
@@ -89,8 +107,11 @@ export interface FileRoutesByFullPath {
   '/app/admin': typeof AppAdminRoute
   '/app/agents': typeof AppAgentsRouteWithChildren
   '/app/billing': typeof AppBillingRoute
+  '/app/deploy': typeof AppDeployRoute
   '/app/inbox': typeof AppInboxRoute
+  '/app/integrations': typeof AppIntegrationsRoute
   '/app/knowledge': typeof AppKnowledgeRoute
+  '/app/logs': typeof AppLogsRoute
   '/app/settings': typeof AppSettingsRoute
   '/app/team': typeof AppTeamRoute
   '/app/whatsapp': typeof AppWhatsappRoute
@@ -102,8 +123,11 @@ export interface FileRoutesByTo {
   '/app/admin': typeof AppAdminRoute
   '/app/agents': typeof AppAgentsRouteWithChildren
   '/app/billing': typeof AppBillingRoute
+  '/app/deploy': typeof AppDeployRoute
   '/app/inbox': typeof AppInboxRoute
+  '/app/integrations': typeof AppIntegrationsRoute
   '/app/knowledge': typeof AppKnowledgeRoute
+  '/app/logs': typeof AppLogsRoute
   '/app/settings': typeof AppSettingsRoute
   '/app/team': typeof AppTeamRoute
   '/app/whatsapp': typeof AppWhatsappRoute
@@ -117,8 +141,11 @@ export interface FileRoutesById {
   '/app/admin': typeof AppAdminRoute
   '/app/agents': typeof AppAgentsRouteWithChildren
   '/app/billing': typeof AppBillingRoute
+  '/app/deploy': typeof AppDeployRoute
   '/app/inbox': typeof AppInboxRoute
+  '/app/integrations': typeof AppIntegrationsRoute
   '/app/knowledge': typeof AppKnowledgeRoute
+  '/app/logs': typeof AppLogsRoute
   '/app/settings': typeof AppSettingsRoute
   '/app/team': typeof AppTeamRoute
   '/app/whatsapp': typeof AppWhatsappRoute
@@ -133,8 +160,11 @@ export interface FileRouteTypes {
     | '/app/admin'
     | '/app/agents'
     | '/app/billing'
+    | '/app/deploy'
     | '/app/inbox'
+    | '/app/integrations'
     | '/app/knowledge'
+    | '/app/logs'
     | '/app/settings'
     | '/app/team'
     | '/app/whatsapp'
@@ -146,8 +176,11 @@ export interface FileRouteTypes {
     | '/app/admin'
     | '/app/agents'
     | '/app/billing'
+    | '/app/deploy'
     | '/app/inbox'
+    | '/app/integrations'
     | '/app/knowledge'
+    | '/app/logs'
     | '/app/settings'
     | '/app/team'
     | '/app/whatsapp'
@@ -160,8 +193,11 @@ export interface FileRouteTypes {
     | '/app/admin'
     | '/app/agents'
     | '/app/billing'
+    | '/app/deploy'
     | '/app/inbox'
+    | '/app/integrations'
     | '/app/knowledge'
+    | '/app/logs'
     | '/app/settings'
     | '/app/team'
     | '/app/whatsapp'
@@ -218,6 +254,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppSettingsRouteImport
       parentRoute: typeof AppRoute
     }
+    '/app/logs': {
+      id: '/app/logs'
+      path: '/logs'
+      fullPath: '/app/logs'
+      preLoaderRoute: typeof AppLogsRouteImport
+      parentRoute: typeof AppRoute
+    }
     '/app/knowledge': {
       id: '/app/knowledge'
       path: '/knowledge'
@@ -225,11 +268,25 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppKnowledgeRouteImport
       parentRoute: typeof AppRoute
     }
+    '/app/integrations': {
+      id: '/app/integrations'
+      path: '/integrations'
+      fullPath: '/app/integrations'
+      preLoaderRoute: typeof AppIntegrationsRouteImport
+      parentRoute: typeof AppRoute
+    }
     '/app/inbox': {
       id: '/app/inbox'
       path: '/inbox'
       fullPath: '/app/inbox'
       preLoaderRoute: typeof AppInboxRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/app/deploy': {
+      id: '/app/deploy'
+      path: '/deploy'
+      fullPath: '/app/deploy'
+      preLoaderRoute: typeof AppDeployRouteImport
       parentRoute: typeof AppRoute
     }
     '/app/billing': {
@@ -279,8 +336,11 @@ interface AppRouteChildren {
   AppAdminRoute: typeof AppAdminRoute
   AppAgentsRoute: typeof AppAgentsRouteWithChildren
   AppBillingRoute: typeof AppBillingRoute
+  AppDeployRoute: typeof AppDeployRoute
   AppInboxRoute: typeof AppInboxRoute
+  AppIntegrationsRoute: typeof AppIntegrationsRoute
   AppKnowledgeRoute: typeof AppKnowledgeRoute
+  AppLogsRoute: typeof AppLogsRoute
   AppSettingsRoute: typeof AppSettingsRoute
   AppTeamRoute: typeof AppTeamRoute
   AppWhatsappRoute: typeof AppWhatsappRoute
@@ -291,8 +351,11 @@ const AppRouteChildren: AppRouteChildren = {
   AppAdminRoute: AppAdminRoute,
   AppAgentsRoute: AppAgentsRouteWithChildren,
   AppBillingRoute: AppBillingRoute,
+  AppDeployRoute: AppDeployRoute,
   AppInboxRoute: AppInboxRoute,
+  AppIntegrationsRoute: AppIntegrationsRoute,
   AppKnowledgeRoute: AppKnowledgeRoute,
+  AppLogsRoute: AppLogsRoute,
   AppSettingsRoute: AppSettingsRoute,
   AppTeamRoute: AppTeamRoute,
   AppWhatsappRoute: AppWhatsappRoute,

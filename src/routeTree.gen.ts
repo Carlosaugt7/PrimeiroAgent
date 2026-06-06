@@ -12,6 +12,7 @@ import { Route as rootRouteImport } from './routes/__root'
 import { Route as AppRouteImport } from './routes/app'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as AppIndexRouteImport } from './routes/app.index'
+import { Route as AppWhatsappRouteImport } from './routes/app.whatsapp'
 import { Route as AppKnowledgeRouteImport } from './routes/app.knowledge'
 import { Route as AppInboxRouteImport } from './routes/app.inbox'
 import { Route as AppAgentsRouteImport } from './routes/app.agents'
@@ -30,6 +31,11 @@ const IndexRoute = IndexRouteImport.update({
 const AppIndexRoute = AppIndexRouteImport.update({
   id: '/',
   path: '/',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppWhatsappRoute = AppWhatsappRouteImport.update({
+  id: '/whatsapp',
+  path: '/whatsapp',
   getParentRoute: () => AppRoute,
 } as any)
 const AppKnowledgeRoute = AppKnowledgeRouteImport.update({
@@ -59,6 +65,7 @@ export interface FileRoutesByFullPath {
   '/app/agents': typeof AppAgentsRouteWithChildren
   '/app/inbox': typeof AppInboxRoute
   '/app/knowledge': typeof AppKnowledgeRoute
+  '/app/whatsapp': typeof AppWhatsappRoute
   '/app/': typeof AppIndexRoute
   '/app/agents/$id': typeof AppAgentsIdRoute
 }
@@ -67,6 +74,7 @@ export interface FileRoutesByTo {
   '/app/agents': typeof AppAgentsRouteWithChildren
   '/app/inbox': typeof AppInboxRoute
   '/app/knowledge': typeof AppKnowledgeRoute
+  '/app/whatsapp': typeof AppWhatsappRoute
   '/app': typeof AppIndexRoute
   '/app/agents/$id': typeof AppAgentsIdRoute
 }
@@ -77,6 +85,7 @@ export interface FileRoutesById {
   '/app/agents': typeof AppAgentsRouteWithChildren
   '/app/inbox': typeof AppInboxRoute
   '/app/knowledge': typeof AppKnowledgeRoute
+  '/app/whatsapp': typeof AppWhatsappRoute
   '/app/': typeof AppIndexRoute
   '/app/agents/$id': typeof AppAgentsIdRoute
 }
@@ -88,6 +97,7 @@ export interface FileRouteTypes {
     | '/app/agents'
     | '/app/inbox'
     | '/app/knowledge'
+    | '/app/whatsapp'
     | '/app/'
     | '/app/agents/$id'
   fileRoutesByTo: FileRoutesByTo
@@ -96,6 +106,7 @@ export interface FileRouteTypes {
     | '/app/agents'
     | '/app/inbox'
     | '/app/knowledge'
+    | '/app/whatsapp'
     | '/app'
     | '/app/agents/$id'
   id:
@@ -105,6 +116,7 @@ export interface FileRouteTypes {
     | '/app/agents'
     | '/app/inbox'
     | '/app/knowledge'
+    | '/app/whatsapp'
     | '/app/'
     | '/app/agents/$id'
   fileRoutesById: FileRoutesById
@@ -135,6 +147,13 @@ declare module '@tanstack/react-router' {
       path: '/'
       fullPath: '/app/'
       preLoaderRoute: typeof AppIndexRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/app/whatsapp': {
+      id: '/app/whatsapp'
+      path: '/whatsapp'
+      fullPath: '/app/whatsapp'
+      preLoaderRoute: typeof AppWhatsappRouteImport
       parentRoute: typeof AppRoute
     }
     '/app/knowledge': {
@@ -184,6 +203,7 @@ interface AppRouteChildren {
   AppAgentsRoute: typeof AppAgentsRouteWithChildren
   AppInboxRoute: typeof AppInboxRoute
   AppKnowledgeRoute: typeof AppKnowledgeRoute
+  AppWhatsappRoute: typeof AppWhatsappRoute
   AppIndexRoute: typeof AppIndexRoute
 }
 
@@ -191,6 +211,7 @@ const AppRouteChildren: AppRouteChildren = {
   AppAgentsRoute: AppAgentsRouteWithChildren,
   AppInboxRoute: AppInboxRoute,
   AppKnowledgeRoute: AppKnowledgeRoute,
+  AppWhatsappRoute: AppWhatsappRoute,
   AppIndexRoute: AppIndexRoute,
 }
 

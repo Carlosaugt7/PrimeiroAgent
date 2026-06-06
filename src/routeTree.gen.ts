@@ -19,6 +19,7 @@ import { Route as AppKnowledgeRouteImport } from './routes/app.knowledge'
 import { Route as AppInboxRouteImport } from './routes/app.inbox'
 import { Route as AppBillingRouteImport } from './routes/app.billing'
 import { Route as AppAgentsRouteImport } from './routes/app.agents'
+import { Route as AppAdminRouteImport } from './routes/app.admin'
 import { Route as AppAgentsIdRouteImport } from './routes/app.agents.$id'
 
 const AppRoute = AppRouteImport.update({
@@ -71,6 +72,11 @@ const AppAgentsRoute = AppAgentsRouteImport.update({
   path: '/agents',
   getParentRoute: () => AppRoute,
 } as any)
+const AppAdminRoute = AppAdminRouteImport.update({
+  id: '/admin',
+  path: '/admin',
+  getParentRoute: () => AppRoute,
+} as any)
 const AppAgentsIdRoute = AppAgentsIdRouteImport.update({
   id: '/$id',
   path: '/$id',
@@ -80,6 +86,7 @@ const AppAgentsIdRoute = AppAgentsIdRouteImport.update({
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/app': typeof AppRouteWithChildren
+  '/app/admin': typeof AppAdminRoute
   '/app/agents': typeof AppAgentsRouteWithChildren
   '/app/billing': typeof AppBillingRoute
   '/app/inbox': typeof AppInboxRoute
@@ -92,6 +99,7 @@ export interface FileRoutesByFullPath {
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/app/admin': typeof AppAdminRoute
   '/app/agents': typeof AppAgentsRouteWithChildren
   '/app/billing': typeof AppBillingRoute
   '/app/inbox': typeof AppInboxRoute
@@ -106,6 +114,7 @@ export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/app': typeof AppRouteWithChildren
+  '/app/admin': typeof AppAdminRoute
   '/app/agents': typeof AppAgentsRouteWithChildren
   '/app/billing': typeof AppBillingRoute
   '/app/inbox': typeof AppInboxRoute
@@ -121,6 +130,7 @@ export interface FileRouteTypes {
   fullPaths:
     | '/'
     | '/app'
+    | '/app/admin'
     | '/app/agents'
     | '/app/billing'
     | '/app/inbox'
@@ -133,6 +143,7 @@ export interface FileRouteTypes {
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
+    | '/app/admin'
     | '/app/agents'
     | '/app/billing'
     | '/app/inbox'
@@ -146,6 +157,7 @@ export interface FileRouteTypes {
     | '__root__'
     | '/'
     | '/app'
+    | '/app/admin'
     | '/app/agents'
     | '/app/billing'
     | '/app/inbox'
@@ -234,6 +246,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppAgentsRouteImport
       parentRoute: typeof AppRoute
     }
+    '/app/admin': {
+      id: '/app/admin'
+      path: '/admin'
+      fullPath: '/app/admin'
+      preLoaderRoute: typeof AppAdminRouteImport
+      parentRoute: typeof AppRoute
+    }
     '/app/agents/$id': {
       id: '/app/agents/$id'
       path: '/$id'
@@ -257,6 +276,7 @@ const AppAgentsRouteWithChildren = AppAgentsRoute._addFileChildren(
 )
 
 interface AppRouteChildren {
+  AppAdminRoute: typeof AppAdminRoute
   AppAgentsRoute: typeof AppAgentsRouteWithChildren
   AppBillingRoute: typeof AppBillingRoute
   AppInboxRoute: typeof AppInboxRoute
@@ -268,6 +288,7 @@ interface AppRouteChildren {
 }
 
 const AppRouteChildren: AppRouteChildren = {
+  AppAdminRoute: AppAdminRoute,
   AppAgentsRoute: AppAgentsRouteWithChildren,
   AppBillingRoute: AppBillingRoute,
   AppInboxRoute: AppInboxRoute,

@@ -1,4 +1,5 @@
 import { Button } from "@/components/ui/button";
+import { Link } from "@tanstack/react-router";
 import { ArrowRight, MessageCircle, Zap } from "lucide-react";
 import heroBg from "@/assets/hero-bg.jpg";
 

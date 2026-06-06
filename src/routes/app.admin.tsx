@@ -5,14 +5,7 @@ export const Route = createFileRoute("/app/admin")({
   component: AdminSaaS,
 });
 
-const tenants = [
-  { name: "Acme Comércio", plan: "Pro", mrr: 597, agents: 5, status: "ativo" },
-  { name: "Clínica Aurora", plan: "Starter", mrr: 197, agents: 1, status: "ativo" },
-  { name: "Imobiliária Vega", plan: "Pro", mrr: 597, agents: 4, status: "ativo" },
-  { name: "EduMax Cursos", plan: "Enterprise", mrr: 4900, agents: 28, status: "ativo" },
-  { name: "Bistrô Norte", plan: "Starter", mrr: 197, agents: 1, status: "trial" },
-  { name: "TechParts B2B", plan: "Pro", mrr: 597, agents: 3, status: "inadimplente" },
-];
+const tenants: { name: string; plan: string; mrr: number; agents: number; status: string }[] = [];
 
 function AdminSaaS() {
   const mrr = tenants.reduce((s, t) => s + t.mrr, 0);

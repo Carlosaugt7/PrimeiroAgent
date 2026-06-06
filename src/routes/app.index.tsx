@@ -46,7 +46,7 @@ function Overview() {
         <StatCard icon={Bot} label="Agentes online" value={`${online}/${agents.length}`} />
         <StatCard icon={MessageCircle} label="Mensagens (30d)" value={totalMsgs.toLocaleString("pt-BR")} delta="+18%" />
         <StatCard icon={TrendingUp} label="Conversões (30d)" value={totalConv.toLocaleString("pt-BR")} delta="+9%" />
-        <StatCard icon={Zap} label="Uso do plano" value={`${Math.round((plan.messagesUsed / plan.messagesLimit) * 100)}%`} />
+        <StatCard icon={Zap} label="Uso do plano" value={plan.messagesLimit > 0 ? `${Math.round((plan.messagesUsed / plan.messagesLimit) * 100)}%` : "—"} />
       </div>
 
       <div className="grid lg:grid-cols-3 gap-5">

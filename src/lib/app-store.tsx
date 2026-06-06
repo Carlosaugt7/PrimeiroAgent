@@ -160,7 +160,7 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
 
   const value = useMemo<AppState>(() => ({
     agents, docs, conversations, users, integrations, logs, deployments,
-    plan: { name: "Pro", price: "R$ 597", renewsAt: "30/06/2026", messagesUsed: 7710, messagesLimit: 10000 },
+    plan: { name: "—", price: "—", renewsAt: "—", messagesUsed: 0, messagesLimit: 0 },
     createAgent: (a) => {
       const id = `ag_${Date.now()}`;
       setAgents((prev) => [...prev, baseAgent({ ...a, id })]);

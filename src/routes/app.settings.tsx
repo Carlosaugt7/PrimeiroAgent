@@ -14,22 +14,19 @@ function Settings() {
       </div>
 
       <Section title="Workspace">
-        <Field label="Nome da empresa" value="Acme Comércio Ltda" />
-        <Field label="Subdomínio" value="acme.agenthub.ai" />
+        <Field label="Nome da empresa" value="—" />
+        <Field label="Subdomínio" value="—" />
         <Field label="Fuso horário" value="America/Sao_Paulo" />
       </Section>
 
       <Section title="Integrações">
-        <Integration name="Evolution API" status="conectado" desc="WhatsApp Business · região São Paulo" />
-        <Integration name="OpenAI" status="conectado" desc="Modelos GPT-4o disponíveis" />
-        <Integration name="Webhook personalizado" status="pendente" desc="Eventos de conversas em tempo real" />
-        <Integration name="CRM (HubSpot)" status="desconectado" desc="Sincronize contatos e leads" />
+        <p className="text-sm text-muted-foreground">Nenhuma integração configurada.</p>
       </Section>
 
       <Section title="Segurança">
-        <Field label="Auditoria de eventos" value="ativada (90 dias)" />
-        <Field label="LGPD · Data Processing Agreement" value="assinado em 12/03/2026" />
-        <Field label="2FA obrigatório" value="ativado" />
+        <Field label="Auditoria de eventos" value="—" />
+        <Field label="LGPD · Data Processing Agreement" value="—" />
+        <Field label="2FA obrigatório" value="—" />
       </Section>
 
       <div className="rounded-2xl border border-destructive/30 bg-destructive/5 p-5">

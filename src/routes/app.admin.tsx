@@ -21,9 +21,9 @@ function AdminSaaS() {
 
       <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4">
         <Stat icon={Building2} label="Tenants ativos" value={tenants.filter((t) => t.status === "ativo").length.toString()} />
-        <Stat icon={DollarSign} label="MRR" value={`R$ ${mrr.toLocaleString("pt-BR")}`} delta="+12%" />
-        <Stat icon={Users} label="Usuários totais" value="248" delta="+9%" />
-        <Stat icon={TrendingUp} label="Churn (30d)" value="2.1%" />
+        <Stat icon={DollarSign} label="MRR" value={`R$ ${mrr.toLocaleString("pt-BR")}`} />
+        <Stat icon={Users} label="Usuários totais" value="0" />
+        <Stat icon={TrendingUp} label="Churn (30d)" value="—" />
       </div>
 
       <div className="rounded-2xl bg-gradient-card border border-border overflow-hidden">

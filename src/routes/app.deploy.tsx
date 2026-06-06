@@ -20,7 +20,7 @@ function DeployPage() {
       <div className="grid md:grid-cols-3 gap-4">
         <Stat label="Agentes em produção" value={String(deployments.filter((d) => d.env === "prod" && d.status === "ativo").length)} />
         <Stat label="Em homologação" value={String(deployments.filter((d) => d.env === "dev").length)} />
-        <Stat label="Último deploy" value="hoje · 09:10" />
+        <Stat label="Último deploy" value={deployments.length ? deployments[deployments.length - 1].deployedAt : "—"} />
       </div>
 
       <div className="space-y-3">

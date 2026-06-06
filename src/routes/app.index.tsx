@@ -32,7 +32,7 @@ function Overview() {
     <div className="space-y-8">
       <div className="flex items-end justify-between flex-wrap gap-4">
         <div>
-          <h1 className="font-display text-3xl font-bold">Bem-vinda, Ana 👋</h1>
+          <h1 className="font-display text-3xl font-bold">Bem-vindo 👋</h1>
           <p className="text-muted-foreground mt-1">Resumo dos últimos 30 dias da sua operação.</p>
         </div>
         <Link to="/app/agents">
@@ -46,7 +46,7 @@ function Overview() {
         <StatCard icon={Bot} label="Agentes online" value={`${online}/${agents.length}`} />
         <StatCard icon={MessageCircle} label="Mensagens (30d)" value={totalMsgs.toLocaleString("pt-BR")} delta="+18%" />
         <StatCard icon={TrendingUp} label="Conversões (30d)" value={totalConv.toLocaleString("pt-BR")} delta="+9%" />
-        <StatCard icon={Zap} label="Uso do plano" value={`${Math.round((plan.messagesUsed / plan.messagesLimit) * 100)}%`} />
+        <StatCard icon={Zap} label="Uso do plano" value={plan.messagesLimit > 0 ? `${Math.round((plan.messagesUsed / plan.messagesLimit) * 100)}%` : "—"} />
       </div>
 
       <div className="grid lg:grid-cols-3 gap-5">

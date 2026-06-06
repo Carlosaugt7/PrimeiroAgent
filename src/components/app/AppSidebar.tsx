@@ -57,8 +57,8 @@ export function AppSidebar() {
 
       <div className="mt-auto rounded-xl bg-gradient-card border border-border p-4">
         <p className="text-xs text-muted-foreground">Workspace</p>
-        <p className="font-display font-semibold">Acme Comércio Ltda</p>
-        <p className="text-xs text-muted-foreground mt-1">Plano Pro · 30/06</p>
+        <p className="font-display font-semibold">—</p>
+        <p className="text-xs text-muted-foreground mt-1">Sem plano ativo</p>
       </div>
     </aside>
   );

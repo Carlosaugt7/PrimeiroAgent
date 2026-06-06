@@ -5,14 +5,7 @@ export const Route = createFileRoute("/app/admin")({
   component: AdminSaaS,
 });
 
-const tenants = [
-  { name: "Acme Comércio", plan: "Pro", mrr: 597, agents: 5, status: "ativo" },
-  { name: "Clínica Aurora", plan: "Starter", mrr: 197, agents: 1, status: "ativo" },
-  { name: "Imobiliária Vega", plan: "Pro", mrr: 597, agents: 4, status: "ativo" },
-  { name: "EduMax Cursos", plan: "Enterprise", mrr: 4900, agents: 28, status: "ativo" },
-  { name: "Bistrô Norte", plan: "Starter", mrr: 197, agents: 1, status: "trial" },
-  { name: "TechParts B2B", plan: "Pro", mrr: 597, agents: 3, status: "inadimplente" },
-];
+const tenants: { name: string; plan: string; mrr: number; agents: number; status: string }[] = [];
 
 function AdminSaaS() {
   const mrr = tenants.reduce((s, t) => s + t.mrr, 0);
@@ -28,9 +21,9 @@ function AdminSaaS() {
 
       <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4">
         <Stat icon={Building2} label="Tenants ativos" value={tenants.filter((t) => t.status === "ativo").length.toString()} />
-        <Stat icon={DollarSign} label="MRR" value={`R$ ${mrr.toLocaleString("pt-BR")}`} delta="+12%" />
-        <Stat icon={Users} label="Usuários totais" value="248" delta="+9%" />
-        <Stat icon={TrendingUp} label="Churn (30d)" value="2.1%" />
+        <Stat icon={DollarSign} label="MRR" value={`R$ ${mrr.toLocaleString("pt-BR")}`} />
+        <Stat icon={Users} label="Usuários totais" value="0" />
+        <Stat icon={TrendingUp} label="Churn (30d)" value="—" />
       </div>
 
       <div className="rounded-2xl bg-gradient-card border border-border overflow-hidden">

@@ -13,6 +13,7 @@ import { Route as AppRouteImport } from './routes/app'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as AppIndexRouteImport } from './routes/app.index'
 import { Route as AppWhatsappRouteImport } from './routes/app.whatsapp'
+import { Route as AppTeamRouteImport } from './routes/app.team'
 import { Route as AppKnowledgeRouteImport } from './routes/app.knowledge'
 import { Route as AppInboxRouteImport } from './routes/app.inbox'
 import { Route as AppBillingRouteImport } from './routes/app.billing'
@@ -37,6 +38,11 @@ const AppIndexRoute = AppIndexRouteImport.update({
 const AppWhatsappRoute = AppWhatsappRouteImport.update({
   id: '/whatsapp',
   path: '/whatsapp',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppTeamRoute = AppTeamRouteImport.update({
+  id: '/team',
+  path: '/team',
   getParentRoute: () => AppRoute,
 } as any)
 const AppKnowledgeRoute = AppKnowledgeRouteImport.update({
@@ -72,6 +78,7 @@ export interface FileRoutesByFullPath {
   '/app/billing': typeof AppBillingRoute
   '/app/inbox': typeof AppInboxRoute
   '/app/knowledge': typeof AppKnowledgeRoute
+  '/app/team': typeof AppTeamRoute
   '/app/whatsapp': typeof AppWhatsappRoute
   '/app/': typeof AppIndexRoute
   '/app/agents/$id': typeof AppAgentsIdRoute
@@ -82,6 +89,7 @@ export interface FileRoutesByTo {
   '/app/billing': typeof AppBillingRoute
   '/app/inbox': typeof AppInboxRoute
   '/app/knowledge': typeof AppKnowledgeRoute
+  '/app/team': typeof AppTeamRoute
   '/app/whatsapp': typeof AppWhatsappRoute
   '/app': typeof AppIndexRoute
   '/app/agents/$id': typeof AppAgentsIdRoute
@@ -94,6 +102,7 @@ export interface FileRoutesById {
   '/app/billing': typeof AppBillingRoute
   '/app/inbox': typeof AppInboxRoute
   '/app/knowledge': typeof AppKnowledgeRoute
+  '/app/team': typeof AppTeamRoute
   '/app/whatsapp': typeof AppWhatsappRoute
   '/app/': typeof AppIndexRoute
   '/app/agents/$id': typeof AppAgentsIdRoute
@@ -107,6 +116,7 @@ export interface FileRouteTypes {
     | '/app/billing'
     | '/app/inbox'
     | '/app/knowledge'
+    | '/app/team'
     | '/app/whatsapp'
     | '/app/'
     | '/app/agents/$id'
@@ -117,6 +127,7 @@ export interface FileRouteTypes {
     | '/app/billing'
     | '/app/inbox'
     | '/app/knowledge'
+    | '/app/team'
     | '/app/whatsapp'
     | '/app'
     | '/app/agents/$id'
@@ -128,6 +139,7 @@ export interface FileRouteTypes {
     | '/app/billing'
     | '/app/inbox'
     | '/app/knowledge'
+    | '/app/team'
     | '/app/whatsapp'
     | '/app/'
     | '/app/agents/$id'
@@ -166,6 +178,13 @@ declare module '@tanstack/react-router' {
       path: '/whatsapp'
       fullPath: '/app/whatsapp'
       preLoaderRoute: typeof AppWhatsappRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/app/team': {
+      id: '/app/team'
+      path: '/team'
+      fullPath: '/app/team'
+      preLoaderRoute: typeof AppTeamRouteImport
       parentRoute: typeof AppRoute
     }
     '/app/knowledge': {
@@ -223,6 +242,7 @@ interface AppRouteChildren {
   AppBillingRoute: typeof AppBillingRoute
   AppInboxRoute: typeof AppInboxRoute
   AppKnowledgeRoute: typeof AppKnowledgeRoute
+  AppTeamRoute: typeof AppTeamRoute
   AppWhatsappRoute: typeof AppWhatsappRoute
   AppIndexRoute: typeof AppIndexRoute
 }
@@ -232,6 +252,7 @@ const AppRouteChildren: AppRouteChildren = {
   AppBillingRoute: AppBillingRoute,
   AppInboxRoute: AppInboxRoute,
   AppKnowledgeRoute: AppKnowledgeRoute,
+  AppTeamRoute: AppTeamRoute,
   AppWhatsappRoute: AppWhatsappRoute,
   AppIndexRoute: AppIndexRoute,
 }

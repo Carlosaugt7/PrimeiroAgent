@@ -28,15 +28,15 @@ function WhatsAppPage() {
         <p className="text-muted-foreground mt-1">Conecte números aos seus agentes em poucos cliques. Sem terminal, sem configuração manual.</p>
       </div>
 
-      <div className="rounded-2xl bg-gradient-card border border-primary/30 p-5 flex items-center gap-4">
-        <div className="size-12 rounded-xl bg-gradient-primary grid place-items-center shadow-glow">
-          <CheckCircle2 className="size-5 text-primary-foreground" />
+      <div className="rounded-2xl bg-gradient-card border border-border p-5 flex items-center gap-4">
+        <div className="size-12 rounded-xl bg-secondary grid place-items-center">
+          <CheckCircle2 className="size-5 text-muted-foreground" />
         </div>
         <div className="flex-1">
-          <p className="font-semibold">Evolution API conectada</p>
-          <p className="text-xs text-muted-foreground">Workspace · Acme Comércio · região: São Paulo</p>
+          <p className="font-semibold">Evolution API</p>
+          <p className="text-xs text-muted-foreground">Configure a conexão em Configurações → Integrações</p>
         </div>
-        <span className="text-xs px-3 py-1 rounded-full bg-success/15 text-success">healthy</span>
+        <span className="text-xs px-3 py-1 rounded-full bg-muted text-muted-foreground">não configurado</span>
       </div>
 
       <div className="grid md:grid-cols-2 gap-4">

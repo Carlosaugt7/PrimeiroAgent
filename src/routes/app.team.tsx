@@ -4,7 +4,7 @@ import { useAuth, type Role } from "@/lib/auth";
 import { logAudit, notify } from "@/lib/notifications";
 import { db } from "@/integrations/firebase/client";
 import {
-  collection, deleteDoc, doc, onSnapshot, orderBy, query, setDoc, updateDoc, where, getDocs,
+  collection, deleteDoc, doc, onSnapshot, orderBy, query, setDoc, updateDoc, where,
 } from "firebase/firestore";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -79,9 +79,6 @@ function Team() {
 
     setBusy(true);
     try {
-      const snap = await getDocs(query(collection(db, "invites"), where("email", "==", e)));
-      if (!snap.empty) return toast.error("Esse e-mail já tem convite em outro workspace");
-
       const id = encodeURIComponent(e);
       await setDoc(doc(db, "invites", id), {
         email: e,

@@ -1,0 +1,102 @@
+import { createFileRoute } from "@tanstack/react-router";
+import { setDoc as fsSetDoc, getDoc as fsGetDoc } from "@/lib/firebase-admin.server";
+
+// Asaas envia o token configurado no painel via header `asaas-access-token`.
+// Configure `ASAAS_WEBHOOK_TOKEN` igual ao token usado lá.
+
+function planFromAmount(value: number): string | null {
+  if (value >= 297) return "pro";
+  if (value >= 97) return "starter";
+  return null;
+}
+
+function parseRef(ref: string | null): { tenantId?: string; planId?: string } {
+  if (!ref) return {};
+  const out: Record<string, string> = {};
+  for (const part of ref.split("|")) {
+    const [k, v] = part.split(":");
+    if (k && v) out[k] = v;
+  }
+  return { tenantId: out.tenant, planId: out.plan };
+}
+
+export const Route = createFileRoute("/api/public/asaas-webhook")({
+  server: {
+    handlers: {
+      POST: async ({ request }) => {
+        try {
+          const expected = process.env.ASAAS_WEBHOOK_TOKEN;
+          if (expected) {
+            const got = request.headers.get("asaas-access-token");
+            if (got !== expected) return new Response("unauthorized", { status: 401 });
+          }
+
+          const body = (await request.json()) as {
+            event?: string;
+            payment?: {
+              id: string; status: string; value: number; netValue?: number;
+              billingType?: string; externalReference?: string; customer?: string;
+              invoiceUrl?: string; dueDate?: string; paymentDate?: string;
+            };
+          };
+
+          const ev = body.event ?? "";
+          const p = body.payment;
+          if (!p) return new Response(JSON.stringify({ ok: true, ignored: true }), { status: 200 });
+
+          const { tenantId, planId } = parseRef(p.externalReference ?? null);
+          if (!tenantId) {
+            console.warn("[asaas-webhook] sem tenantId em externalReference:", p.externalReference);
+            return new Response(JSON.stringify({ ok: true }), { status: 200 });
+          }
+
+          const paid = ev === "PAYMENT_CONFIRMED" || ev === "PAYMENT_RECEIVED" || p.status === "CONFIRMED" || p.status === "RECEIVED";
+          const status = paid ? "paid" : p.status?.toLowerCase() ?? "pending";
+
+          // Registra fatura
+          await fsSetDoc(`tenants/${tenantId}/invoices/${p.id}`, {
+            provider: "asaas",
+            externalId: p.id,
+            planId: planId ?? null,
+            amount: p.value,
+            netValue: p.netValue ?? null,
+            status,
+            billingType: p.billingType ?? null,
+            invoiceUrl: p.invoiceUrl ?? null,
+            dueDate: p.dueDate ?? null,
+            paidAt: p.paymentDate ?? null,
+            event: ev,
+            updatedAt: new Date().toISOString(),
+          }, { merge: true });
+
+          // Atualiza intent
+          await fsSetDoc(`tenants/${tenantId}/billing_intents/${p.id}`, {
+            status, updatedAt: new Date().toISOString(),
+          }, { merge: true }).catch(() => {});
+
+          // Promove plano do tenant se pago
+          if (paid) {
+            const finalPlan = planId ?? planFromAmount(p.value);
+            if (finalPlan) {
+              await fsSetDoc(`tenants/${tenantId}`, {
+                plan: finalPlan,
+                status: "active",
+                lastPaymentAt: new Date().toISOString(),
+                billingProvider: "asaas",
+              }, { merge: true });
+            }
+          }
+
+          return new Response(JSON.stringify({ ok: true }), {
+            status: 200, headers: { "content-type": "application/json" },
+          });
+        } catch (e) {
+          console.error("[asaas-webhook] erro:", e);
+          return new Response(JSON.stringify({ ok: false, error: String(e) }), {
+            status: 200, headers: { "content-type": "application/json" },
+          });
+        }
+      },
+    },
+  },
+});

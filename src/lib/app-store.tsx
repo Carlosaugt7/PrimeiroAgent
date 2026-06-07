@@ -256,7 +256,7 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
       if (!tenantId) return;
       await deleteDoc(tdoc(tenantId, "llm_providers", id));
     },
-  }), [loading, tenantId, profile, agents, providers, conversations, knowledge, instances, plan]);
+  }), [loading, tenantId, profile, tenant?.plan, agents, providers, conversations, knowledge, instances, plan]);
 
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
 }

@@ -52,8 +52,8 @@ service cloud.firestore {
     // Índice global de instâncias WhatsApp → tenant (usado pelo webhook server-side)
     match /instance_index/{instanceName} {
       allow read: if isSignedIn();
-      allow create: if isSignedIn() && request.auth.uid == request.resource.data.tenantId;
-      allow update, delete: if isSignedIn() && request.auth.uid == resource.data.tenantId;
+      allow create: if isSignedIn() && (request.auth.uid == request.resource.data.tenantId || isMasterAdmin());
+      allow update, delete: if isSignedIn() && (request.auth.uid == resource.data.tenantId || isMasterAdmin());
     }
 
     // Convites pendentes (consultados no bootstrap por e-mail e na página de Equipe)

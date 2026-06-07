@@ -2,6 +2,7 @@ import { createContext, useContext, useEffect, useState, type ReactNode } from "
 import {
   GoogleAuthProvider,
   createUserWithEmailAndPassword,
+  getIdTokenResult,
   onAuthStateChanged,
   signInWithEmailAndPassword,
   signInWithPopup,
@@ -64,6 +65,24 @@ interface AuthCtx {
 }
 
 const Ctx = createContext<AuthCtx | null>(null);
+
+async function isMasterUser(user: User | null): Promise<boolean> {
+  if (!user) return false;
+  if (isMasterEmail(user.email)) return true;
+  try {
+    const token = await getIdTokenResult(user, true);
+    if (token.claims.master_admin === true || token.claims.masterAdmin === true) return true;
+  } catch (e) {
+    console.warn("[auth] falha ao ler claims master:", e);
+  }
+  try {
+    const snap = await getDoc(doc(db, "master_admins", user.uid));
+    return snap.exists();
+  } catch (e) {
+    console.warn("[auth] falha ao verificar master_admins:", e);
+    return false;
+  }
+}
 
 async function ensureTenantAndProfile(
   user: User,
@@ -196,6 +215,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [tenant, setTenant] = useState<Tenant | null>(null);
   const [loading, setLoading] = useState(true);
+  const [isMaster, setIsMaster] = useState(false);
 
   useEffect(() => {
     const unsub = onAuthStateChanged(auth, async (u) => {
@@ -204,11 +224,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (u) {
         try {
           const { profile, tenant } = await ensureTenantAndProfile(u);
+          const master = await isMasterUser(u);
+          setIsMaster(master);
           setProfile(profile);
 
           // Master admin pode persistir um tenant ativo diferente do seu
           let activeTenant = tenant;
-          if (isMasterEmail(u.email)) {
+          if (master) {
             const saved =
               typeof window !== "undefined" ? localStorage.getItem(ACTIVE_TENANT_KEY) : null;
             if (saved && saved !== tenant.id) {
@@ -225,10 +247,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           setTenant(activeTenant);
         } catch (e) {
           console.error("[auth] bootstrap failed:", e);
+          setIsMaster(false);
           setProfile(null);
           setTenant(null);
         }
       } else {
+        setIsMaster(false);
         setProfile(null);
         setTenant(null);
       }
@@ -239,7 +263,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const switchTenant = async (tenantId: string) => {
     if (!user) return;
-    if (!isMasterEmail(user.email)) throw new Error("Apenas Master Admin pode trocar de tenant");
+    if (!isMaster) throw new Error("Apenas Master Admin pode trocar de tenant");
     const ts = await getDoc(doc(db, "tenants", tenantId));
     if (!ts.exists()) throw new Error("Tenant não encontrado");
     localStorage.setItem(ACTIVE_TENANT_KEY, tenantId);
@@ -258,7 +282,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     profile,
     tenant,
     loading,
-    isMaster: isMasterEmail(user?.email),
+    isMaster,
     switchTenant,
     resetTenant,
     signInEmail: async (email, password) => {

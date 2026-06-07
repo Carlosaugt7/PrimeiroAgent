@@ -1,12 +1,31 @@
 import { Link, useRouterState } from "@tanstack/react-router";
 import {
-  LayoutDashboard, Bot, MessagesSquare, Database, Smartphone,
-  CreditCard, Users, Settings, ShieldCheck, Sparkles, Plug, ScrollText, Rocket,
-  Cpu, FlaskConical, Contact, MessageSquareText, CalendarClock, BarChart3, Zap, Crown,
-  Compass, Bell, History,
+  BarChart3,
+  Bell,
+  Bot,
+  CalendarClock,
+  Compass,
+  Contact,
+  Cpu,
+  CreditCard,
+  Crown,
+  Database,
+  FlaskConical,
+  History,
+  LayoutDashboard,
+  MessageSquareText,
+  MessagesSquare,
+  Plug,
+  Rocket,
+  ScrollText,
+  Settings,
+  Smartphone,
+  Sparkles,
+  Users,
+  Zap,
 } from "lucide-react";
-import { cn } from "@/lib/utils";
 import { useAuth } from "@/lib/auth";
+import { cn } from "@/lib/utils";
 
 type NavItem = { to: string; label: string; icon: typeof LayoutDashboard; exact?: boolean };
 
@@ -44,7 +63,6 @@ const groups: { title: string; items: NavItem[] }[] = [
       { to: "/app/billing", label: "Planos & uso", icon: CreditCard },
       { to: "/app/team", label: "Equipe", icon: Users },
       { to: "/app/settings", label: "Configurações", icon: Settings },
-      { to: "/app/admin", label: "Master Admin", icon: ShieldCheck },
     ],
   },
 ];
@@ -56,16 +74,25 @@ export function AppSidebar({ tenantName, planName }: { tenantName: string; planN
   const onboardingPending = !!tenant && !tenant.onboardedAt;
   const baseGroups = onboardingPending
     ? [
-        { title: "Começar", items: [{ to: "/app/onboarding", label: "Começar aqui", icon: Compass }] },
+        {
+          title: "Começar",
+          items: [{ to: "/app/onboarding", label: "Começar aqui", icon: Compass }],
+        },
         ...groups,
       ]
     : groups;
   const visibleGroups = isMaster
-    ? [...baseGroups, { title: "Plataforma (Master)", items: [{ to: "/app/master", label: "Master Admin", icon: Crown }] }]
+    ? [
+        ...baseGroups,
+        {
+          title: "Plataforma (Master)",
+          items: [{ to: "/app/master", label: "Master Admin", icon: Crown }],
+        },
+      ]
     : baseGroups;
+
   return (
     <aside className="hidden md:flex w-64 shrink-0 flex-col gap-2 p-4 border-r border-border bg-card/40 backdrop-blur-xl">
-
       <Link to="/" className="flex items-center gap-2 px-2 py-3">
         <div className="size-8 rounded-lg bg-gradient-primary grid place-items-center shadow-glow">
           <Sparkles className="size-4 text-primary-foreground" />
@@ -78,10 +105,14 @@ export function AppSidebar({ tenantName, planName }: { tenantName: string; planN
       <div className="mt-2 flex flex-col gap-4 overflow-y-auto">
         {visibleGroups.map((g) => (
           <div key={g.title}>
-            <p className="px-3 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground mb-1.5">{g.title}</p>
+            <p className="px-3 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground mb-1.5">
+              {g.title}
+            </p>
             <div className="flex flex-col gap-0.5">
               {g.items.map((item) => {
-                const active = item.exact ? pathname === item.to : pathname === item.to || pathname.startsWith(item.to + "/");
+                const active = item.exact
+                  ? pathname === item.to
+                  : pathname === item.to || pathname.startsWith(item.to + "/");
                 return (
                   <Link
                     key={item.to}
@@ -104,8 +135,12 @@ export function AppSidebar({ tenantName, planName }: { tenantName: string; planN
       </div>
 
       {impersonating && (
-        <button onClick={() => resetTenant()} className="text-[11px] rounded-lg border border-amber-500/40 bg-amber-500/10 text-amber-200 px-2.5 py-2 hover:bg-amber-500/15">
-          <span className="font-semibold">Master Mode:</span> dentro do tenant <span className="font-mono">{tenant?.id?.slice(0, 8)}</span>. Clique para sair.
+        <button
+          onClick={() => resetTenant()}
+          className="text-[11px] rounded-lg border border-amber-500/40 bg-amber-500/10 text-amber-200 px-2.5 py-2 hover:bg-amber-500/15"
+        >
+          <span className="font-semibold">Master Mode:</span> dentro do tenant{" "}
+          <span className="font-mono">{tenant?.id?.slice(0, 8)}</span>. Clique para sair.
         </button>
       )}
       <div className="mt-auto rounded-xl bg-gradient-card border border-border p-4">

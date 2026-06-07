@@ -43,9 +43,36 @@ function Inbox() {
   const [messages, setMessages] = useState<Msg[]>([]);
   const [draft, setDraft] = useState("");
   const [sending, setSending] = useState(false);
+  const [tagInput, setTagInput] = useState("");
   const bottomRef = useRef<HTMLDivElement>(null);
 
-  // Subscribe conversations
+  const convRef = (id: string) => doc(db, "tenants", tenant!.id, "conversations", id);
+
+  const toggleBot = async (paused: boolean) => {
+    if (!tenant || !activeId) return;
+    await updateDoc(convRef(activeId), {
+      botPaused: paused,
+      status: paused ? "handoff" : "aberta",
+    }).catch((e) => toast.error(e?.message ?? "Falha ao atualizar"));
+  };
+
+  const setStatus = async (status: "aberta" | "resolvida") => {
+    if (!tenant || !activeId) return;
+    await updateDoc(convRef(activeId), { status }).catch((e) => toast.error(e?.message));
+  };
+
+  const addTag = async () => {
+    const t = tagInput.trim();
+    if (!t || !tenant || !activeId) return;
+    await updateDoc(convRef(activeId), { tags: arrayUnion(t) }).catch((e) => toast.error(e?.message));
+    setTagInput("");
+  };
+
+  const removeTag = async (t: string) => {
+    if (!tenant || !activeId) return;
+    await updateDoc(convRef(activeId), { tags: arrayRemove(t) }).catch((e) => toast.error(e?.message));
+  };
+
   useEffect(() => {
     if (!tenant) return;
     const q = query(collection(db, "tenants", tenant.id, "conversations"), orderBy("updatedAt", "desc"), limit(100));

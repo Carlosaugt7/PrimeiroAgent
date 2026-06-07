@@ -19,6 +19,7 @@ const groups: { title: string; items: NavItem[] }[] = [
       { to: "/app/crm", label: "Contatos (CRM)", icon: Contact },
       { to: "/app/templates", label: "Templates", icon: MessageSquareText },
       { to: "/app/scheduled", label: "Agendamentos", icon: CalendarClock },
+      { to: "/app/automations", label: "Automações", icon: Zap },
     ],
   },
   {

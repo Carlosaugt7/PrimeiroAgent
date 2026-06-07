@@ -33,6 +33,7 @@ const groups: { title: string; items: NavItem[] }[] = [
   {
     title: "Plataforma",
     items: [
+      { to: "/app/reports", label: "Relatórios", icon: BarChart3 },
       { to: "/app/logs", label: "Logs & Traces", icon: ScrollText },
       { to: "/app/deploy", label: "Deploy", icon: Rocket },
       { to: "/app/billing", label: "Planos & uso", icon: CreditCard },

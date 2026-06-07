@@ -106,7 +106,8 @@ function Master() {
             <Crown className="size-7 text-amber-500" /> Master Admin
           </h1>
           <p className="text-muted-foreground mt-1">
-            Logado como <span className="font-medium text-foreground">{user?.email}</span>. Workspace ativo:{" "}
+            Logado como <span className="font-medium text-foreground">{user?.email}</span>. Workspace
+            ativo:{" "}
             <Badge variant="outline" className="ml-1">
               {tenant?.name ?? "—"}
             </Badge>

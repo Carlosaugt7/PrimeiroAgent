@@ -218,9 +218,13 @@ export const Route = createFileRoute("/api/public/evolution-webhook")({
             id: messageId, text, fromMe, createdAt: new Date().toISOString(),
           }, { merge: true });
 
-          // Bridge IA: só responde a mensagens recebidas e que tenham texto
+          // Bridge IA: só responde a mensagens recebidas, com texto, e se o bot não estiver pausado
           if (!fromMe && text && text !== "[mídia]") {
             try {
+              const conv = await fb.getDoc(convPath);
+              if (conv?.botPaused === true) {
+                return Response.json({ ok: true, bridge: { skipped: "bot-paused" } });
+              }
               const r = await runBridge(fb, tenantId, instanceName, remoteJid, text, convPath);
               return Response.json({ ok: true, bridge: r });
             } catch (e) {

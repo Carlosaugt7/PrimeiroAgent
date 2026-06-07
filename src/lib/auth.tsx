@@ -71,9 +71,15 @@ async function isMasterUser(user: User | null): Promise<boolean> {
   if (isMasterEmail(user.email)) return true;
   try {
     const token = await getIdTokenResult(user, true);
-    return token.claims.master_admin === true || token.claims.masterAdmin === true;
+    if (token.claims.master_admin === true || token.claims.masterAdmin === true) return true;
   } catch (e) {
     console.warn("[auth] falha ao ler claims master:", e);
+  }
+  try {
+    const snap = await getDoc(doc(db, "master_admins", user.uid));
+    return snap.exists();
+  } catch (e) {
+    console.warn("[auth] falha ao verificar master_admins:", e);
     return false;
   }
 }

@@ -1,6 +1,6 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useAppStore } from "@/lib/app-store";
-import { ArrowUpRight, Bot, BotOff, CheckCircle2, Cpu, MessageCircle, Plug, Smartphone, TrendingUp, Users } from "lucide-react";
+import { ArrowUpRight, Bot, BotOff, CheckCircle2, Compass, Cpu, MessageCircle, Plug, Smartphone, TrendingUp, Users } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { useAuth } from "@/lib/auth";
@@ -48,6 +48,21 @@ function Overview() {
           <Button variant="hero"><Bot className="size-4" /> Criar agente</Button>
         </Link>
       </div>
+
+      {tenant && !tenant.onboardedAt && (
+        <Link to="/app/onboarding" className="block rounded-2xl border border-accent/40 bg-accent/5 p-5 hover:bg-accent/10 transition-colors">
+          <div className="flex items-center gap-4">
+            <div className="size-10 rounded-xl bg-gradient-primary grid place-items-center shadow-glow shrink-0">
+              <Compass className="size-5 text-primary-foreground" />
+            </div>
+            <div className="flex-1">
+              <p className="font-display font-semibold">Termine de configurar sua workspace</p>
+              <p className="text-sm text-muted-foreground">Siga o guia de início rápido em 5 passos.</p>
+            </div>
+            <ArrowUpRight className="size-5 text-accent" />
+          </div>
+        </Link>
+      )}
 
       {empty && (
         <div className="rounded-2xl border-2 border-dashed border-border p-8 text-center">

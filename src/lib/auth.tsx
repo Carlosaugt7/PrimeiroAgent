@@ -209,7 +209,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           // Master admin pode persistir um tenant ativo diferente do seu
           let activeTenant = tenant;
           if (isMasterEmail(u.email)) {
-            const saved = typeof window !== "undefined" ? localStorage.getItem(ACTIVE_TENANT_KEY) : null;
+            const saved =
+              typeof window !== "undefined" ? localStorage.getItem(ACTIVE_TENANT_KEY) : null;
             if (saved && saved !== tenant.id) {
               try {
                 const ts = await getDoc(doc(db, "tenants", saved));

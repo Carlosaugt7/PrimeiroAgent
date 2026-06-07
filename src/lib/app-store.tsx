@@ -13,6 +13,7 @@ import {
   limit,
 } from "firebase/firestore";
 import { useAuth } from "@/lib/auth";
+import { logAudit, notify } from "@/lib/notifications";
 
 export type AgentStatus = "online" | "offline" | "treinando";
 
@@ -167,8 +168,27 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
       setKnowledge(s.docs.map((d) => ({ id: d.id, ...(d.data() as object) })) as KnowledgeDoc[]);
     }));
 
+    const prevInstanceStatus = new Map<string, string>();
     subs.push(onSnapshot(tcol(tenantId, "instances"), (s) => {
-      setInstances(s.docs.map((d) => ({ id: d.id, ...(d.data() as object) })) as Instance[]);
+      const next = s.docs.map((d) => ({ id: d.id, ...(d.data() as object) })) as Instance[];
+      // Alerta quando uma instância sai de open/connected
+      for (const inst of next) {
+        const prev = prevInstanceStatus.get(inst.id);
+        const cur = String((inst as any).status ?? "").toLowerCase();
+        const wasOk = prev === "open" || prev === "connected";
+        const isDown = cur && cur !== "open" && cur !== "connected" && cur !== "connecting";
+        if (prev && wasOk && isDown) {
+          notify(tenantId, {
+            type: "instance_down", severity: "error",
+            title: "Instância WhatsApp caiu",
+            body: `${(inst as any).instanceName ?? inst.id} agora está "${cur}".`,
+            link: "/app/whatsapp",
+          });
+          logAudit(tenantId, { action: "instance.down", target: inst.id, targetLabel: (inst as any).instanceName, meta: { from: prev, to: cur } });
+        }
+        prevInstanceStatus.set(inst.id, cur);
+      }
+      setInstances(next);
     }));
 
     return () => subs.forEach((u) => u());
@@ -201,15 +221,22 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
         _ts: serverTimestamp(),
         _createdBy: profile?.uid ?? "",
       });
+      const actor = { actorId: profile?.uid, actorEmail: profile?.email, actorName: profile?.displayName };
+      logAudit(tenantId, { action: "agent.create", target: ref.id, targetLabel: a.name, ...actor });
+      notify(tenantId, { type: "system", severity: "success", title: "Agente criado", body: `${a.name} foi adicionado.`, link: "/app/agents" });
       return ref.id;
     },
     updateAgent: async (id, patch) => {
       if (!tenantId) return;
       await updateDoc(tdoc(tenantId, "agents", id), patch as Record<string, unknown>);
+      logAudit(tenantId, { action: "agent.update", target: id, targetLabel: (patch as any)?.name, actorId: profile?.uid, actorEmail: profile?.email, actorName: profile?.displayName, meta: { fields: Object.keys(patch as object) } });
     },
     deleteAgent: async (id) => {
       if (!tenantId) return;
+      const name = agents.find((x) => x.id === id)?.name;
       await deleteDoc(tdoc(tenantId, "agents", id));
+      logAudit(tenantId, { action: "agent.delete", target: id, targetLabel: name, actorId: profile?.uid, actorEmail: profile?.email, actorName: profile?.displayName });
+      notify(tenantId, { type: "system", severity: "warning", title: "Agente removido", body: name ?? id });
     },
     createProvider: async (p) => {
       if (!tenantId) throw new Error("Sem tenant");

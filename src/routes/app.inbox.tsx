@@ -45,7 +45,32 @@ function Inbox() {
   const [draft, setDraft] = useState("");
   const [sending, setSending] = useState(false);
   const [tagInput, setTagInput] = useState("");
+  const [templates, setTemplates] = useState<Template[]>([]);
+  const [tplOpen, setTplOpen] = useState(false);
+  const [tplIdx, setTplIdx] = useState(0);
   const bottomRef = useRef<HTMLDivElement>(null);
+
+  // Templates do tenant
+  useEffect(() => {
+    if (!tenant) return;
+    return onSnapshot(
+      query(collection(db, "tenants", tenant.id, "templates"), orderBy("shortcut", "asc")),
+      (s) => setTemplates(s.docs.map((d) => ({ id: d.id, ...(d.data() as object) })) as Template[]),
+    );
+  }, [tenant]);
+
+  // Filtra templates pelo termo após "/"
+  const tplQuery = draft.startsWith("/") ? draft.slice(1).toLowerCase() : "";
+  const tplMatches = draft.startsWith("/")
+    ? templates.filter((t) => t.shortcut.includes(tplQuery) || t.title.toLowerCase().includes(tplQuery)).slice(0, 6)
+    : [];
+
+  const applyTemplate = (t: Template) => {
+    setDraft(t.body);
+    setTplOpen(false);
+    setTplIdx(0);
+  };
+
 
   const convRef = (id: string) => doc(db, "tenants", tenant!.id, "conversations", id);
 

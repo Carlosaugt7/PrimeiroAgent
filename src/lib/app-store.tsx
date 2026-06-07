@@ -136,7 +136,7 @@ function tdoc(tenantId: string, name: string, id: string) {
 }
 
 export function AppStoreProvider({ children }: { children: ReactNode }) {
-  const { tenant, profile, loading: authLoading } = useAuth();
+  const { tenant, profile, isMaster, loading: authLoading } = useAuth();
   const tenantId = tenant?.id ?? null;
 
   const [agents, setAgents] = useState<Agent[]>([]);

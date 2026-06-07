@@ -1,5 +1,4 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { adminDb, FieldValue } from "@/lib/firebase-admin.server";
 
 export const Route = createFileRoute("/api/public/evolution-webhook")({
   server: {
@@ -14,18 +13,16 @@ export const Route = createFileRoute("/api/public/evolution-webhook")({
 
         if (!instanceName) return new Response("missing instance", { status: 200 });
 
-        const db = adminDb();
+        // Lazy-load: o módulo só carrega no runtime do handler (evita quebrar SSR de páginas)
+        const { getDoc, setDoc, FieldValue } = await import("@/lib/firebase-admin.server");
 
-        // Lookup tenant via global index
-        const idxSnap = await db.collection("instance_index").doc(instanceName).get();
-        const tenantId = (idxSnap.data() as { tenantId?: string } | undefined)?.tenantId;
+        const idx = await getDoc(`instance_index/${instanceName}`);
+        const tenantId: string | undefined = idx?.tenantId;
         if (!tenantId) return new Response("unknown instance", { status: 200 });
-
-        const tenantRef = db.collection("tenants").doc(tenantId);
 
         if (event.includes("CONNECTION")) {
           const state = body?.data?.state ?? body?.state ?? "unknown";
-          await tenantRef.collection("instances").doc(instanceName).set({
+          await setDoc(`tenants/${tenantId}/instances/${instanceName}`, {
             name: instanceName,
             status: state === "open" ? "online" : state === "connecting" ? "conectando" : "offline",
             updatedAt: new Date().toISOString(),
@@ -49,8 +46,8 @@ export const Route = createFileRoute("/api/public/evolution-webhook")({
           const pushName: string = m?.pushName ?? remoteJid.split("@")[0];
           const convId = remoteJid.replace(/[^a-zA-Z0-9_-]/g, "_");
 
-          const convRef = tenantRef.collection("conversations").doc(convId);
-          await convRef.set({
+          const convPath = `tenants/${tenantId}/conversations/${convId}`;
+          await setDoc(convPath, {
             id: convId,
             instanceName,
             contactName: pushName,
@@ -59,15 +56,14 @@ export const Route = createFileRoute("/api/public/evolution-webhook")({
             lastMessage: text.slice(0, 200),
             updatedAt: new Date().toISOString(),
             status: "aberta",
-            unread: fromMe ? 0 : FieldValue.increment(1),
+            ...(fromMe ? { unread: 0 } : { unread: FieldValue.increment(1) }),
           }, { merge: true });
 
-          await convRef.collection("messages").doc(messageId).set({
+          await setDoc(`${convPath}/messages/${messageId}`, {
             id: messageId,
             text,
             fromMe,
             createdAt: new Date().toISOString(),
-            raw: m ?? null,
           }, { merge: true });
 
           return Response.json({ ok: true });

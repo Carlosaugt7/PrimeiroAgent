@@ -10,6 +10,9 @@ import {
 } from "firebase/auth";
 import { collection, deleteDoc, doc, getDoc, getDocs, query, serverTimestamp, setDoc, where } from "firebase/firestore";
 import { auth, db } from "@/integrations/firebase/client";
+import { isMasterEmail } from "@/lib/master";
+
+const ACTIVE_TENANT_KEY = "agenthub.activeTenantId";
 
 export type Role = "owner" | "admin" | "editor" | "viewer" | "agent";
 
@@ -35,6 +38,9 @@ interface AuthCtx {
   profile: UserProfile | null;
   tenant: Tenant | null;
   loading: boolean;
+  isMaster: boolean;
+  switchTenant: (tenantId: string) => Promise<void>;
+  resetTenant: () => Promise<void>;
   signInEmail: (email: string, password: string) => Promise<void>;
   signUpEmail: (email: string, password: string, displayName: string, company: string) => Promise<void>;
   signInGoogle: () => Promise<void>;
@@ -137,7 +143,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         try {
           const { profile, tenant } = await ensureTenantAndProfile(u);
           setProfile(profile);
-          setTenant(tenant);
+
+          // Master admin pode persistir um tenant ativo diferente do seu
+          let activeTenant = tenant;
+          if (isMasterEmail(u.email)) {
+            const saved = typeof window !== "undefined" ? localStorage.getItem(ACTIVE_TENANT_KEY) : null;
+            if (saved && saved !== tenant.id) {
+              try {
+                const ts = await getDoc(doc(db, "tenants", saved));
+                if (ts.exists()) activeTenant = { id: ts.id, ...(ts.data() as Omit<Tenant, "id">) };
+              } catch (e) { console.warn("[auth] failed to load active tenant:", e); }
+            }
+          }
+          setTenant(activeTenant);
         } catch (e) {
           console.error("[auth] bootstrap failed:", e);
         }
@@ -150,8 +168,26 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return () => unsub();
   }, []);
 
+  const switchTenant = async (tenantId: string) => {
+    if (!user) return;
+    if (!isMasterEmail(user.email)) throw new Error("Apenas Master Admin pode trocar de tenant");
+    const ts = await getDoc(doc(db, "tenants", tenantId));
+    if (!ts.exists()) throw new Error("Tenant não encontrado");
+    localStorage.setItem(ACTIVE_TENANT_KEY, tenantId);
+    setTenant({ id: ts.id, ...(ts.data() as Omit<Tenant, "id">) });
+  };
+
+  const resetTenant = async () => {
+    if (!user) return;
+    localStorage.removeItem(ACTIVE_TENANT_KEY);
+    const ts = await getDoc(doc(db, "tenants", user.uid));
+    if (ts.exists()) setTenant({ id: ts.id, ...(ts.data() as Omit<Tenant, "id">) });
+  };
+
   const value: AuthCtx = {
     user, profile, tenant, loading,
+    isMaster: isMasterEmail(user?.email),
+    switchTenant, resetTenant,
     signInEmail: async (email, password) => { await signInWithEmailAndPassword(auth, email, password); },
     signUpEmail: async (email, password, displayName, company) => {
       const cred = await createUserWithEmailAndPassword(auth, email, password);
@@ -161,7 +197,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const provider = new GoogleAuthProvider();
       await signInWithPopup(auth, provider);
     },
-    signOut: async () => { await fbSignOut(auth); },
+    signOut: async () => {
+      localStorage.removeItem(ACTIVE_TENANT_KEY);
+      await fbSignOut(auth);
+    },
   };
 
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;

@@ -20,6 +20,7 @@ import { Route as AppSettingsRouteImport } from './routes/app.settings'
 import { Route as AppScheduledRouteImport } from './routes/app.scheduled'
 import { Route as AppReportsRouteImport } from './routes/app.reports'
 import { Route as AppPlaygroundRouteImport } from './routes/app.playground'
+import { Route as AppMasterRouteImport } from './routes/app.master'
 import { Route as AppLogsRouteImport } from './routes/app.logs'
 import { Route as AppLlmProvidersRouteImport } from './routes/app.llm-providers'
 import { Route as AppKnowledgeRouteImport } from './routes/app.knowledge'
@@ -87,6 +88,11 @@ const AppReportsRoute = AppReportsRouteImport.update({
 const AppPlaygroundRoute = AppPlaygroundRouteImport.update({
   id: '/playground',
   path: '/playground',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppMasterRoute = AppMasterRouteImport.update({
+  id: '/master',
+  path: '/master',
   getParentRoute: () => AppRoute,
 } as any)
 const AppLogsRoute = AppLogsRouteImport.update({
@@ -171,6 +177,7 @@ export interface FileRoutesByFullPath {
   '/app/knowledge': typeof AppKnowledgeRoute
   '/app/llm-providers': typeof AppLlmProvidersRoute
   '/app/logs': typeof AppLogsRoute
+  '/app/master': typeof AppMasterRoute
   '/app/playground': typeof AppPlaygroundRoute
   '/app/reports': typeof AppReportsRoute
   '/app/scheduled': typeof AppScheduledRoute
@@ -196,6 +203,7 @@ export interface FileRoutesByTo {
   '/app/knowledge': typeof AppKnowledgeRoute
   '/app/llm-providers': typeof AppLlmProvidersRoute
   '/app/logs': typeof AppLogsRoute
+  '/app/master': typeof AppMasterRoute
   '/app/playground': typeof AppPlaygroundRoute
   '/app/reports': typeof AppReportsRoute
   '/app/scheduled': typeof AppScheduledRoute
@@ -223,6 +231,7 @@ export interface FileRoutesById {
   '/app/knowledge': typeof AppKnowledgeRoute
   '/app/llm-providers': typeof AppLlmProvidersRoute
   '/app/logs': typeof AppLogsRoute
+  '/app/master': typeof AppMasterRoute
   '/app/playground': typeof AppPlaygroundRoute
   '/app/reports': typeof AppReportsRoute
   '/app/scheduled': typeof AppScheduledRoute
@@ -251,6 +260,7 @@ export interface FileRouteTypes {
     | '/app/knowledge'
     | '/app/llm-providers'
     | '/app/logs'
+    | '/app/master'
     | '/app/playground'
     | '/app/reports'
     | '/app/scheduled'
@@ -276,6 +286,7 @@ export interface FileRouteTypes {
     | '/app/knowledge'
     | '/app/llm-providers'
     | '/app/logs'
+    | '/app/master'
     | '/app/playground'
     | '/app/reports'
     | '/app/scheduled'
@@ -302,6 +313,7 @@ export interface FileRouteTypes {
     | '/app/knowledge'
     | '/app/llm-providers'
     | '/app/logs'
+    | '/app/master'
     | '/app/playground'
     | '/app/reports'
     | '/app/scheduled'
@@ -399,6 +411,13 @@ declare module '@tanstack/react-router' {
       path: '/playground'
       fullPath: '/app/playground'
       preLoaderRoute: typeof AppPlaygroundRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/app/master': {
+      id: '/app/master'
+      path: '/master'
+      fullPath: '/app/master'
+      preLoaderRoute: typeof AppMasterRouteImport
       parentRoute: typeof AppRoute
     }
     '/app/logs': {
@@ -507,6 +526,7 @@ interface AppRouteChildren {
   AppKnowledgeRoute: typeof AppKnowledgeRoute
   AppLlmProvidersRoute: typeof AppLlmProvidersRoute
   AppLogsRoute: typeof AppLogsRoute
+  AppMasterRoute: typeof AppMasterRoute
   AppPlaygroundRoute: typeof AppPlaygroundRoute
   AppReportsRoute: typeof AppReportsRoute
   AppScheduledRoute: typeof AppScheduledRoute
@@ -529,6 +549,7 @@ const AppRouteChildren: AppRouteChildren = {
   AppKnowledgeRoute: AppKnowledgeRoute,
   AppLlmProvidersRoute: AppLlmProvidersRoute,
   AppLogsRoute: AppLogsRoute,
+  AppMasterRoute: AppMasterRoute,
   AppPlaygroundRoute: AppPlaygroundRoute,
   AppReportsRoute: AppReportsRoute,
   AppScheduledRoute: AppScheduledRoute,

@@ -93,6 +93,11 @@ export function AppSidebar({ tenantName, planName }: { tenantName: string; planN
         ))}
       </div>
 
+      {impersonating && (
+        <button onClick={() => resetTenant()} className="text-[11px] rounded-lg border border-amber-500/40 bg-amber-500/10 text-amber-200 px-2.5 py-2 hover:bg-amber-500/15">
+          <span className="font-semibold">Master Mode:</span> dentro do tenant <span className="font-mono">{tenant?.id?.slice(0, 8)}</span>. Clique para sair.
+        </button>
+      )}
       <div className="mt-auto rounded-xl bg-gradient-card border border-border p-4">
         <p className="text-xs text-muted-foreground">Workspace</p>
         <p className="font-display font-semibold truncate">{tenantName}</p>

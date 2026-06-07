@@ -24,12 +24,12 @@ interface Entry {
 }
 
 function Page() {
-  const { tenant, profile } = useAuth();
+  const { tenant, profile, isMaster } = useAuth();
   const [items, setItems] = useState<Entry[]>([]);
   const [search, setSearch] = useState("");
   const [action, setAction] = useState<string>("all");
 
-  const canView = profile?.role === "owner" || profile?.role === "admin" || profile?.role === "master";
+  const canView = isMaster || profile?.role === "owner" || profile?.role === "admin";
 
   useEffect(() => {
     if (!tenant?.id || !canView) return;

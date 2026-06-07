@@ -3,6 +3,7 @@ import {
   LayoutDashboard, Bot, MessagesSquare, Database, Smartphone,
   CreditCard, Users, Settings, ShieldCheck, Sparkles, Plug, ScrollText, Rocket,
   Cpu, FlaskConical, Contact, MessageSquareText, CalendarClock, BarChart3, Zap, Crown,
+  Compass,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/lib/auth";

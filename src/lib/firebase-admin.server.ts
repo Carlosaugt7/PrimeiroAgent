@@ -123,6 +123,23 @@ export async function getDoc(path: string): Promise<Record<string, any> | null> 
   return fromFields(j.fields ?? {});
 }
 
+/** Lista documentos de uma coleção. `path` deve ser uma coleção, ex: "tenants/x/agents". */
+export async function listCollection(
+  path: string,
+  opts: { pageSize?: number } = {},
+): Promise<Array<{ id: string } & Record<string, any>>> {
+  const token = await getAccessToken();
+  const url = `${BASE}/${docName(path)}?pageSize=${opts.pageSize ?? 300}`;
+  const r = await fetch(url, { headers: { authorization: `Bearer ${token}` } });
+  if (r.status === 404) return [];
+  if (!r.ok) throw new Error(`listCollection ${path}: ${r.status} ${await r.text()}`);
+  const j = (await r.json()) as { documents?: Array<{ name: string; fields?: Record<string, any> }> };
+  return (j.documents ?? []).map((d) => {
+    const id = d.name.split("/").pop()!;
+    return { id, ...fromFields(d.fields ?? {}) };
+  });
+}
+
 export async function setDoc(
   path: string,
   data: Record<string, any>,

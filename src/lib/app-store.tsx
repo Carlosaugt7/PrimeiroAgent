@@ -62,13 +62,16 @@ export interface LLMProvider {
 
 export interface Conversation {
   id: string;
-  agentId: string;
+  agentId?: string;
+  instanceName?: string;
   contactName: string;
   contactPhone: string;
   lastMessage: string;
   unread: number;
   updatedAt: string;
   status: "aberta" | "resolvida" | "handoff";
+  botPaused?: boolean;
+  tags?: string[];
 }
 
 export interface KnowledgeDoc {

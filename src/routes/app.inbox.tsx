@@ -134,9 +134,17 @@ function Inbox() {
                   >
                     <div className="flex items-center justify-between gap-2">
                       <p className="font-medium text-sm truncate">{c.contactName}</p>
-                      {c.unread ? <Badge className="bg-primary text-primary-foreground">{c.unread}</Badge> : null}
+                      <div className="flex items-center gap-1 shrink-0">
+                        {c.botPaused && <BotOff className="size-3 text-muted-foreground" />}
+                        {c.unread ? <Badge className="bg-primary text-primary-foreground">{c.unread}</Badge> : null}
+                      </div>
                     </div>
                     <p className="text-xs text-muted-foreground truncate mt-0.5">{c.lastMessage}</p>
+                    {(c.tags?.length ?? 0) > 0 && (
+                      <div className="flex flex-wrap gap-1 mt-1">
+                        {c.tags!.slice(0, 3).map((t) => <Badge key={t} variant="outline" className="text-[9px] px-1 py-0">{t}</Badge>)}
+                      </div>
+                    )}
                     <p className="text-[10px] text-muted-foreground mt-1">{new Date(c.updatedAt).toLocaleString()}</p>
                   </button>
                 </li>

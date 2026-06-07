@@ -212,9 +212,42 @@ async function runBridge(
     console.warn("[bridge] RAG falhou:", e);
   }
 
-  // 4) Chamar LLM
-  const reply = (await callLLM(provider, agent, systemPrompt, userText)).trim();
-  if (!reply) return { skipped: "empty-reply" };
+  // 4) Chamar LLM (com log de trace)
+  const t0 = Date.now();
+  let reply = "";
+  let llmError: string | null = null;
+  try {
+    reply = (await callLLM(provider, agent, systemPrompt, userText)).trim();
+  } catch (e) {
+    llmError = e instanceof Error ? e.message : String(e);
+  }
+  const latencyMs = Date.now() - t0;
+
+  // Log
+  try {
+    const logId = `log_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
+    await fb.setDoc(`tenants/${tenantId}/ai_logs/${logId}`, {
+      id: logId,
+      createdAt: new Date().toISOString(),
+      agentId: agent.id,
+      agentName: agent.name ?? "",
+      providerId: agent.providerId,
+      providerKind: provider.kind ?? "",
+      model: agent.model ?? "",
+      instanceName,
+      remoteJid,
+      conversationId: convPath.split("/").pop(),
+      userText: userText.slice(0, 2000),
+      reply: reply.slice(0, 4000),
+      systemPromptChars: systemPrompt.length,
+      latencyMs,
+      ok: !llmError && !!reply,
+      error: llmError,
+    }, { merge: true });
+  } catch (e) { console.warn("[ai_logs] falhou:", e); }
+
+  if (llmError) return { error: llmError, latencyMs };
+  if (!reply) return { skipped: "empty-reply", latencyMs };
 
   // 5) Enviar via WhatsApp
   const number = remoteJid.split("@")[0];
@@ -229,7 +262,7 @@ async function runBridge(
     lastMessage: reply.slice(0, 200), updatedAt: new Date().toISOString(),
   }, { merge: true });
 
-  return { ok: true, agent: agent.id };
+  return { ok: true, agent: agent.id, latencyMs };
 }
 
 export const Route = createFileRoute("/api/public/evolution-webhook")({

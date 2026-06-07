@@ -199,7 +199,7 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
     loading, tenantId, agents, providers, conversations, knowledge, instances, plan,
     createAgent: async (a) => {
       if (!tenantId) throw new Error("Sem tenant");
-      const lim = ensureLimit(tenantId, tenant?.plan, "agents", agents.length);
+      const lim = ensureLimit(tenantId, tenant?.plan, "agents", agents.length, isMaster);
       if (!lim.ok) throw new Error(lim.message ?? "Limite de agentes atingido");
       const ref = await fsAddDoc(tcol(tenantId, "agents"), {
         name: a.name,

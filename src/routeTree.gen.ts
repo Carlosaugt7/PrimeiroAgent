@@ -20,6 +20,7 @@ import { Route as AppSettingsRouteImport } from './routes/app.settings'
 import { Route as AppScheduledRouteImport } from './routes/app.scheduled'
 import { Route as AppReportsRouteImport } from './routes/app.reports'
 import { Route as AppPlaygroundRouteImport } from './routes/app.playground'
+import { Route as AppOnboardingRouteImport } from './routes/app.onboarding'
 import { Route as AppMasterRouteImport } from './routes/app.master'
 import { Route as AppLogsRouteImport } from './routes/app.logs'
 import { Route as AppLlmProvidersRouteImport } from './routes/app.llm-providers'
@@ -88,6 +89,11 @@ const AppReportsRoute = AppReportsRouteImport.update({
 const AppPlaygroundRoute = AppPlaygroundRouteImport.update({
   id: '/playground',
   path: '/playground',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppOnboardingRoute = AppOnboardingRouteImport.update({
+  id: '/onboarding',
+  path: '/onboarding',
   getParentRoute: () => AppRoute,
 } as any)
 const AppMasterRoute = AppMasterRouteImport.update({
@@ -178,6 +184,7 @@ export interface FileRoutesByFullPath {
   '/app/llm-providers': typeof AppLlmProvidersRoute
   '/app/logs': typeof AppLogsRoute
   '/app/master': typeof AppMasterRoute
+  '/app/onboarding': typeof AppOnboardingRoute
   '/app/playground': typeof AppPlaygroundRoute
   '/app/reports': typeof AppReportsRoute
   '/app/scheduled': typeof AppScheduledRoute
@@ -204,6 +211,7 @@ export interface FileRoutesByTo {
   '/app/llm-providers': typeof AppLlmProvidersRoute
   '/app/logs': typeof AppLogsRoute
   '/app/master': typeof AppMasterRoute
+  '/app/onboarding': typeof AppOnboardingRoute
   '/app/playground': typeof AppPlaygroundRoute
   '/app/reports': typeof AppReportsRoute
   '/app/scheduled': typeof AppScheduledRoute
@@ -232,6 +240,7 @@ export interface FileRoutesById {
   '/app/llm-providers': typeof AppLlmProvidersRoute
   '/app/logs': typeof AppLogsRoute
   '/app/master': typeof AppMasterRoute
+  '/app/onboarding': typeof AppOnboardingRoute
   '/app/playground': typeof AppPlaygroundRoute
   '/app/reports': typeof AppReportsRoute
   '/app/scheduled': typeof AppScheduledRoute
@@ -261,6 +270,7 @@ export interface FileRouteTypes {
     | '/app/llm-providers'
     | '/app/logs'
     | '/app/master'
+    | '/app/onboarding'
     | '/app/playground'
     | '/app/reports'
     | '/app/scheduled'
@@ -287,6 +297,7 @@ export interface FileRouteTypes {
     | '/app/llm-providers'
     | '/app/logs'
     | '/app/master'
+    | '/app/onboarding'
     | '/app/playground'
     | '/app/reports'
     | '/app/scheduled'
@@ -314,6 +325,7 @@ export interface FileRouteTypes {
     | '/app/llm-providers'
     | '/app/logs'
     | '/app/master'
+    | '/app/onboarding'
     | '/app/playground'
     | '/app/reports'
     | '/app/scheduled'
@@ -411,6 +423,13 @@ declare module '@tanstack/react-router' {
       path: '/playground'
       fullPath: '/app/playground'
       preLoaderRoute: typeof AppPlaygroundRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/app/onboarding': {
+      id: '/app/onboarding'
+      path: '/onboarding'
+      fullPath: '/app/onboarding'
+      preLoaderRoute: typeof AppOnboardingRouteImport
       parentRoute: typeof AppRoute
     }
     '/app/master': {
@@ -527,6 +546,7 @@ interface AppRouteChildren {
   AppLlmProvidersRoute: typeof AppLlmProvidersRoute
   AppLogsRoute: typeof AppLogsRoute
   AppMasterRoute: typeof AppMasterRoute
+  AppOnboardingRoute: typeof AppOnboardingRoute
   AppPlaygroundRoute: typeof AppPlaygroundRoute
   AppReportsRoute: typeof AppReportsRoute
   AppScheduledRoute: typeof AppScheduledRoute
@@ -550,6 +570,7 @@ const AppRouteChildren: AppRouteChildren = {
   AppLlmProvidersRoute: AppLlmProvidersRoute,
   AppLogsRoute: AppLogsRoute,
   AppMasterRoute: AppMasterRoute,
+  AppOnboardingRoute: AppOnboardingRoute,
   AppPlaygroundRoute: AppPlaygroundRoute,
   AppReportsRoute: AppReportsRoute,
   AppScheduledRoute: AppScheduledRoute,
@@ -572,13 +593,3 @@ const rootRouteChildren: RootRouteChildren = {
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
   ._addFileTypes<FileRouteTypes>()
-
-import type { getRouter } from './router.tsx'
-import type { startInstance } from './start.ts'
-declare module '@tanstack/react-start' {
-  interface Register {
-    ssr: true
-    router: Awaited<ReturnType<typeof getRouter>>
-    config: Awaited<ReturnType<typeof startInstance.getOptions>>
-  }
-}

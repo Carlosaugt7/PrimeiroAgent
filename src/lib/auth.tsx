@@ -31,6 +31,7 @@ export interface Tenant {
   plan: "trial" | "starter" | "pro" | "enterprise";
   status: "active" | "suspended";
   createdAt: string;
+  onboardedAt?: string;
 }
 
 interface AuthCtx {

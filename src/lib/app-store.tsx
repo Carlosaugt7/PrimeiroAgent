@@ -14,6 +14,7 @@ import {
 } from "firebase/firestore";
 import { useAuth } from "@/lib/auth";
 import { logAudit, notify } from "@/lib/notifications";
+import { ensureLimit } from "@/lib/limits";
 
 export type AgentStatus = "online" | "offline" | "treinando";
 

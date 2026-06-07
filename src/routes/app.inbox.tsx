@@ -150,10 +150,46 @@ function Inbox() {
               <div className="flex-1 grid place-items-center text-sm text-muted-foreground">Selecione uma conversa</div>
             ) : (
               <>
-                <div className="h-14 border-b border-border px-4 flex items-center justify-between">
-                  <div>
-                    <p className="font-semibold text-sm">{active.contactName}</p>
-                    <p className="text-xs text-muted-foreground">{active.contactPhone} · {active.instanceName}</p>
+                <div className="border-b border-border px-4 py-3 flex items-start justify-between gap-3 flex-wrap">
+                  <div className="min-w-0">
+                    <div className="flex items-center gap-2">
+                      <p className="font-semibold text-sm truncate">{active.contactName}</p>
+                      {active.status === "resolvida" && <Badge variant="secondary" className="gap-1"><CheckCircle2 className="size-3" />Resolvida</Badge>}
+                      {active.status === "handoff" && <Badge variant="outline">Handoff humano</Badge>}
+                    </div>
+                    <p className="text-xs text-muted-foreground truncate">{active.contactPhone} · {active.instanceName}</p>
+                  </div>
+                  <div className="flex items-center gap-3">
+                    <label className="flex items-center gap-2 text-xs select-none cursor-pointer">
+                      {active.botPaused ? <BotOff className="size-4 text-muted-foreground" /> : <Bot className="size-4 text-primary" />}
+                      <span>{active.botPaused ? "IA pausada" : "IA ativa"}</span>
+                      <Switch checked={!active.botPaused} onCheckedChange={(v) => toggleBot(!v)} />
+                    </label>
+                    {active.status !== "resolvida" ? (
+                      <Button size="sm" variant="outline" onClick={() => setStatus("resolvida")}>Resolver</Button>
+                    ) : (
+                      <Button size="sm" variant="outline" onClick={() => setStatus("aberta")}>Reabrir</Button>
+                    )}
+                  </div>
+                </div>
+
+                {/* Tags */}
+                <div className="border-b border-border px-4 py-2 flex items-center gap-2 flex-wrap">
+                  {(active.tags ?? []).map((t) => (
+                    <Badge key={t} variant="secondary" className="gap-1 pr-1">
+                      {t}
+                      <button onClick={() => removeTag(t)} className="hover:text-destructive ml-1"><X className="size-3" /></button>
+                    </Badge>
+                  ))}
+                  <div className="flex items-center gap-1">
+                    <Input
+                      value={tagInput}
+                      onChange={(e) => setTagInput(e.target.value)}
+                      onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); addTag(); } }}
+                      placeholder="Adicionar tag"
+                      className="h-7 w-32 text-xs"
+                    />
+                    <Button size="icon" variant="ghost" className="size-7" onClick={addTag}><Plus className="size-3" /></Button>
                   </div>
                 </div>
                 <div className="flex-1 overflow-y-auto p-4 space-y-2">

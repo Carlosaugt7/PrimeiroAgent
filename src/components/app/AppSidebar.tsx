@@ -16,6 +16,7 @@ const groups: { title: string; items: NavItem[] }[] = [
       { to: "/app/agents", label: "Agentes", icon: Bot },
       { to: "/app/playground", label: "Playground", icon: FlaskConical },
       { to: "/app/inbox", label: "Inbox", icon: MessagesSquare },
+      { to: "/app/crm", label: "Contatos (CRM)", icon: Contact },
     ],
   },
   {

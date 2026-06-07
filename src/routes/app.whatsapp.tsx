@@ -1,5 +1,8 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
+import { doc, setDoc, deleteDoc, serverTimestamp } from "firebase/firestore";
+import { db } from "@/integrations/firebase/client";
+import { useAuth } from "@/lib/auth";
 import { useServerFn } from "@tanstack/react-start";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -27,6 +30,7 @@ function statusBadge(state: string) {
 }
 
 function Page() {
+  const { tenant } = useAuth();
   const list = useServerFn(listInstances);
   const create = useServerFn(createInstance);
   const connect = useServerFn(connectInstance);
@@ -71,12 +75,25 @@ function Page() {
 
   const handleCreate = async () => {
     if (!/^[a-zA-Z0-9_-]{3,40}$/.test(newName)) { toast.error("Nome inválido"); return; }
+    if (!tenant) { toast.error("Tenant não carregado"); return; }
     setCreating(true);
     try {
-      await create({ data: { instanceName: newName } });
+      const webhookUrl = `${window.location.origin}/api/public/evolution-webhook`;
+      await create({ data: { instanceName: newName, webhookUrl } });
+      // Registra mapeamento global instância → tenant (usado pelo webhook)
+      await setDoc(doc(db, "instance_index", newName), {
+        tenantId: tenant.id,
+        instanceName: newName,
+        createdAt: new Date().toISOString(),
+        _ts: serverTimestamp(),
+      });
+      // Cria o registro local da instância no tenant
+      await setDoc(doc(db, "tenants", tenant.id, "instances", newName), {
+        id: newName, name: newName, status: "conectando",
+        webhook: webhookUrl, createdAt: new Date().toISOString(),
+      }, { merge: true });
       toast.success("Instância criada");
       setOpenCreate(false); setNewName(""); await refresh();
-      // auto open QR
       openQr(newName);
     } catch (e: any) { toast.error(e?.message ?? "Falha ao criar"); }
     finally { setCreating(false); }
@@ -102,8 +119,14 @@ function Page() {
   };
   const handleDelete = async (name: string) => {
     if (!confirm(`Excluir definitivamente ${name}?`)) return;
-    try { await del({ data: { instanceName: name } }); toast.success("Excluída"); refresh(); }
-    catch (e: any) { toast.error(e?.message ?? "Falha"); }
+    try {
+      await del({ data: { instanceName: name } });
+      if (tenant) {
+        await deleteDoc(doc(db, "instance_index", name)).catch(() => {});
+        await deleteDoc(doc(db, "tenants", tenant.id, "instances", name)).catch(() => {});
+      }
+      toast.success("Excluída"); refresh();
+    } catch (e: any) { toast.error(e?.message ?? "Falha"); }
   };
 
   return (

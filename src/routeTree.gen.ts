@@ -26,6 +26,7 @@ import { Route as AppDeployRouteImport } from './routes/app.deploy'
 import { Route as AppBillingRouteImport } from './routes/app.billing'
 import { Route as AppAgentsRouteImport } from './routes/app.agents'
 import { Route as AppAdminRouteImport } from './routes/app.admin'
+import { Route as ApiPublicEvolutionWebhookRouteImport } from './routes/api/public/evolution-webhook'
 
 const AuthRoute = AuthRouteImport.update({
   id: '/auth',
@@ -112,6 +113,12 @@ const AppAdminRoute = AppAdminRouteImport.update({
   path: '/admin',
   getParentRoute: () => AppRoute,
 } as any)
+const ApiPublicEvolutionWebhookRoute =
+  ApiPublicEvolutionWebhookRouteImport.update({
+    id: '/api/public/evolution-webhook',
+    path: '/api/public/evolution-webhook',
+    getParentRoute: () => rootRouteImport,
+  } as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
@@ -131,6 +138,7 @@ export interface FileRoutesByFullPath {
   '/app/team': typeof AppTeamRoute
   '/app/whatsapp': typeof AppWhatsappRoute
   '/app/': typeof AppIndexRoute
+  '/api/public/evolution-webhook': typeof ApiPublicEvolutionWebhookRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -149,6 +157,7 @@ export interface FileRoutesByTo {
   '/app/team': typeof AppTeamRoute
   '/app/whatsapp': typeof AppWhatsappRoute
   '/app': typeof AppIndexRoute
+  '/api/public/evolution-webhook': typeof ApiPublicEvolutionWebhookRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -169,6 +178,7 @@ export interface FileRoutesById {
   '/app/team': typeof AppTeamRoute
   '/app/whatsapp': typeof AppWhatsappRoute
   '/app/': typeof AppIndexRoute
+  '/api/public/evolution-webhook': typeof ApiPublicEvolutionWebhookRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -190,6 +200,7 @@ export interface FileRouteTypes {
     | '/app/team'
     | '/app/whatsapp'
     | '/app/'
+    | '/api/public/evolution-webhook'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -208,6 +219,7 @@ export interface FileRouteTypes {
     | '/app/team'
     | '/app/whatsapp'
     | '/app'
+    | '/api/public/evolution-webhook'
   id:
     | '__root__'
     | '/'
@@ -227,12 +239,14 @@ export interface FileRouteTypes {
     | '/app/team'
     | '/app/whatsapp'
     | '/app/'
+    | '/api/public/evolution-webhook'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   AppRoute: typeof AppRouteWithChildren
   AuthRoute: typeof AuthRoute
+  ApiPublicEvolutionWebhookRoute: typeof ApiPublicEvolutionWebhookRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -356,6 +370,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppAdminRouteImport
       parentRoute: typeof AppRoute
     }
+    '/api/public/evolution-webhook': {
+      id: '/api/public/evolution-webhook'
+      path: '/api/public/evolution-webhook'
+      fullPath: '/api/public/evolution-webhook'
+      preLoaderRoute: typeof ApiPublicEvolutionWebhookRouteImport
+      parentRoute: typeof rootRouteImport
+    }
   }
 }
 
@@ -399,17 +420,8 @@ const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   AppRoute: AppRouteWithChildren,
   AuthRoute: AuthRoute,
+  ApiPublicEvolutionWebhookRoute: ApiPublicEvolutionWebhookRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
   ._addFileTypes<FileRouteTypes>()
-
-import type { getRouter } from './router.tsx'
-import type { startInstance } from './start.ts'
-declare module '@tanstack/react-start' {
-  interface Register {
-    ssr: true
-    router: Awaited<ReturnType<typeof getRouter>>
-    config: Awaited<ReturnType<typeof startInstance.getOptions>>
-  }
-}

@@ -2,7 +2,7 @@ import { Link, useRouterState } from "@tanstack/react-router";
 import {
   LayoutDashboard, Bot, MessagesSquare, Database, Smartphone,
   CreditCard, Users, Settings, ShieldCheck, Sparkles, Plug, ScrollText, Rocket,
-  Cpu, FlaskConical, Contact, MessageSquareText, CalendarClock,
+  Cpu, FlaskConical, Contact, MessageSquareText, CalendarClock, BarChart3,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -33,6 +33,7 @@ const groups: { title: string; items: NavItem[] }[] = [
   {
     title: "Plataforma",
     items: [
+      { to: "/app/reports", label: "Relatórios", icon: BarChart3 },
       { to: "/app/logs", label: "Logs & Traces", icon: ScrollText },
       { to: "/app/deploy", label: "Deploy", icon: Rocket },
       { to: "/app/billing", label: "Planos & uso", icon: CreditCard },

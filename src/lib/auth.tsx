@@ -69,8 +69,11 @@ async function ensureTenantAndProfile(user: User, companyHint?: string): Promise
   let inviteDocId: string | null = null;
   if (email) {
     try {
-      const snap = await getDocs(query(collection(db, "invites"), where("email", "==", email)));
-      const inv = snap.docs[0];
+      const directInvite = await getDoc(doc(db, "invites", email));
+      const snap = directInvite.exists()
+        ? null
+        : await getDocs(query(collection(db, "invites"), where("email", "==", email)));
+      const inv = directInvite.exists() ? directInvite : snap?.docs[0];
       if (inv) {
         const data = inv.data() as { tenantId: string; role: Role };
         invitedTenantId = data.tenantId;
@@ -84,17 +87,19 @@ async function ensureTenantAndProfile(user: User, companyHint?: string): Promise
   let profile: UserProfile;
 
   if (invitedTenantId) {
-    const tSnap = await getDoc(doc(db, "tenants", invitedTenantId));
-    if (!tSnap.exists()) throw new Error("Tenant do convite não existe");
-    tenant = { id: tSnap.id, ...(tSnap.data() as Omit<Tenant, "id">) };
     profile = {
       uid: user.uid,
       email: user.email || "",
       displayName: user.displayName || user.email?.split("@")[0] || "",
-      tenantId: tenant.id,
+      tenantId: invitedTenantId,
       role: invitedRole,
     };
+    // Cria o vínculo do usuário antes de ler o tenant; as regras liberam o tenant pelo vínculo.
     await setDoc(profileRef, { ...profile, _ts: serverTimestamp() });
+
+    const tSnap = await getDoc(doc(db, "tenants", invitedTenantId));
+    if (!tSnap.exists()) throw new Error("Tenant do convite não existe");
+    tenant = { id: tSnap.id, ...(tSnap.data() as Omit<Tenant, "id">) };
     await setDoc(doc(db, "tenants", tenant.id, "members", user.uid), {
       uid: user.uid, email: profile.email, displayName: profile.displayName,
       role: invitedRole, joinedAt: new Date().toISOString(),
@@ -139,6 +144,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     const unsub = onAuthStateChanged(auth, async (u) => {
+      setLoading(true);
       setUser(u);
       if (u) {
         try {
@@ -159,6 +165,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           setTenant(activeTenant);
         } catch (e) {
           console.error("[auth] bootstrap failed:", e);
+          setProfile(null);
+          setTenant(null);
         }
       } else {
         setProfile(null);

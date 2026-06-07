@@ -35,6 +35,9 @@ interface AuthCtx {
   profile: UserProfile | null;
   tenant: Tenant | null;
   loading: boolean;
+  isMaster: boolean;
+  switchTenant: (tenantId: string) => Promise<void>;
+  resetTenant: () => Promise<void>;
   signInEmail: (email: string, password: string) => Promise<void>;
   signUpEmail: (email: string, password: string, displayName: string, company: string) => Promise<void>;
   signInGoogle: () => Promise<void>;

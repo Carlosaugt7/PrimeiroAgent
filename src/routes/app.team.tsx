@@ -43,7 +43,7 @@ const ROLE_LABEL: Record<Role, string> = {
 };
 
 function Team() {
-  const { tenant, profile } = useAuth();
+  const { tenant, profile, isMaster } = useAuth();
   const [members, setMembers] = useState<Member[]>([]);
   const [invites, setInvites] = useState<Invite[]>([]);
   const [email, setEmail] = useState("");

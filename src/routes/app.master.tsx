@@ -6,7 +6,7 @@ import { collection, getDocs } from "firebase/firestore";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
-import { Crown, Building2, ArrowRightCircle, RefreshCw, Search, ShieldAlert } from "lucide-react";
+import { Crown, Building2, ArrowRightCircle, RefreshCw, Search, ShieldAlert, Smartphone } from "lucide-react";
 import { toast } from "sonner";
 
 export const Route = createFileRoute("/app/master")({
@@ -67,6 +67,14 @@ function Master() {
     } catch (e: any) { toast.error(e?.message ?? "Falha ao trocar"); }
   };
 
+  const openInstances = async (id: string) => {
+    try {
+      if (tenant?.id !== id) await switchTenant(id);
+      toast.success("Abrindo instâncias do cliente");
+      nav({ to: "/app/whatsapp" });
+    } catch (e: any) { toast.error(e?.message ?? "Falha ao abrir instâncias"); }
+  };
+
   const back = async () => {
     await resetTenant();
     toast.success("Voltou ao seu workspace");
@@ -117,9 +125,14 @@ function Master() {
                 {t.id} · owner: {t.ownerId ?? "—"}
               </div>
             </div>
-            <Button size="sm" onClick={() => enter(t.id)} disabled={tenant?.id === t.id}>
-              <ArrowRightCircle className="size-4" /> Entrar
-            </Button>
+            <div className="flex items-center gap-2">
+              <Button size="sm" variant="outline" onClick={() => openInstances(t.id)}>
+                <Smartphone className="size-4" /> Instâncias
+              </Button>
+              <Button size="sm" onClick={() => enter(t.id)} disabled={tenant?.id === t.id}>
+                <ArrowRightCircle className="size-4" /> Entrar
+              </Button>
+            </div>
           </div>
         ))}
       </div>

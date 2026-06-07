@@ -2,9 +2,10 @@ import { Link, useRouterState } from "@tanstack/react-router";
 import {
   LayoutDashboard, Bot, MessagesSquare, Database, Smartphone,
   CreditCard, Users, Settings, ShieldCheck, Sparkles, Plug, ScrollText, Rocket,
-  Cpu, FlaskConical, Contact, MessageSquareText, CalendarClock, BarChart3, Zap,
+  Cpu, FlaskConical, Contact, MessageSquareText, CalendarClock, BarChart3, Zap, Crown,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { useAuth } from "@/lib/auth";
 
 type NavItem = { to: string; label: string; icon: typeof LayoutDashboard; exact?: boolean };
 

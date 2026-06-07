@@ -150,3 +150,32 @@ export const chatCompletion = createServerFn({ method: "POST" })
       durationMs: Date.now() - started,
     };
   });
+
+// ============== Embeddings (OpenAI-compatível) ==============
+
+interface EmbedInput {
+  baseUrl: string;
+  apiKey: string;
+  model: string; // ex: "text-embedding-3-small"
+  texts: string[];
+}
+
+export const embedTexts = createServerFn({ method: "POST" })
+  .inputValidator((d: EmbedInput) => {
+    if (!d?.apiKey) throw new Error("apiKey ausente");
+    if (!d?.model) throw new Error("model ausente");
+    if (!Array.isArray(d.texts) || d.texts.length === 0) throw new Error("texts vazio");
+    if (d.texts.length > 100) throw new Error("máximo 100 textos por chamada");
+    return d;
+  })
+  .handler(async ({ data }) => {
+    const base = (data.baseUrl?.trim() || "https://api.openai.com/v1").replace(/\/$/, "");
+    const r = await fetch(`${base}/embeddings`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${data.apiKey}` },
+      body: JSON.stringify({ model: data.model, input: data.texts }),
+    });
+    if (!r.ok) throw new Error(`Embeddings ${r.status}: ${(await r.text()).slice(0, 400)}`);
+    const j = (await r.json()) as { data: { embedding: number[] }[] };
+    return { vectors: j.data.map((x) => x.embedding) };
+  });

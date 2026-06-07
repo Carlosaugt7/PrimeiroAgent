@@ -8,7 +8,7 @@ import {
   signOut as fbSignOut,
   type User,
 } from "firebase/auth";
-import { doc, getDoc, serverTimestamp, setDoc } from "firebase/firestore";
+import { collection, deleteDoc, doc, getDoc, getDocs, query, serverTimestamp, setDoc, where } from "firebase/firestore";
 import { auth, db } from "@/integrations/firebase/client";
 
 export type Role = "owner" | "admin" | "editor" | "viewer" | "agent";
@@ -55,9 +55,50 @@ async function ensureTenantAndProfile(user: User, companyHint?: string): Promise
     }
   }
 
-  // Bootstrap: create tenant + profile
-  const tenantId = user.uid; // owner's uid = tenant id (simple, unique)
-  const tenant: Tenant = {
+  // Procura convite pendente pelo e-mail (top-level `invites`)
+  const email = (user.email || "").toLowerCase();
+  let invitedTenantId: string | null = null;
+  let invitedRole: Role = "agent";
+  let inviteDocId: string | null = null;
+  if (email) {
+    try {
+      const snap = await getDocs(query(collection(db, "invites"), where("email", "==", email)));
+      const inv = snap.docs[0];
+      if (inv) {
+        const data = inv.data() as { tenantId: string; role: Role };
+        invitedTenantId = data.tenantId;
+        invitedRole = data.role || "agent";
+        inviteDocId = inv.id;
+      }
+    } catch (e) { console.warn("[auth] invite lookup falhou:", e); }
+  }
+
+  let tenant: Tenant;
+  let profile: UserProfile;
+
+  if (invitedTenantId) {
+    const tSnap = await getDoc(doc(db, "tenants", invitedTenantId));
+    if (!tSnap.exists()) throw new Error("Tenant do convite não existe");
+    tenant = { id: tSnap.id, ...(tSnap.data() as Omit<Tenant, "id">) };
+    profile = {
+      uid: user.uid,
+      email: user.email || "",
+      displayName: user.displayName || user.email?.split("@")[0] || "",
+      tenantId: tenant.id,
+      role: invitedRole,
+    };
+    await setDoc(profileRef, { ...profile, _ts: serverTimestamp() });
+    await setDoc(doc(db, "tenants", tenant.id, "members", user.uid), {
+      uid: user.uid, email: profile.email, displayName: profile.displayName,
+      role: invitedRole, joinedAt: new Date().toISOString(),
+    });
+    if (inviteDocId) { try { await deleteDoc(doc(db, "invites", inviteDocId)); } catch {} }
+    return { profile, tenant };
+  }
+
+  // Bootstrap: cria tenant + profile (novo owner)
+  const tenantId = user.uid;
+  tenant = {
     id: tenantId,
     name: companyHint || user.displayName || user.email?.split("@")[0] || "Workspace",
     ownerId: user.uid,
@@ -67,7 +108,7 @@ async function ensureTenantAndProfile(user: User, companyHint?: string): Promise
   };
   await setDoc(doc(db, "tenants", tenantId), { ...tenant, _ts: serverTimestamp() });
 
-  const profile: UserProfile = {
+  profile = {
     uid: user.uid,
     email: user.email || "",
     displayName: user.displayName || user.email?.split("@")[0] || "",
@@ -75,6 +116,10 @@ async function ensureTenantAndProfile(user: User, companyHint?: string): Promise
     role: "owner",
   };
   await setDoc(profileRef, { ...profile, _ts: serverTimestamp() });
+  await setDoc(doc(db, "tenants", tenantId, "members", user.uid), {
+    uid: user.uid, email: profile.email, displayName: profile.displayName,
+    role: "owner", joinedAt: new Date().toISOString(),
+  });
 
   return { profile, tenant };
 }

@@ -3,70 +3,61 @@ import { db } from "@/integrations/firebase/client";
 import {
   collection,
   onSnapshot,
-  addDoc,
+  addDoc as fsAddDoc,
   updateDoc,
   deleteDoc,
   doc,
-  setDoc,
   serverTimestamp,
   query,
   orderBy,
   limit,
 } from "firebase/firestore";
+import { useAuth } from "@/lib/auth";
 
 export type AgentStatus = "online" | "offline" | "treinando";
-export type WhatsAppStatus = "conectado" | "desconectado" | "aguardando_qr";
 
-export interface AgentTool {
-  id: string;
+export interface Persona {
   name: string;
-  description: string;
-  enabled: boolean;
+  role: string;
+  specialty: string;
+  tone: string;
+  writingStyle: string;
+  rules: string;
+  goals: string;
 }
-export interface AgentTrigger {
-  id: string;
-  type: "mensagem" | "cron" | "webhook";
-  label: string;
-  config: string;
-  enabled: boolean;
-}
-export interface AgentEnvVar { id: string; key: string; value: string; secret: boolean }
 
 export interface Agent {
   id: string;
   name: string;
+  photoUrl?: string;
+  category: string;
+  department: string;
   description: string;
-  segment: string;
   status: AgentStatus;
-  whatsapp: WhatsAppStatus;
-  whatsappNumber?: string;
+  segment: string;
+  systemPrompt: string;
+  promptVersion: number;
+  providerId?: string;
   model: string;
-  provider: "openai" | "anthropic" | "google" | "lovable";
   temperature: number;
   topP: number;
   maxTokens: number;
-  presencePenalty: number;
-  frequencyPenalty: number;
   memory: "curto" | "longo" | "vetorial";
-  systemPrompt: string;
+  persona: Persona;
   messages30d: number;
   conversions30d: number;
   createdAt: string;
-  knowledgeBaseIds: string[];
-  tools: AgentTool[];
-  triggers: AgentTrigger[];
-  envVars: AgentEnvVar[];
+  whatsappInstanceId?: string;
 }
 
-export interface KnowledgeDoc {
+export interface LLMProvider {
   id: string;
   name: string;
-  type: "pdf" | "site" | "planilha" | "texto";
-  sizeKb: number;
-  uploadedAt: string;
-  agentId?: string;
-  indexProgress: number;
-  status: "fila" | "processando" | "indexado" | "erro";
+  kind: "openai" | "anthropic" | "google" | "groq" | "deepseek" | "openrouter" | "custom";
+  baseUrl: string;
+  apiKey: string; // stored as-is for now; Phase 5 will encrypt
+  models: { id: string; contextWindow?: number }[];
+  createdAt: string;
 }
 
 export interface Conversation {
@@ -80,193 +71,165 @@ export interface Conversation {
   status: "aberta" | "resolvida" | "handoff";
 }
 
-export interface TenantUser {
+export interface KnowledgeDoc {
   id: string;
   name: string;
-  email: string;
-  role: "owner" | "admin" | "editor" | "viewer";
+  type: "pdf" | "docx" | "xlsx" | "txt" | "csv" | "json" | "site" | "faq";
+  sizeKb: number;
+  uploadedAt: string;
+  agentId?: string;
+  status: "fila" | "processando" | "indexado" | "erro";
 }
 
-export interface Integration {
+export interface Instance {
   id: string;
   name: string;
-  kind: "whatsapp" | "webhook" | "telegram" | "slack" | "api";
-  status: "ativo" | "inativo";
-  detail: string;
+  status: "online" | "offline" | "conectando";
+  number?: string;
+  webhook?: string;
+  createdAt: string;
 }
 
-export interface LogEntry {
-  id: string;
-  ts: string;
-  agentId: string;
-  level: "info" | "warn" | "error" | "tool";
-  message: string;
-  durationMs?: number;
-  tokens?: number;
-}
-
-export interface Deployment {
-  id: string;
-  agentId: string;
-  version: string;
-  env: "dev" | "prod";
-  deployedAt: string;
-  deployedBy: string;
-  status: "ativo" | "rollback";
-}
-
-export interface PlanInfo {
+export interface AppPlan {
   name: string;
-  price: string;
-  renewsAt: string;
   messagesUsed: number;
   messagesLimit: number;
+  renewsAt: string;
 }
 
 interface AppState {
-  agents: Agent[];
-  docs: KnowledgeDoc[];
-  conversations: Conversation[];
-  users: TenantUser[];
-  integrations: Integration[];
-  logs: LogEntry[];
-  deployments: Deployment[];
-  plan: PlanInfo;
   loading: boolean;
-  createAgent: (a: Pick<Agent, "name" | "description" | "segment" | "model" | "temperature" | "systemPrompt">) => Promise<string>;
+  tenantId: string | null;
+  agents: Agent[];
+  providers: LLMProvider[];
+  conversations: Conversation[];
+  knowledge: KnowledgeDoc[];
+  instances: Instance[];
+  plan: AppPlan;
+  createAgent: (a: Partial<Agent> & { name: string }) => Promise<string>;
   updateAgent: (id: string, patch: Partial<Agent>) => Promise<void>;
   deleteAgent: (id: string) => Promise<void>;
-  connectWhatsapp: (agentId: string, number: string) => Promise<void>;
-  addDoc: (d: Pick<KnowledgeDoc, "name" | "type" | "sizeKb" | "agentId">) => Promise<void>;
-  removeDoc: (id: string) => Promise<void>;
-  toggleIntegration: (id: string) => Promise<void>;
-  promoteDeployment: (agentId: string) => Promise<void>;
+  createProvider: (p: Omit<LLMProvider, "id" | "createdAt" | "models"> & { models?: LLMProvider["models"] }) => Promise<string>;
+  updateProvider: (id: string, patch: Partial<LLMProvider>) => Promise<void>;
+  deleteProvider: (id: string) => Promise<void>;
 }
 
-const defaultTools = (): AgentTool[] => [
-  { id: "t_web", name: "web_search", description: "Pesquisa na web em tempo real", enabled: true },
-  { id: "t_http", name: "http_request", description: "Chama APIs externas (GET/POST)", enabled: false },
-  { id: "t_cal", name: "calendar", description: "Lê e cria eventos de calendário", enabled: false },
-  { id: "t_code", name: "code_interpreter", description: "Executa cálculos e Python sandbox", enabled: false },
-  { id: "t_img", name: "image_generation", description: "Gera imagens sob demanda", enabled: false },
-];
+const defaultPersona = (): Persona => ({
+  name: "", role: "", specialty: "", tone: "Profissional, cordial",
+  writingStyle: "Direto e claro", rules: "Nunca prometa o que não pode cumprir.", goals: "Qualificar e converter leads.",
+});
 
-const defaultPlan: PlanInfo = { name: "—", price: "—", renewsAt: "—", messagesUsed: 0, messagesLimit: 0 };
+const defaultPlan: AppPlan = { name: "Trial", messagesUsed: 0, messagesLimit: 1000, renewsAt: "—" };
 
-const AppCtx = createContext<AppState | null>(null);
+const Ctx = createContext<AppState | null>(null);
 
-function useCollectionSync<T extends { id: string }>(name: string, setter: (rows: T[]) => void) {
-  useEffect(() => {
-    const unsub = onSnapshot(collection(db, name), (snap) => {
-      setter(snap.docs.map((d) => ({ id: d.id, ...(d.data() as object) })) as T[]);
-    }, (err) => console.error(`[firebase] ${name}:`, err));
-    return () => unsub();
-  }, [name, setter]);
+function tcol(tenantId: string, name: string) {
+  return collection(db, "tenants", tenantId, name);
+}
+function tdoc(tenantId: string, name: string, id: string) {
+  return doc(db, "tenants", tenantId, name, id);
 }
 
 export function AppStoreProvider({ children }: { children: ReactNode }) {
+  const { tenant, profile, loading: authLoading } = useAuth();
+  const tenantId = tenant?.id ?? null;
+
   const [agents, setAgents] = useState<Agent[]>([]);
-  const [docs, setDocs] = useState<KnowledgeDoc[]>([]);
+  const [providers, setProviders] = useState<LLMProvider[]>([]);
   const [conversations, setConversations] = useState<Conversation[]>([]);
-  const [users, setUsers] = useState<TenantUser[]>([]);
-  const [integrations, setIntegrations] = useState<Integration[]>([]);
-  const [logs, setLogs] = useState<LogEntry[]>([]);
-  const [deployments, setDeployments] = useState<Deployment[]>([]);
-  const [plan, setPlan] = useState<PlanInfo>(defaultPlan);
+  const [knowledge, setKnowledge] = useState<KnowledgeDoc[]>([]);
+  const [instances, setInstances] = useState<Instance[]>([]);
+  const [plan] = useState<AppPlan>(defaultPlan);
   const [loading, setLoading] = useState(true);
 
-  useCollectionSync<Agent>("agents", setAgents);
-  useCollectionSync<KnowledgeDoc>("docs", setDocs);
-  useCollectionSync<TenantUser>("users", setUsers);
-  useCollectionSync<Integration>("integrations", setIntegrations);
-  useCollectionSync<Deployment>("deployments", setDeployments);
-
   useEffect(() => {
-    const unsub = onSnapshot(
-      query(collection(db, "conversations"), orderBy("updatedAt", "desc")),
-      (snap) => setConversations(snap.docs.map((d) => ({ id: d.id, ...(d.data() as object) })) as Conversation[]),
-      (err) => console.error("[firebase] conversations:", err),
-    );
-    return () => unsub();
-  }, []);
+    if (!tenantId) { setLoading(authLoading); return; }
+    setLoading(true);
+    const subs: Array<() => void> = [];
 
-  useEffect(() => {
-    const unsub = onSnapshot(
-      query(collection(db, "logs"), orderBy("ts", "desc"), limit(100)),
-      (snap) => setLogs(snap.docs.map((d) => ({ id: d.id, ...(d.data() as object) })) as LogEntry[]),
-      (err) => console.error("[firebase] logs:", err),
-    );
-    return () => unsub();
-  }, []);
-
-  useEffect(() => {
-    const unsub = onSnapshot(doc(db, "settings", "plan"), (d) => {
-      if (d.exists()) setPlan(d.data() as PlanInfo);
+    subs.push(onSnapshot(tcol(tenantId, "agents"), (s) => {
+      setAgents(s.docs.map((d) => ({ id: d.id, ...(d.data() as object) })) as Agent[]);
       setLoading(false);
-    }, (err) => { console.error("[firebase] plan:", err); setLoading(false); });
-    return () => unsub();
-  }, []);
+    }, (e) => { console.error("[fs] agents:", e); setLoading(false); }));
+
+    subs.push(onSnapshot(tcol(tenantId, "llm_providers"), (s) => {
+      setProviders(s.docs.map((d) => ({ id: d.id, ...(d.data() as object) })) as LLMProvider[]);
+    }));
+
+    subs.push(onSnapshot(query(tcol(tenantId, "conversations"), orderBy("updatedAt", "desc"), limit(50)), (s) => {
+      setConversations(s.docs.map((d) => ({ id: d.id, ...(d.data() as object) })) as Conversation[]);
+    }));
+
+    subs.push(onSnapshot(tcol(tenantId, "knowledge"), (s) => {
+      setKnowledge(s.docs.map((d) => ({ id: d.id, ...(d.data() as object) })) as KnowledgeDoc[]);
+    }));
+
+    subs.push(onSnapshot(tcol(tenantId, "instances"), (s) => {
+      setInstances(s.docs.map((d) => ({ id: d.id, ...(d.data() as object) })) as Instance[]);
+    }));
+
+    return () => subs.forEach((u) => u());
+  }, [tenantId, authLoading]);
 
   const value = useMemo<AppState>(() => ({
-    agents, docs, conversations, users, integrations, logs, deployments, plan, loading,
+    loading, tenantId, agents, providers, conversations, knowledge, instances, plan,
     createAgent: async (a) => {
-      const ref = await addDoc(collection(db, "agents"), {
-        name: a.name, description: a.description, segment: a.segment,
-        status: "offline", whatsapp: "desconectado",
-        model: a.model, provider: "openai",
-        temperature: a.temperature, topP: 1, maxTokens: 1024,
-        presencePenalty: 0, frequencyPenalty: 0, memory: "vetorial",
-        systemPrompt: a.systemPrompt, messages30d: 0, conversions30d: 0,
-        createdAt: new Date().toISOString().slice(0, 10),
-        knowledgeBaseIds: [], tools: defaultTools(), triggers: [], envVars: [],
+      if (!tenantId) throw new Error("Sem tenant");
+      const ref = await fsAddDoc(tcol(tenantId, "agents"), {
+        name: a.name,
+        photoUrl: a.photoUrl ?? "",
+        category: a.category ?? "Geral",
+        department: a.department ?? "Atendimento",
+        description: a.description ?? "",
+        status: "offline" as AgentStatus,
+        segment: a.segment ?? "Vendas",
+        systemPrompt: a.systemPrompt ?? "Você é um assistente prestativo.",
+        promptVersion: 1,
+        providerId: a.providerId ?? "",
+        model: a.model ?? "",
+        temperature: a.temperature ?? 0.5,
+        topP: a.topP ?? 1,
+        maxTokens: a.maxTokens ?? 1024,
+        memory: a.memory ?? "vetorial",
+        persona: a.persona ?? defaultPersona(),
+        messages30d: 0,
+        conversions30d: 0,
+        createdAt: new Date().toISOString(),
+        _ts: serverTimestamp(),
+        _createdBy: profile?.uid ?? "",
       });
       return ref.id;
     },
     updateAgent: async (id, patch) => {
-      await updateDoc(doc(db, "agents", id), patch as Record<string, unknown>);
+      if (!tenantId) return;
+      await updateDoc(tdoc(tenantId, "agents", id), patch as Record<string, unknown>);
     },
-    deleteAgent: async (id) => { await deleteDoc(doc(db, "agents", id)); },
-    connectWhatsapp: async (agentId, number) => {
-      await updateDoc(doc(db, "agents", agentId), { whatsapp: "conectado", whatsappNumber: number, status: "online" });
+    deleteAgent: async (id) => {
+      if (!tenantId) return;
+      await deleteDoc(tdoc(tenantId, "agents", id));
     },
-    addDoc: async (d) => {
-      const ref = await addDoc(collection(db, "docs"), {
-        ...d, uploadedAt: new Date().toISOString().slice(0, 10), indexProgress: 0, status: "processando",
+    createProvider: async (p) => {
+      if (!tenantId) throw new Error("Sem tenant");
+      const ref = await fsAddDoc(tcol(tenantId, "llm_providers"), {
+        ...p, models: p.models ?? [], createdAt: new Date().toISOString(), _ts: serverTimestamp(),
       });
-      let p = 0;
-      const tick = setInterval(async () => {
-        p += 20;
-        await updateDoc(doc(db, "docs", ref.id), {
-          indexProgress: Math.min(100, p),
-          status: p >= 100 ? "indexado" : "processando",
-        });
-        if (p >= 100) clearInterval(tick);
-      }, 600);
+      return ref.id;
     },
-    removeDoc: async (id) => { await deleteDoc(doc(db, "docs", id)); },
-    toggleIntegration: async (id) => {
-      const cur = integrations.find((i) => i.id === id);
-      if (!cur) return;
-      await updateDoc(doc(db, "integrations", id), { status: cur.status === "ativo" ? "inativo" : "ativo" });
+    updateProvider: async (id, patch) => {
+      if (!tenantId) return;
+      await updateDoc(tdoc(tenantId, "llm_providers", id), patch as Record<string, unknown>);
     },
-    promoteDeployment: async (agentId) => {
-      const dev = deployments.find((d) => d.agentId === agentId && d.env === "dev");
-      if (!dev) return;
-      const prod = deployments.find((d) => d.agentId === agentId && d.env === "prod");
-      if (prod) await deleteDoc(doc(db, "deployments", prod.id));
-      await setDoc(doc(collection(db, "deployments")), {
-        agentId, version: dev.version, env: "prod",
-        deployedAt: new Date().toISOString().slice(0, 16).replace("T", " "),
-        deployedBy: dev.deployedBy, status: "ativo", _ts: serverTimestamp(),
-      });
+    deleteProvider: async (id) => {
+      if (!tenantId) return;
+      await deleteDoc(tdoc(tenantId, "llm_providers", id));
     },
-  }), [agents, docs, conversations, users, integrations, logs, deployments, plan, loading]);
+  }), [loading, tenantId, profile, agents, providers, conversations, knowledge, instances, plan]);
 
-  return <AppCtx.Provider value={value}>{children}</AppCtx.Provider>;
+  return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
 }
 
 export function useAppStore() {
-  const ctx = useContext(AppCtx);
+  const ctx = useContext(Ctx);
   if (!ctx) throw new Error("useAppStore must be used inside AppStoreProvider");
   return ctx;
 }

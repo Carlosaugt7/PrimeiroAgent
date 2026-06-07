@@ -1,0 +1,52 @@
+rules_version = '2';
+
+// Cole estas regras em: Firebase Console → Firestore Database → Rules
+// Projeto: studio-5871543491-a8c0f
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isMasterAdmin() {
+      return isSignedIn() && exists(/databases/$(database)/documents/master_admins/$(request.auth.uid));
+    }
+
+    function userTenantId() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data.tenantId;
+    }
+
+    function belongsToTenant(tid) {
+      return isSignedIn() && userTenantId() == tid;
+    }
+
+    // Perfis dos usuários (1 doc por uid)
+    match /users/{uid} {
+      allow read: if isSignedIn() && (request.auth.uid == uid || isMasterAdmin());
+      allow create: if isSignedIn() && request.auth.uid == uid;
+      allow update: if isSignedIn() && (request.auth.uid == uid || isMasterAdmin());
+      allow delete: if isMasterAdmin();
+    }
+
+    // Tenants (workspaces)
+    match /tenants/{tenantId} {
+      allow read: if belongsToTenant(tenantId) || isMasterAdmin();
+      allow create: if isSignedIn() && request.auth.uid == tenantId;
+      allow update: if (belongsToTenant(tenantId) && resource.data.ownerId == request.auth.uid) || isMasterAdmin();
+      allow delete: if isMasterAdmin();
+
+      // Tudo dentro do tenant
+      match /{collection}/{docId=**} {
+        allow read, write: if belongsToTenant(tenantId) || isMasterAdmin();
+      }
+    }
+
+    // Master admins (RS Consultoria)
+    match /master_admins/{uid} {
+      allow read: if isSignedIn() && request.auth.uid == uid;
+      allow write: if false; // promover via console Firebase
+    }
+  }
+}

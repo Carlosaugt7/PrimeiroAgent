@@ -1,7 +1,13 @@
-import { createFileRoute, Outlet } from "@tanstack/react-router";
+import { createFileRoute, Outlet, useNavigate } from "@tanstack/react-router";
+import { useEffect } from "react";
 import { AppSidebar } from "@/components/app/AppSidebar";
 import { AppStoreProvider } from "@/lib/app-store";
-import { Bell, Search } from "lucide-react";
+import { useAuth } from "@/lib/auth";
+import { Bell, Loader2, LogOut, Search } from "lucide-react";
+import {
+  DropdownMenu, DropdownMenuContent, DropdownMenuItem,
+  DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 
 export const Route = createFileRoute("/app")({
   head: () => ({ meta: [{ title: "Console — AgentHub AI" }] }),
@@ -9,10 +15,27 @@ export const Route = createFileRoute("/app")({
 });
 
 function AppLayout() {
+  const { user, profile, tenant, loading, signOut } = useAuth();
+  const navigate = useNavigate();
+
+  useEffect(() => {
+    if (!loading && !user) navigate({ to: "/auth" });
+  }, [loading, user, navigate]);
+
+  if (loading || !user || !profile || !tenant) {
+    return (
+      <div className="min-h-screen grid place-items-center">
+        <Loader2 className="animate-spin size-6 text-muted-foreground" />
+      </div>
+    );
+  }
+
+  const initials = (profile.displayName || profile.email).split(/[\s@]/).filter(Boolean).slice(0, 2).map((s) => s[0]?.toUpperCase()).join("");
+
   return (
     <AppStoreProvider>
       <div className="min-h-screen flex">
-        <AppSidebar />
+        <AppSidebar tenantName={tenant.name} planName={tenant.plan} />
         <div className="flex-1 flex flex-col min-w-0">
           <header className="h-16 border-b border-border bg-card/30 backdrop-blur-xl flex items-center gap-4 px-6">
             <div className="flex-1 flex items-center gap-2 max-w-md">
@@ -27,9 +50,29 @@ function AppLayout() {
             <button className="size-9 rounded-lg grid place-items-center hover:bg-secondary/60">
               <Bell className="size-4" />
             </button>
-            <div className="size-9 rounded-full bg-gradient-primary grid place-items-center text-sm font-semibold text-primary-foreground">
-              AM
-            </div>
+
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <button className="size-9 rounded-full bg-gradient-primary grid place-items-center text-sm font-semibold text-primary-foreground">
+                  {initials || "U"}
+                </button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-56">
+                <DropdownMenuLabel>
+                  <p className="font-medium">{profile.displayName || "Usuário"}</p>
+                  <p className="text-xs text-muted-foreground truncate">{profile.email}</p>
+                </DropdownMenuLabel>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem onClick={() => navigate({ to: "/app/settings" })}>Configurações</DropdownMenuItem>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem
+                  onClick={async () => { await signOut(); navigate({ to: "/auth" }); }}
+                  className="text-destructive"
+                >
+                  <LogOut className="size-4 mr-2" /> Sair
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
           </header>
           <main className="flex-1 p-6 md:p-8 overflow-x-hidden">
             <Outlet />

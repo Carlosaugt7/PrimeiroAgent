@@ -12,7 +12,13 @@ import {
 import { Loader2, LogOut, Plus, QrCode, RefreshCw, Smartphone, Trash2 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { db } from "@/integrations/firebase/client";
@@ -46,7 +52,9 @@ function messageFromError(error: unknown, fallback: string) {
 function statusBadge(state: string) {
   const s = state.toLowerCase();
   if (s === "open" || s === "online" || s === "connected") {
-    return <Badge className="bg-emerald-500/15 text-emerald-400 border-emerald-500/30">Conectado</Badge>;
+    return (
+      <Badge className="bg-emerald-500/15 text-emerald-400 border-emerald-500/30">Conectado</Badge>
+    );
   }
   if (s === "connecting" || s === "qr") {
     return <Badge className="bg-amber-500/15 text-amber-400 border-amber-500/30">Conectando</Badge>;
@@ -79,7 +87,9 @@ function Page() {
     setLoading(true);
     try {
       const remote = await list();
-      const remoteByName = new Map(remote.filter((i) => i.instanceName).map((i) => [i.instanceName, i]));
+      const remoteByName = new Map(
+        remote.filter((i) => i.instanceName).map((i) => [i.instanceName, i]),
+      );
       setInstances(
         localInstances.map((i) => {
           return (

@@ -1,5 +1,160 @@
 import { createFileRoute } from "@tanstack/react-router";
 
+const EVO_BASE = "https://evolution-api.rsconsultoria.pro";
+
+async function evoSendText(instanceName: string, number: string, text: string) {
+  const key = process.env.EVOLUTION_API_KEY;
+  if (!key) throw new Error("EVOLUTION_API_KEY ausente");
+  const r = await fetch(`${EVO_BASE}/message/sendText/${encodeURIComponent(instanceName)}`, {
+    method: "POST",
+    headers: { apikey: key, "Content-Type": "application/json" },
+    body: JSON.stringify({ number, text }),
+  });
+  if (!r.ok) throw new Error(`sendText ${r.status}: ${(await r.text()).slice(0, 200)}`);
+}
+
+function cosine(a: number[], b: number[]) {
+  let dot = 0, na = 0, nb = 0;
+  const n = Math.min(a.length, b.length);
+  for (let i = 0; i < n; i++) { dot += a[i] * b[i]; na += a[i] * a[i]; nb += b[i] * b[i]; }
+  return dot / (Math.sqrt(na) * Math.sqrt(nb) || 1);
+}
+
+async function embedQuery(provider: any, model: string, text: string): Promise<number[] | null> {
+  try {
+    const base = (provider.baseUrl?.trim() || "https://api.openai.com/v1").replace(/\/$/, "");
+    const r = await fetch(`${base}/embeddings`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${provider.apiKey}` },
+      body: JSON.stringify({ model, input: [text] }),
+    });
+    if (!r.ok) return null;
+    const j = (await r.json()) as { data: { embedding: number[] }[] };
+    return j.data?.[0]?.embedding ?? null;
+  } catch { return null; }
+}
+
+async function callLLM(provider: any, agent: any, systemPrompt: string, userText: string): Promise<string> {
+  const baseUrl = provider.baseUrl?.trim() || "";
+  const kind = provider.kind;
+
+  if (kind === "anthropic") {
+    const base = (baseUrl || "https://api.anthropic.com/v1").replace(/\/$/, "");
+    const r = await fetch(`${base}/messages`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "x-api-key": provider.apiKey, "anthropic-version": "2023-06-01" },
+      body: JSON.stringify({
+        model: agent.model, system: systemPrompt,
+        messages: [{ role: "user", content: userText }],
+        max_tokens: 1024, temperature: agent.temperature ?? 0.5,
+      }),
+    });
+    if (!r.ok) throw new Error(`LLM ${r.status}: ${(await r.text()).slice(0, 300)}`);
+    const j = (await r.json()) as { content: Array<{ text: string }> };
+    return j.content?.[0]?.text ?? "";
+  }
+
+  if (kind === "google") {
+    const url = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(agent.model)}:generateContent?key=${encodeURIComponent(provider.apiKey)}`;
+    const r = await fetch(url, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        systemInstruction: { parts: [{ text: systemPrompt }] },
+        contents: [{ role: "user", parts: [{ text: userText }] }],
+        generationConfig: { temperature: agent.temperature ?? 0.5 },
+      }),
+    });
+    if (!r.ok) throw new Error(`LLM ${r.status}: ${(await r.text()).slice(0, 300)}`);
+    const j = (await r.json()) as { candidates?: Array<{ content: { parts: Array<{ text: string }> } }> };
+    return j.candidates?.[0]?.content?.parts?.[0]?.text ?? "";
+  }
+
+  // OpenAI-compatível
+  const base = (baseUrl || "https://api.openai.com/v1").replace(/\/$/, "");
+  const r = await fetch(`${base}/chat/completions`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Authorization: `Bearer ${provider.apiKey}` },
+    body: JSON.stringify({
+      model: agent.model,
+      messages: [{ role: "system", content: systemPrompt }, { role: "user", content: userText }],
+      temperature: agent.temperature ?? 0.5,
+    }),
+  });
+  if (!r.ok) throw new Error(`LLM ${r.status}: ${(await r.text()).slice(0, 300)}`);
+  const j = (await r.json()) as { choices: Array<{ message: { content: string } }> };
+  return j.choices?.[0]?.message?.content ?? "";
+}
+
+async function runBridge(
+  fb: typeof import("@/lib/firebase-admin.server"),
+  tenantId: string,
+  instanceName: string,
+  remoteJid: string,
+  userText: string,
+  convPath: string,
+) {
+  // 1) Encontrar agente vinculado a esta instância
+  const agents = await fb.listCollection(`tenants/${tenantId}/agents`);
+  const agent = agents.find((a) => a.whatsappInstanceId === instanceName);
+  if (!agent) return { skipped: "no-agent-linked" };
+  if (agent.autoReply === false) return { skipped: "auto-reply-off" };
+  if (!agent.providerId || !agent.model) return { skipped: "agent-incomplete" };
+
+  // 2) Carregar provider
+  const provider = await fb.getDoc(`tenants/${tenantId}/providers/${agent.providerId}`);
+  if (!provider?.apiKey) return { skipped: "no-provider" };
+
+  // 3) RAG opcional
+  let systemPrompt: string = agent.systemPrompt ?? "Você é um assistente útil.";
+  try {
+    const docs = await fb.listCollection(`tenants/${tenantId}/knowledge`);
+    const compatible = docs.filter((d) => d.embedProviderId === agent.providerId && d.embedModel);
+    if (compatible.length > 0) {
+      const embedModel = compatible[0].embedModel as string;
+      const qvec = await embedQuery(provider, embedModel, userText);
+      if (qvec) {
+        const scored: Array<{ text: string; score: number }> = [];
+        for (const d of compatible.slice(0, 10)) {
+          const chunks = await fb.listCollection(`tenants/${tenantId}/knowledge/${d.id}/chunks`, { pageSize: 200 });
+          for (const c of chunks) {
+            if (Array.isArray(c.embedding) && typeof c.text === "string") {
+              scored.push({ text: c.text, score: cosine(qvec, c.embedding as number[]) });
+            }
+          }
+        }
+        scored.sort((a, b) => b.score - a.score);
+        const top = scored.slice(0, 4).filter((s) => s.score > 0.2);
+        if (top.length > 0) {
+          const ctx = top.map((t, i) => `[${i + 1}] ${t.text}`).join("\n\n");
+          systemPrompt = `${systemPrompt}\n\n## CONTEXTO RELEVANTE DA BASE DE CONHECIMENTO\nUse APENAS estas informações quando forem pertinentes. Se a resposta não estiver no contexto, diga que vai verificar.\n\n${ctx}`;
+        }
+      }
+    }
+  } catch (e) {
+    console.warn("[bridge] RAG falhou:", e);
+  }
+
+  // 4) Chamar LLM
+  const reply = (await callLLM(provider, agent, systemPrompt, userText)).trim();
+  if (!reply) return { skipped: "empty-reply" };
+
+  // 5) Enviar via WhatsApp
+  const number = remoteJid.split("@")[0];
+  await evoSendText(instanceName, number, reply);
+
+  // 6) Registrar resposta do bot no Firestore
+  const replyId = `bot_${Date.now()}`;
+  await fb.setDoc(`${convPath}/messages/${replyId}`, {
+    id: replyId, text: reply, fromMe: true, bot: true, agentId: agent.id, createdAt: new Date().toISOString(),
+  }, { merge: true });
+  await fb.setDoc(convPath, {
+    lastMessage: reply.slice(0, 200), updatedAt: new Date().toISOString(),
+  }, { merge: true });
+
+  return { ok: true, agent: agent.id };
+}
+
 export const Route = createFileRoute("/api/public/evolution-webhook")({
   server: {
     handlers: {
@@ -13,16 +168,15 @@ export const Route = createFileRoute("/api/public/evolution-webhook")({
 
         if (!instanceName) return new Response("missing instance", { status: 200 });
 
-        // Lazy-load: o módulo só carrega no runtime do handler (evita quebrar SSR de páginas)
-        const { getDoc, setDoc, FieldValue } = await import("@/lib/firebase-admin.server");
+        const fb = await import("@/lib/firebase-admin.server");
 
-        const idx = await getDoc(`instance_index/${instanceName}`);
+        const idx = await fb.getDoc(`instance_index/${instanceName}`);
         const tenantId: string | undefined = idx?.tenantId;
         if (!tenantId) return new Response("unknown instance", { status: 200 });
 
         if (event.includes("CONNECTION")) {
           const state = body?.data?.state ?? body?.state ?? "unknown";
-          await setDoc(`tenants/${tenantId}/instances/${instanceName}`, {
+          await fb.setDoc(`tenants/${tenantId}/instances/${instanceName}`, {
             name: instanceName,
             status: state === "open" ? "online" : state === "connecting" ? "conectando" : "offline",
             updatedAt: new Date().toISOString(),
@@ -35,6 +189,7 @@ export const Route = createFileRoute("/api/public/evolution-webhook")({
           const key = m?.key ?? {};
           const remoteJid: string | undefined = key.remoteJid ?? m?.remoteJid;
           if (!remoteJid) return new Response("no remoteJid", { status: 200 });
+          if (remoteJid.endsWith("@g.us")) return Response.json({ ok: true, ignored: "group" });
 
           const fromMe: boolean = !!key.fromMe;
           const messageId: string = key.id ?? `${Date.now()}`;
@@ -45,9 +200,9 @@ export const Route = createFileRoute("/api/public/evolution-webhook")({
             "[mídia]";
           const pushName: string = m?.pushName ?? remoteJid.split("@")[0];
           const convId = remoteJid.replace(/[^a-zA-Z0-9_-]/g, "_");
-
           const convPath = `tenants/${tenantId}/conversations/${convId}`;
-          await setDoc(convPath, {
+
+          await fb.setDoc(convPath, {
             id: convId,
             instanceName,
             contactName: pushName,
@@ -56,15 +211,23 @@ export const Route = createFileRoute("/api/public/evolution-webhook")({
             lastMessage: text.slice(0, 200),
             updatedAt: new Date().toISOString(),
             status: "aberta",
-            ...(fromMe ? { unread: 0 } : { unread: FieldValue.increment(1) }),
+            ...(fromMe ? { unread: 0 } : { unread: fb.FieldValue.increment(1) }),
           }, { merge: true });
 
-          await setDoc(`${convPath}/messages/${messageId}`, {
-            id: messageId,
-            text,
-            fromMe,
-            createdAt: new Date().toISOString(),
+          await fb.setDoc(`${convPath}/messages/${messageId}`, {
+            id: messageId, text, fromMe, createdAt: new Date().toISOString(),
           }, { merge: true });
+
+          // Bridge IA: só responde a mensagens recebidas e que tenham texto
+          if (!fromMe && text && text !== "[mídia]") {
+            try {
+              const r = await runBridge(fb, tenantId, instanceName, remoteJid, text, convPath);
+              return Response.json({ ok: true, bridge: r });
+            } catch (e) {
+              console.error("[bridge] erro:", e);
+              return Response.json({ ok: true, bridgeError: e instanceof Error ? e.message : String(e) });
+            }
+          }
 
           return Response.json({ ok: true });
         }

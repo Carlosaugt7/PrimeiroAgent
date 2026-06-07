@@ -2,7 +2,7 @@ import { Link, useRouterState } from "@tanstack/react-router";
 import {
   LayoutDashboard, Bot, MessagesSquare, Database, Smartphone,
   CreditCard, Users, Settings, ShieldCheck, Sparkles, Plug, ScrollText, Rocket,
-  Cpu, FlaskConical, Contact, MessageSquareText, CalendarClock, BarChart3,
+  Cpu, FlaskConical, Contact, MessageSquareText, CalendarClock, BarChart3, Zap,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 

@@ -8,7 +8,17 @@ import {
   signOut as fbSignOut,
   type User,
 } from "firebase/auth";
-import { collection, deleteDoc, doc, getDoc, getDocs, query, serverTimestamp, setDoc, where } from "firebase/firestore";
+import {
+  collection,
+  deleteDoc,
+  doc,
+  getDoc,
+  getDocs,
+  query,
+  serverTimestamp,
+  setDoc,
+  where,
+} from "firebase/firestore";
 import { auth, db } from "@/integrations/firebase/client";
 import { isMasterEmail } from "@/lib/master";
 
@@ -43,14 +53,22 @@ interface AuthCtx {
   switchTenant: (tenantId: string) => Promise<void>;
   resetTenant: () => Promise<void>;
   signInEmail: (email: string, password: string) => Promise<void>;
-  signUpEmail: (email: string, password: string, displayName: string, company: string) => Promise<void>;
+  signUpEmail: (
+    email: string,
+    password: string,
+    displayName: string,
+    company: string,
+  ) => Promise<void>;
   signInGoogle: () => Promise<void>;
   signOut: () => Promise<void>;
 }
 
 const Ctx = createContext<AuthCtx | null>(null);
 
-async function ensureTenantAndProfile(user: User, companyHint?: string): Promise<{ profile: UserProfile; tenant: Tenant }> {
+async function ensureTenantAndProfile(
+  user: User,
+  companyHint?: string,
+): Promise<{ profile: UserProfile; tenant: Tenant }> {
   const profileRef = doc(db, "users", user.uid);
   const profileSnap = await getDoc(profileRef);
 
@@ -60,9 +78,14 @@ async function ensureTenantAndProfile(user: User, companyHint?: string): Promise
       try {
         const tenantSnap = await getDoc(doc(db, "tenants", profile.tenantId));
         if (tenantSnap.exists()) {
-          return { profile, tenant: { id: tenantSnap.id, ...(tenantSnap.data() as Omit<Tenant, "id">) } };
+          return {
+            profile,
+            tenant: { id: tenantSnap.id, ...(tenantSnap.data() as Omit<Tenant, "id">) },
+          };
         }
-        console.warn("[auth] perfil aponta para tenant inexistente; recriando workspace", { tenantId: profile.tenantId });
+        console.warn("[auth] perfil aponta para tenant inexistente; recriando workspace", {
+          tenantId: profile.tenantId,
+        });
       } catch (e) {
         console.warn("[auth] falha ao carregar tenant do perfil; tentando recuperar bootstrap", e);
       }

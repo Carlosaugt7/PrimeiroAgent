@@ -17,6 +17,7 @@ import { Route as AppWhatsappRouteImport } from './routes/app.whatsapp'
 import { Route as AppTemplatesRouteImport } from './routes/app.templates'
 import { Route as AppTeamRouteImport } from './routes/app.team'
 import { Route as AppSettingsRouteImport } from './routes/app.settings'
+import { Route as AppScheduledRouteImport } from './routes/app.scheduled'
 import { Route as AppPlaygroundRouteImport } from './routes/app.playground'
 import { Route as AppLogsRouteImport } from './routes/app.logs'
 import { Route as AppLlmProvidersRouteImport } from './routes/app.llm-providers'
@@ -69,6 +70,11 @@ const AppTeamRoute = AppTeamRouteImport.update({
 const AppSettingsRoute = AppSettingsRouteImport.update({
   id: '/settings',
   path: '/settings',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppScheduledRoute = AppScheduledRouteImport.update({
+  id: '/scheduled',
+  path: '/scheduled',
   getParentRoute: () => AppRoute,
 } as any)
 const AppPlaygroundRoute = AppPlaygroundRouteImport.update({
@@ -153,6 +159,7 @@ export interface FileRoutesByFullPath {
   '/app/llm-providers': typeof AppLlmProvidersRoute
   '/app/logs': typeof AppLogsRoute
   '/app/playground': typeof AppPlaygroundRoute
+  '/app/scheduled': typeof AppScheduledRoute
   '/app/settings': typeof AppSettingsRoute
   '/app/team': typeof AppTeamRoute
   '/app/templates': typeof AppTemplatesRoute
@@ -175,6 +182,7 @@ export interface FileRoutesByTo {
   '/app/llm-providers': typeof AppLlmProvidersRoute
   '/app/logs': typeof AppLogsRoute
   '/app/playground': typeof AppPlaygroundRoute
+  '/app/scheduled': typeof AppScheduledRoute
   '/app/settings': typeof AppSettingsRoute
   '/app/team': typeof AppTeamRoute
   '/app/templates': typeof AppTemplatesRoute
@@ -199,6 +207,7 @@ export interface FileRoutesById {
   '/app/llm-providers': typeof AppLlmProvidersRoute
   '/app/logs': typeof AppLogsRoute
   '/app/playground': typeof AppPlaygroundRoute
+  '/app/scheduled': typeof AppScheduledRoute
   '/app/settings': typeof AppSettingsRoute
   '/app/team': typeof AppTeamRoute
   '/app/templates': typeof AppTemplatesRoute
@@ -224,6 +233,7 @@ export interface FileRouteTypes {
     | '/app/llm-providers'
     | '/app/logs'
     | '/app/playground'
+    | '/app/scheduled'
     | '/app/settings'
     | '/app/team'
     | '/app/templates'
@@ -246,6 +256,7 @@ export interface FileRouteTypes {
     | '/app/llm-providers'
     | '/app/logs'
     | '/app/playground'
+    | '/app/scheduled'
     | '/app/settings'
     | '/app/team'
     | '/app/templates'
@@ -269,6 +280,7 @@ export interface FileRouteTypes {
     | '/app/llm-providers'
     | '/app/logs'
     | '/app/playground'
+    | '/app/scheduled'
     | '/app/settings'
     | '/app/team'
     | '/app/templates'
@@ -342,6 +354,13 @@ declare module '@tanstack/react-router' {
       path: '/settings'
       fullPath: '/app/settings'
       preLoaderRoute: typeof AppSettingsRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/app/scheduled': {
+      id: '/app/scheduled'
+      path: '/scheduled'
+      fullPath: '/app/scheduled'
+      preLoaderRoute: typeof AppScheduledRouteImport
       parentRoute: typeof AppRoute
     }
     '/app/playground': {
@@ -450,6 +469,7 @@ interface AppRouteChildren {
   AppLlmProvidersRoute: typeof AppLlmProvidersRoute
   AppLogsRoute: typeof AppLogsRoute
   AppPlaygroundRoute: typeof AppPlaygroundRoute
+  AppScheduledRoute: typeof AppScheduledRoute
   AppSettingsRoute: typeof AppSettingsRoute
   AppTeamRoute: typeof AppTeamRoute
   AppTemplatesRoute: typeof AppTemplatesRoute
@@ -469,6 +489,7 @@ const AppRouteChildren: AppRouteChildren = {
   AppLlmProvidersRoute: AppLlmProvidersRoute,
   AppLogsRoute: AppLogsRoute,
   AppPlaygroundRoute: AppPlaygroundRoute,
+  AppScheduledRoute: AppScheduledRoute,
   AppSettingsRoute: AppSettingsRoute,
   AppTeamRoute: AppTeamRoute,
   AppTemplatesRoute: AppTemplatesRoute,
@@ -488,3 +509,13 @@ const rootRouteChildren: RootRouteChildren = {
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
   ._addFileTypes<FileRouteTypes>()
+
+import type { getRouter } from './router.tsx'
+import type { startInstance } from './start.ts'
+declare module '@tanstack/react-start' {
+  interface Register {
+    ssr: true
+    router: Awaited<ReturnType<typeof getRouter>>
+    config: Awaited<ReturnType<typeof startInstance.getOptions>>
+  }
+}

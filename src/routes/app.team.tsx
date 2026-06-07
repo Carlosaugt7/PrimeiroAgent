@@ -72,6 +72,10 @@ function Team() {
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e)) return toast.error("E-mail inválido");
     if (members.some((m) => m.email.toLowerCase() === e)) return toast.error("Já é membro");
     if (invites.some((i) => i.email === e)) return toast.error("Convite já enviado");
+    const { ensureLimit } = await import("@/lib/limits");
+    const lim = ensureLimit(tenant.id, tenant.plan, "members", members.length + invites.length);
+    if (!lim.ok) return toast.error(lim.message!);
+
 
     setBusy(true);
     try {

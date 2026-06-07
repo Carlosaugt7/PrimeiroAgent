@@ -1,7 +1,7 @@
 import { Link, useRouterState } from "@tanstack/react-router";
 import {
   LayoutDashboard, Bot, MessagesSquare, Database, Smartphone,
-  CreditCard, Users, Settings, ShieldCheck, Sparkles, Plug, ScrollText, Rocket,
+  CreditCard, Users, Settings, Sparkles, Plug, ScrollText, Rocket,
   Cpu, FlaskConical, Contact, MessageSquareText, CalendarClock, BarChart3, Zap, Crown,
   Compass, Bell, History,
 } from "lucide-react";
@@ -44,7 +44,6 @@ const groups: { title: string; items: NavItem[] }[] = [
       { to: "/app/billing", label: "Planos & uso", icon: CreditCard },
       { to: "/app/team", label: "Equipe", icon: Users },
       { to: "/app/settings", label: "Configurações", icon: Settings },
-      { to: "/app/admin", label: "Master Admin", icon: ShieldCheck },
     ],
   },
 ];

@@ -1,9 +1,10 @@
 import { createFileRoute, Outlet, useNavigate } from "@tanstack/react-router";
 import { useEffect } from "react";
 import { AppSidebar } from "@/components/app/AppSidebar";
+import { NotificationsBell } from "@/components/app/NotificationsBell";
 import { AppStoreProvider } from "@/lib/app-store";
 import { useAuth } from "@/lib/auth";
-import { Bell, Loader2, LogOut, Search } from "lucide-react";
+import { Loader2, LogOut, Search } from "lucide-react";
 import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem,
   DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger,
@@ -47,9 +48,7 @@ function AppLayout() {
                 />
               </div>
             </div>
-            <button className="size-9 rounded-lg grid place-items-center hover:bg-secondary/60">
-              <Bell className="size-4" />
-            </button>
+            <NotificationsBell />
 
             <DropdownMenu>
               <DropdownMenuTrigger asChild>

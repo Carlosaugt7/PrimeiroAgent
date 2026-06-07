@@ -51,9 +51,16 @@ export function AppSidebar({ tenantName, planName }: { tenantName: string; planN
   const pathname = useRouterState({ select: (s) => s.location.pathname });
   const { isMaster, profile, tenant, resetTenant } = useAuth();
   const impersonating = isMaster && profile && tenant && profile.tenantId !== tenant.id;
-  const visibleGroups = isMaster
-    ? [...groups, { title: "Plataforma (Master)", items: [{ to: "/app/master", label: "Master Admin", icon: Crown }] }]
+  const onboardingPending = !!tenant && !tenant.onboardedAt;
+  const baseGroups = onboardingPending
+    ? [
+        { title: "Começar", items: [{ to: "/app/onboarding", label: "Começar aqui", icon: Compass }] },
+        ...groups,
+      ]
     : groups;
+  const visibleGroups = isMaster
+    ? [...baseGroups, { title: "Plataforma (Master)", items: [{ to: "/app/master", label: "Master Admin", icon: Crown }] }]
+    : baseGroups;
   return (
     <aside className="hidden md:flex w-64 shrink-0 flex-col gap-2 p-4 border-r border-border bg-card/40 backdrop-blur-xl">
 

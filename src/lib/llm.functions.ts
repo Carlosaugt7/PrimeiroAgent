@@ -28,10 +28,21 @@ const STATIC_ANTHROPIC: ModelInfo[] = [
 ];
 
 async function fetchOpenAICompatible(baseUrl: string, apiKey: string): Promise<ModelInfo[]> {
-  const r = await fetch(`${baseUrl.replace(/\/$/, "")}/models`, {
-    headers: { Authorization: `Bearer ${apiKey}` },
-  });
-  if (!r.ok) throw new Error(`HTTP ${r.status}: ${await r.text().catch(() => "")}`);
+  const clean = baseUrl.replace(/\/+$/, "");
+  if (!/^https?:\/\//i.test(clean)) {
+    throw new Error(`Base URL inválida: "${baseUrl}". Use uma URL absoluta começando com https://`);
+  }
+  const url = `${clean}/models`;
+  let r: Response;
+  try {
+    r = await fetch(url, { headers: { Authorization: `Bearer ${apiKey}` } });
+  } catch (e) {
+    throw new Error(`Falha de rede ao acessar ${url}: ${e instanceof Error ? e.message : String(e)}`);
+  }
+  if (!r.ok) {
+    const body = await r.text().catch(() => "");
+    throw new Error(`HTTP ${r.status} em ${url}: ${body.slice(0, 300)}`);
+  }
   const data = (await r.json()) as { data?: Array<{ id: string; context_length?: number; context_window?: number }> };
   return (data.data ?? []).map((m) => ({ id: m.id, contextWindow: m.context_length ?? m.context_window }));
 }

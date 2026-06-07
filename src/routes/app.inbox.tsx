@@ -237,17 +237,55 @@ function Inbox() {
                   ))}
                   <div ref={bottomRef} />
                 </div>
-                <div className="border-t border-border p-3 flex gap-2">
-                  <Input
-                    value={draft}
-                    onChange={(e) => setDraft(e.target.value)}
-                    placeholder="Digite uma mensagem..."
-                    onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); handleSend(); } }}
-                    disabled={sending}
-                  />
-                  <Button onClick={handleSend} disabled={sending || !draft.trim()}>
-                    {sending ? <Loader2 className="size-4 animate-spin" /> : <Send className="size-4" />}
-                  </Button>
+                <div className="border-t border-border p-3 relative">
+                  {tplOpen && tplMatches.length > 0 && (
+                    <div className="absolute bottom-full left-3 right-3 mb-2 rounded-xl border border-border bg-popover shadow-lg overflow-hidden z-10">
+                      <div className="px-3 py-1.5 text-[10px] uppercase tracking-wider text-muted-foreground border-b border-border flex items-center gap-1.5">
+                        <MessageSquareText className="size-3" /> Templates · ↑↓ navegar · Enter aplicar · Esc fechar
+                      </div>
+                      <ul>
+                        {tplMatches.map((t, i) => (
+                          <li key={t.id}>
+                            <button
+                              onMouseEnter={() => setTplIdx(i)}
+                              onClick={() => applyTemplate(t)}
+                              className={`w-full text-left px-3 py-2 text-sm flex items-center gap-2 ${i === tplIdx ? "bg-secondary" : "hover:bg-secondary/60"}`}
+                            >
+                              <Badge variant="outline" className="font-mono shrink-0">/{t.shortcut}</Badge>
+                              <span className="font-medium truncate">{t.title}</span>
+                              <span className="text-xs text-muted-foreground truncate">— {t.body}</span>
+                            </button>
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+                  <div className="flex gap-2">
+                    <Input
+                      value={draft}
+                      onChange={(e) => {
+                        const v = e.target.value;
+                        setDraft(v);
+                        setTplOpen(v.startsWith("/"));
+                        setTplIdx(0);
+                      }}
+                      placeholder="Digite uma mensagem ou /atalho para templates..."
+                      onKeyDown={(e) => {
+                        if (tplOpen && tplMatches.length > 0) {
+                          if (e.key === "ArrowDown") { e.preventDefault(); setTplIdx((i) => (i + 1) % tplMatches.length); return; }
+                          if (e.key === "ArrowUp") { e.preventDefault(); setTplIdx((i) => (i - 1 + tplMatches.length) % tplMatches.length); return; }
+                          if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); applyTemplate(tplMatches[tplIdx]); return; }
+                          if (e.key === "Escape") { e.preventDefault(); setTplOpen(false); return; }
+                          if (e.key === "Tab") { e.preventDefault(); applyTemplate(tplMatches[tplIdx]); return; }
+                        }
+                        if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); handleSend(); }
+                      }}
+                      disabled={sending}
+                    />
+                    <Button onClick={handleSend} disabled={sending || !draft.trim()}>
+                      {sending ? <Loader2 className="size-4 animate-spin" /> : <Send className="size-4" />}
+                    </Button>
+                  </div>
                 </div>
               </>
             )}

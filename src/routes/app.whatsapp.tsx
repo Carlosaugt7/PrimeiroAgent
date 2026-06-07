@@ -1,6 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
-import { doc, setDoc, deleteDoc, serverTimestamp } from "firebase/firestore";
+import { collection, doc, setDoc, deleteDoc, onSnapshot, serverTimestamp } from "firebase/firestore";
 import { db } from "@/integrations/firebase/client";
 import { useAuth } from "@/lib/auth";
 import { useServerFn } from "@tanstack/react-start";
@@ -19,6 +19,7 @@ import {
 export const Route = createFileRoute("/app/whatsapp")({ component: Page });
 
 type Inst = { instanceName: string; status: string; ownerJid: string | null; profileName: string | null };
+type LocalInst = { id: string; instanceName: string; status?: string };
 
 function statusBadge(state: string) {
   const s = state.toLowerCase();
@@ -40,6 +41,7 @@ function Page() {
   const del = useServerFn(deleteInstance);
 
   const [instances, setInstances] = useState<Inst[]>([]);
+  const [localInstances, setLocalInstances] = useState<LocalInst[]>([]);
   const [loading, setLoading] = useState(true);
   const [creating, setCreating] = useState(false);
   const [newName, setNewName] = useState("");
@@ -50,13 +52,34 @@ function Page() {
   const [qrLoading, setQrLoading] = useState(false);
 
   const refresh = async () => {
+    if (!tenant) return;
     setLoading(true);
-    try { setInstances(await list()); }
+    try {
+      const remote = await list();
+      const remoteByName = new Map(remote.filter((i) => i.instanceName).map((i) => [i.instanceName, i]));
+      setInstances(localInstances.map((i) => remoteByName.get(i.instanceName) ?? {
+        instanceName: i.instanceName,
+        status: i.status ?? "registrada",
+        ownerJid: null,
+        profileName: null,
+      }));
+    }
     catch (e: any) { toast.error(e?.message ?? "Falha ao listar"); }
     finally { setLoading(false); }
   };
 
-  useEffect(() => { refresh(); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, []);
+  useEffect(() => {
+    if (!tenant) return;
+    setLoading(true);
+    return onSnapshot(collection(db, "tenants", tenant.id, "instances"), (snap) => {
+      setLocalInstances(snap.docs.map((d) => {
+        const data = d.data() as Partial<LocalInst> & { name?: string };
+        return { id: d.id, instanceName: data.instanceName ?? data.name ?? d.id, status: data.status };
+      }));
+    }, (e) => { toast.error(e?.message ?? "Falha ao carregar instâncias do workspace"); setLoading(false); });
+  }, [tenant]);
+
+  useEffect(() => { refresh(); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, [tenant, localInstances]);
 
   // Poll QR state while modal open
   useEffect(() => {
@@ -92,7 +115,7 @@ function Page() {
       });
       // Cria o registro local da instância no tenant
       await setDoc(doc(db, "tenants", tenant.id, "instances", newName), {
-        id: newName, name: newName, status: "conectando",
+        id: newName, name: newName, instanceName: newName, status: "conectando",
         webhook: webhookUrl, createdAt: new Date().toISOString(),
       }, { merge: true });
       toast.success("Instância criada");

@@ -135,8 +135,6 @@ async function ensureTenantAndProfile(user: User, companyHint?: string): Promise
     status: "active",
     createdAt: new Date().toISOString(),
   };
-  await setDoc(doc(db, "tenants", tenantId), { ...tenant, _ts: serverTimestamp() });
-
   profile = {
     uid: user.uid,
     email: user.email || "",
@@ -145,6 +143,7 @@ async function ensureTenantAndProfile(user: User, companyHint?: string): Promise
     role: "owner",
   };
   await setDoc(profileRef, { ...profile, _ts: serverTimestamp() });
+  await setDoc(doc(db, "tenants", tenantId), { ...tenant, _ts: serverTimestamp() });
   await setDoc(doc(db, "tenants", tenantId, "members", user.uid), {
     uid: user.uid, email: profile.email, displayName: profile.displayName,
     role: "owner", joinedAt: new Date().toISOString(),

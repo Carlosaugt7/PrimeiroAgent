@@ -1,6 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { useAuth, type Role } from "@/lib/auth";
+import { logAudit, notify } from "@/lib/notifications";
 import { db } from "@/integrations/firebase/client";
 import {
   collection, deleteDoc, doc, onSnapshot, orderBy, query, setDoc, updateDoc, where, getDocs,

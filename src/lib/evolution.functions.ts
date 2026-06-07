@@ -36,7 +36,7 @@ export const createInstance = createServerFn({ method: "POST" })
     return d;
   })
   .handler(async ({ data }) => {
-    return evo("/instance/create", {
+    await evo("/instance/create", {
       method: "POST",
       body: JSON.stringify({
         instanceName: data.instanceName,
@@ -45,6 +45,7 @@ export const createInstance = createServerFn({ method: "POST" })
         ...(data.webhookUrl ? { webhook: { url: data.webhookUrl, events: ["MESSAGES_UPSERT", "CONNECTION_UPDATE"] } } : {}),
       }),
     });
+    return { ok: true };
   });
 
 export const connectInstance = createServerFn({ method: "POST" })
@@ -52,9 +53,9 @@ export const connectInstance = createServerFn({ method: "POST" })
   .handler(async ({ data }) => {
     const r = await evo<any>(`/instance/connect/${encodeURIComponent(data.instanceName)}`);
     return {
-      base64: r?.base64 ?? r?.qrcode?.base64 ?? null,
-      code: r?.code ?? r?.qrcode?.code ?? null,
-      pairingCode: r?.pairingCode ?? null,
+      base64: (r?.base64 ?? r?.qrcode?.base64 ?? null) as string | null,
+      code: (r?.code ?? r?.qrcode?.code ?? null) as string | null,
+      pairingCode: (r?.pairingCode ?? null) as string | null,
     };
   });
 
@@ -62,20 +63,29 @@ export const instanceState = createServerFn({ method: "POST" })
   .inputValidator((d: { instanceName: string }) => d)
   .handler(async ({ data }) => {
     const r = await evo<any>(`/instance/connectionState/${encodeURIComponent(data.instanceName)}`);
-    return { state: r?.instance?.state ?? r?.state ?? "unknown" };
+    return { state: (r?.instance?.state ?? r?.state ?? "unknown") as string };
   });
 
 export const restartInstance = createServerFn({ method: "POST" })
   .inputValidator((d: { instanceName: string }) => d)
-  .handler(async ({ data }) => evo(`/instance/restart/${encodeURIComponent(data.instanceName)}`, { method: "PUT" }));
+  .handler(async ({ data }) => {
+    await evo(`/instance/restart/${encodeURIComponent(data.instanceName)}`, { method: "PUT" });
+    return { ok: true };
+  });
 
 export const logoutInstance = createServerFn({ method: "POST" })
   .inputValidator((d: { instanceName: string }) => d)
-  .handler(async ({ data }) => evo(`/instance/logout/${encodeURIComponent(data.instanceName)}`, { method: "DELETE" }));
+  .handler(async ({ data }) => {
+    await evo(`/instance/logout/${encodeURIComponent(data.instanceName)}`, { method: "DELETE" });
+    return { ok: true };
+  });
 
 export const deleteInstance = createServerFn({ method: "POST" })
   .inputValidator((d: { instanceName: string }) => d)
-  .handler(async ({ data }) => evo(`/instance/delete/${encodeURIComponent(data.instanceName)}`, { method: "DELETE" }));
+  .handler(async ({ data }) => {
+    await evo(`/instance/delete/${encodeURIComponent(data.instanceName)}`, { method: "DELETE" });
+    return { ok: true };
+  });
 
 export const sendText = createServerFn({ method: "POST" })
   .inputValidator((d: { instanceName: string; number: string; text: string }) => {
@@ -83,8 +93,10 @@ export const sendText = createServerFn({ method: "POST" })
     return d;
   })
   .handler(async ({ data }) => {
-    return evo(`/message/sendText/${encodeURIComponent(data.instanceName)}`, {
+    await evo(`/message/sendText/${encodeURIComponent(data.instanceName)}`, {
       method: "POST",
       body: JSON.stringify({ number: data.number, text: data.text }),
     });
+    return { ok: true };
   });
+

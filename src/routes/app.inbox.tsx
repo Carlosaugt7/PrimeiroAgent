@@ -3,12 +3,13 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useServerFn } from "@tanstack/react-start";
 import { useAuth } from "@/lib/auth";
 import { db } from "@/integrations/firebase/client";
-import { collection, doc, onSnapshot, orderBy, query, updateDoc, limit } from "firebase/firestore";
+import { collection, doc, onSnapshot, orderBy, query, updateDoc, limit, arrayUnion, arrayRemove } from "firebase/firestore";
 import { sendText } from "@/lib/evolution.functions";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
-import { MessagesSquare, Send, Loader2 } from "lucide-react";
+import { Switch } from "@/components/ui/switch";
+import { MessagesSquare, Send, Loader2, Bot, BotOff, X, Plus, CheckCircle2 } from "lucide-react";
 import { toast } from "sonner";
 
 export const Route = createFileRoute("/app/inbox")({ component: Inbox });

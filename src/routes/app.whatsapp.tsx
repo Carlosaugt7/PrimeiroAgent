@@ -290,7 +290,12 @@ function Page() {
                     3–40 caracteres. Apenas letras, números, _ e -.
                   </p>
                 </div>
-                <Button variant="hero" className="w-full" onClick={handleCreate} disabled={creating}>
+                <Button
+                  variant="hero"
+                  className="w-full"
+                  onClick={handleCreate}
+                  disabled={creating}
+                >
                   {creating ? <Loader2 className="size-4 animate-spin" /> : "Criar"}
                 </Button>
               </div>
@@ -314,11 +319,16 @@ function Page() {
       ) : (
         <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-4">
           {instances.map((i) => (
-            <div key={i.instanceName} className="rounded-2xl bg-gradient-card border border-border p-5 space-y-3">
+            <div
+              key={i.instanceName}
+              className="rounded-2xl bg-gradient-card border border-border p-5 space-y-3"
+            >
               <div className="flex items-start justify-between gap-2">
                 <div className="min-w-0">
                   <p className="font-semibold truncate">{i.instanceName}</p>
-                  <p className="text-xs text-muted-foreground truncate">{i.profileName ?? i.ownerJid ?? "—"}</p>
+                  <p className="text-xs text-muted-foreground truncate">
+                    {i.profileName ?? i.ownerJid ?? "—"}
+                  </p>
                 </div>
                 {statusBadge(i.status)}
               </div>
@@ -360,12 +370,21 @@ function Page() {
                 <Loader2 className="size-8 animate-spin text-muted-foreground" />
               </div>
             ) : (
-              <img src={qrBase64} alt="QR Code WhatsApp" className="mx-auto rounded-lg bg-white p-2 max-w-[280px]" />
+              <img
+                src={qrBase64}
+                alt="QR Code WhatsApp"
+                className="mx-auto rounded-lg bg-white p-2 max-w-[280px]"
+              />
             )}
             <p className="text-xs text-muted-foreground">
               Abra o WhatsApp → Aparelhos conectados → Escaneie o QR Code.
             </p>
-            <Button variant="outline" size="sm" onClick={() => qrFor && openQr(qrFor)} disabled={qrLoading}>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => qrFor && openQr(qrFor)}
+              disabled={qrLoading}
+            >
               <RefreshCw className="size-3.5" /> Gerar novo QR
             </Button>
           </div>

@@ -119,8 +119,14 @@ function Page() {
   };
   const handleDelete = async (name: string) => {
     if (!confirm(`Excluir definitivamente ${name}?`)) return;
-    try { await del({ data: { instanceName: name } }); toast.success("Excluída"); refresh(); }
-    catch (e: any) { toast.error(e?.message ?? "Falha"); }
+    try {
+      await del({ data: { instanceName: name } });
+      if (tenant) {
+        await deleteDoc(doc(db, "instance_index", name)).catch(() => {});
+        await deleteDoc(doc(db, "tenants", tenant.id, "instances", name)).catch(() => {});
+      }
+      toast.success("Excluída"); refresh();
+    } catch (e: any) { toast.error(e?.message ?? "Falha"); }
   };
 
   return (

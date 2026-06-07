@@ -76,6 +76,9 @@ function Page() {
   const handleCreate = async () => {
     if (!/^[a-zA-Z0-9_-]{3,40}$/.test(newName)) { toast.error("Nome inválido"); return; }
     if (!tenant) { toast.error("Tenant não carregado"); return; }
+    const { ensureLimit } = await import("@/lib/limits");
+    const lim = ensureLimit(tenant.id, tenant.plan, "instances", instances.length);
+    if (!lim.ok) { toast.error(lim.message!); return; }
     setCreating(true);
     try {
       const webhookUrl = `${window.location.origin}/api/public/evolution-webhook`;

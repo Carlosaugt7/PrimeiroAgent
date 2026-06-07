@@ -14,6 +14,7 @@ import {
 } from "firebase/firestore";
 import { useAuth } from "@/lib/auth";
 import { logAudit, notify } from "@/lib/notifications";
+import { ensureLimit } from "@/lib/limits";
 
 export type AgentStatus = "online" | "offline" | "treinando";
 
@@ -198,6 +199,8 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
     loading, tenantId, agents, providers, conversations, knowledge, instances, plan,
     createAgent: async (a) => {
       if (!tenantId) throw new Error("Sem tenant");
+      const lim = ensureLimit(tenantId, tenant?.plan, "agents", agents.length);
+      if (!lim.ok) throw new Error(lim.message ?? "Limite de agentes atingido");
       const ref = await fsAddDoc(tcol(tenantId, "agents"), {
         name: a.name,
         photoUrl: a.photoUrl ?? "",
@@ -253,7 +256,7 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
       if (!tenantId) return;
       await deleteDoc(tdoc(tenantId, "llm_providers", id));
     },
-  }), [loading, tenantId, profile, agents, providers, conversations, knowledge, instances, plan]);
+  }), [loading, tenantId, profile, tenant?.plan, agents, providers, conversations, knowledge, instances, plan]);
 
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
 }

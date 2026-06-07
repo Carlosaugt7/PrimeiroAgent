@@ -88,6 +88,9 @@ function Team() {
         invitedAt: new Date().toISOString(),
       });
       toast.success(`Convite criado para ${e}. Peça que faça login com esse e-mail.`);
+      const actor = { actorId: profile?.uid, actorEmail: profile?.email, actorName: profile?.displayName };
+      logAudit(tenant.id, { action: "member.invite", target: id, targetLabel: e, ...actor, meta: { role } });
+      notify(tenant.id, { type: "team", severity: "info", title: "Novo convite enviado", body: `${e} foi convidado como ${role}.`, link: "/app/team" });
       setEmail("");
     } catch (err: any) {
       toast.error(err?.message ?? "Falha ao convidar");
@@ -96,6 +99,7 @@ function Team() {
 
   const cancelInvite = async (id: string) => {
     await deleteDoc(doc(db, "invites", id));
+    if (tenant) logAudit(tenant.id, { action: "member.invite_cancel", target: id, actorId: profile?.uid, actorEmail: profile?.email, actorName: profile?.displayName });
   };
 
   const changeRole = async (m: Member, newRole: Role) => {
@@ -104,6 +108,8 @@ function Team() {
     await updateDoc(doc(db, "tenants", tenant.id, "members", m.uid), { role: newRole });
     try { await updateDoc(doc(db, "users", m.uid), { role: newRole }); } catch {}
     toast.success("Papel atualizado");
+    logAudit(tenant.id, { action: "member.role_change", target: m.uid, targetLabel: m.email, actorId: profile?.uid, actorEmail: profile?.email, actorName: profile?.displayName, meta: { from: m.role, to: newRole } });
+    notify(tenant.id, { type: "team", severity: "warning", title: "Papel alterado", body: `${m.email}: ${m.role} → ${newRole}`, link: "/app/team" });
   };
 
   const removeMember = async (m: Member) => {
@@ -113,6 +119,8 @@ function Team() {
     if (!confirm(`Remover ${m.displayName || m.email}?`)) return;
     await deleteDoc(doc(db, "tenants", tenant.id, "members", m.uid));
     toast.success("Membro removido. Ele perderá acesso ao reentrar.");
+    logAudit(tenant.id, { action: "member.remove", target: m.uid, targetLabel: m.email, actorId: profile?.uid, actorEmail: profile?.email, actorName: profile?.displayName });
+    notify(tenant.id, { type: "team", severity: "warning", title: "Membro removido", body: m.email, link: "/app/team" });
   };
 
   return (

@@ -2,26 +2,45 @@ import { Link, useRouterState } from "@tanstack/react-router";
 import {
   LayoutDashboard, Bot, MessagesSquare, Database, Smartphone,
   CreditCard, Users, Settings, ShieldCheck, Sparkles, Plug, ScrollText, Rocket,
+  Cpu, FlaskConical,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 type NavItem = { to: string; label: string; icon: typeof LayoutDashboard; exact?: boolean };
-const nav: NavItem[] = [
-  { to: "/app", label: "Visão geral", icon: LayoutDashboard, exact: true },
-  { to: "/app/agents", label: "Agentes", icon: Bot },
-  { to: "/app/inbox", label: "Inbox", icon: MessagesSquare },
-  { to: "/app/knowledge", label: "Conhecimento", icon: Database },
-  { to: "/app/whatsapp", label: "WhatsApp", icon: Smartphone },
-  { to: "/app/integrations", label: "Integrações", icon: Plug },
-  { to: "/app/logs", label: "Logs & Traces", icon: ScrollText },
-  { to: "/app/deploy", label: "Deploy", icon: Rocket },
-  { to: "/app/billing", label: "Planos & uso", icon: CreditCard },
-  { to: "/app/team", label: "Equipe", icon: Users },
-  { to: "/app/settings", label: "Configurações", icon: Settings },
-  { to: "/app/admin", label: "Admin SaaS", icon: ShieldCheck },
+
+const groups: { title: string; items: NavItem[] }[] = [
+  {
+    title: "Operação",
+    items: [
+      { to: "/app", label: "Visão geral", icon: LayoutDashboard, exact: true },
+      { to: "/app/agents", label: "Agentes", icon: Bot },
+      { to: "/app/playground", label: "Playground", icon: FlaskConical },
+      { to: "/app/inbox", label: "Inbox", icon: MessagesSquare },
+    ],
+  },
+  {
+    title: "Configuração",
+    items: [
+      { to: "/app/llm-providers", label: "Provedores LLM", icon: Cpu },
+      { to: "/app/knowledge", label: "Conhecimento", icon: Database },
+      { to: "/app/whatsapp", label: "WhatsApp", icon: Smartphone },
+      { to: "/app/integrations", label: "Integrações", icon: Plug },
+    ],
+  },
+  {
+    title: "Plataforma",
+    items: [
+      { to: "/app/logs", label: "Logs & Traces", icon: ScrollText },
+      { to: "/app/deploy", label: "Deploy", icon: Rocket },
+      { to: "/app/billing", label: "Planos & uso", icon: CreditCard },
+      { to: "/app/team", label: "Equipe", icon: Users },
+      { to: "/app/settings", label: "Configurações", icon: Settings },
+      { to: "/app/admin", label: "Master Admin", icon: ShieldCheck },
+    ],
+  },
 ];
 
-export function AppSidebar() {
+export function AppSidebar({ tenantName, planName }: { tenantName: string; planName: string }) {
   const pathname = useRouterState({ select: (s) => s.location.pathname });
   return (
     <aside className="hidden md:flex w-64 shrink-0 flex-col gap-2 p-4 border-r border-border bg-card/40 backdrop-blur-xl">
@@ -34,31 +53,38 @@ export function AppSidebar() {
         </span>
       </Link>
 
-      <div className="mt-4 flex flex-col gap-1">
-        {nav.map((item) => {
-          const active = item.exact ? pathname === item.to : pathname.startsWith(item.to);
-          return (
-            <Link
-              key={item.to}
-              to={item.to as never}
-              className={cn(
-                "flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-all",
-                active
-                  ? "bg-gradient-primary text-primary-foreground shadow-glow"
-                  : "text-muted-foreground hover:text-foreground hover:bg-secondary/60",
-              )}
-            >
-              <item.icon className="size-4" />
-              {item.label}
-            </Link>
-          );
-        })}
+      <div className="mt-2 flex flex-col gap-4 overflow-y-auto">
+        {groups.map((g) => (
+          <div key={g.title}>
+            <p className="px-3 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground mb-1.5">{g.title}</p>
+            <div className="flex flex-col gap-0.5">
+              {g.items.map((item) => {
+                const active = item.exact ? pathname === item.to : pathname === item.to || pathname.startsWith(item.to + "/");
+                return (
+                  <Link
+                    key={item.to}
+                    to={item.to as never}
+                    className={cn(
+                      "flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-all",
+                      active
+                        ? "bg-gradient-primary text-primary-foreground shadow-glow"
+                        : "text-muted-foreground hover:text-foreground hover:bg-secondary/60",
+                    )}
+                  >
+                    <item.icon className="size-4" />
+                    {item.label}
+                  </Link>
+                );
+              })}
+            </div>
+          </div>
+        ))}
       </div>
 
       <div className="mt-auto rounded-xl bg-gradient-card border border-border p-4">
         <p className="text-xs text-muted-foreground">Workspace</p>
-        <p className="font-display font-semibold">—</p>
-        <p className="text-xs text-muted-foreground mt-1">Sem plano ativo</p>
+        <p className="font-display font-semibold truncate">{tenantName}</p>
+        <p className="text-xs text-muted-foreground mt-1 capitalize">Plano {planName}</p>
       </div>
     </aside>
   );

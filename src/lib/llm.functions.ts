@@ -1,0 +1,152 @@
+import { createServerFn } from "@tanstack/react-start";
+
+type Kind = "openai" | "anthropic" | "google" | "groq" | "deepseek" | "openrouter" | "custom";
+
+interface DetectInput {
+  kind: Kind;
+  baseUrl: string;
+  apiKey: string;
+}
+
+interface ModelInfo { id: string; contextWindow?: number }
+
+const DEFAULT_BASE: Record<Kind, string> = {
+  openai: "https://api.openai.com/v1",
+  anthropic: "https://api.anthropic.com/v1",
+  google: "https://generativelanguage.googleapis.com/v1beta",
+  groq: "https://api.groq.com/openai/v1",
+  deepseek: "https://api.deepseek.com/v1",
+  openrouter: "https://openrouter.ai/api/v1",
+  custom: "",
+};
+
+const STATIC_ANTHROPIC: ModelInfo[] = [
+  { id: "claude-opus-4-20250514", contextWindow: 200000 },
+  { id: "claude-sonnet-4-20250514", contextWindow: 200000 },
+  { id: "claude-3-5-sonnet-20241022", contextWindow: 200000 },
+  { id: "claude-3-5-haiku-20241022", contextWindow: 200000 },
+];
+
+async function fetchOpenAICompatible(baseUrl: string, apiKey: string): Promise<ModelInfo[]> {
+  const r = await fetch(`${baseUrl.replace(/\/$/, "")}/models`, {
+    headers: { Authorization: `Bearer ${apiKey}` },
+  });
+  if (!r.ok) throw new Error(`HTTP ${r.status}: ${await r.text().catch(() => "")}`);
+  const data = (await r.json()) as { data?: Array<{ id: string; context_length?: number; context_window?: number }> };
+  return (data.data ?? []).map((m) => ({ id: m.id, contextWindow: m.context_length ?? m.context_window }));
+}
+
+async function fetchGoogle(apiKey: string): Promise<ModelInfo[]> {
+  const r = await fetch(`https://generativelanguage.googleapis.com/v1beta/models?key=${encodeURIComponent(apiKey)}`);
+  if (!r.ok) throw new Error(`HTTP ${r.status}: ${await r.text().catch(() => "")}`);
+  const data = (await r.json()) as { models?: Array<{ name: string; inputTokenLimit?: number }> };
+  return (data.models ?? [])
+    .map((m) => ({ id: m.name.replace(/^models\//, ""), contextWindow: m.inputTokenLimit }))
+    .filter((m) => /gemini/i.test(m.id));
+}
+
+export const detectModels = createServerFn({ method: "POST" })
+  .inputValidator((d: DetectInput) => {
+    if (!d || typeof d.apiKey !== "string" || d.apiKey.length < 5) throw new Error("apiKey ausente");
+    if (!d.kind) throw new Error("kind ausente");
+    return d;
+  })
+  .handler(async ({ data }) => {
+    const base = data.baseUrl?.trim() || DEFAULT_BASE[data.kind] || "";
+    try {
+      if (data.kind === "anthropic") return { models: STATIC_ANTHROPIC };
+      if (data.kind === "google") return { models: await fetchGoogle(data.apiKey) };
+      // OpenAI-compatível: openai, groq, deepseek, openrouter, custom
+      const models = await fetchOpenAICompatible(base, data.apiKey);
+      return { models };
+    } catch (e) {
+      return { models: [] as ModelInfo[], error: e instanceof Error ? e.message : "Falha ao detectar" };
+    }
+  });
+
+interface ChatInput {
+  baseUrl: string;
+  apiKey: string;
+  kind: Kind;
+  model: string;
+  systemPrompt: string;
+  messages: { role: "user" | "assistant"; content: string }[];
+  temperature?: number;
+}
+
+export const chatCompletion = createServerFn({ method: "POST" })
+  .inputValidator((d: ChatInput) => {
+    if (!d?.model) throw new Error("model ausente");
+    if (!d?.apiKey) throw new Error("apiKey ausente");
+    return d;
+  })
+  .handler(async ({ data }) => {
+    const started = Date.now();
+    const base = data.baseUrl?.trim() || DEFAULT_BASE[data.kind] || "";
+
+    if (data.kind === "anthropic") {
+      const r = await fetch(`${base.replace(/\/$/, "")}/messages`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "x-api-key": data.apiKey,
+          "anthropic-version": "2023-06-01",
+        },
+        body: JSON.stringify({
+          model: data.model,
+          system: data.systemPrompt,
+          messages: data.messages,
+          max_tokens: 1024,
+          temperature: data.temperature ?? 0.5,
+        }),
+      });
+      if (!r.ok) throw new Error(await r.text());
+      const j = (await r.json()) as { content: Array<{ text: string }>; usage?: { input_tokens: number; output_tokens: number } };
+      return {
+        text: j.content?.[0]?.text ?? "",
+        inputTokens: j.usage?.input_tokens ?? 0,
+        outputTokens: j.usage?.output_tokens ?? 0,
+        durationMs: Date.now() - started,
+      };
+    }
+
+    if (data.kind === "google") {
+      const url = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(data.model)}:generateContent?key=${encodeURIComponent(data.apiKey)}`;
+      const r = await fetch(url, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          systemInstruction: { parts: [{ text: data.systemPrompt }] },
+          contents: data.messages.map((m) => ({ role: m.role === "assistant" ? "model" : "user", parts: [{ text: m.content }] })),
+          generationConfig: { temperature: data.temperature ?? 0.5 },
+        }),
+      });
+      if (!r.ok) throw new Error(await r.text());
+      const j = (await r.json()) as { candidates?: Array<{ content: { parts: Array<{ text: string }> } }>; usageMetadata?: { promptTokenCount: number; candidatesTokenCount: number } };
+      return {
+        text: j.candidates?.[0]?.content?.parts?.[0]?.text ?? "",
+        inputTokens: j.usageMetadata?.promptTokenCount ?? 0,
+        outputTokens: j.usageMetadata?.candidatesTokenCount ?? 0,
+        durationMs: Date.now() - started,
+      };
+    }
+
+    // OpenAI-compatível
+    const r = await fetch(`${base.replace(/\/$/, "")}/chat/completions`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${data.apiKey}` },
+      body: JSON.stringify({
+        model: data.model,
+        messages: [{ role: "system", content: data.systemPrompt }, ...data.messages],
+        temperature: data.temperature ?? 0.5,
+      }),
+    });
+    if (!r.ok) throw new Error(await r.text());
+    const j = (await r.json()) as { choices: Array<{ message: { content: string } }>; usage?: { prompt_tokens: number; completion_tokens: number } };
+    return {
+      text: j.choices?.[0]?.message?.content ?? "",
+      inputTokens: j.usage?.prompt_tokens ?? 0,
+      outputTokens: j.usage?.completion_tokens ?? 0,
+      durationMs: Date.now() - started,
+    };
+  });

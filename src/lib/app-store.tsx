@@ -136,7 +136,7 @@ function tdoc(tenantId: string, name: string, id: string) {
 }
 
 export function AppStoreProvider({ children }: { children: ReactNode }) {
-  const { tenant, profile, loading: authLoading } = useAuth();
+  const { tenant, profile, isMaster, loading: authLoading } = useAuth();
   const tenantId = tenant?.id ?? null;
 
   const [agents, setAgents] = useState<Agent[]>([]);
@@ -199,7 +199,7 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
     loading, tenantId, agents, providers, conversations, knowledge, instances, plan,
     createAgent: async (a) => {
       if (!tenantId) throw new Error("Sem tenant");
-      const lim = ensureLimit(tenantId, tenant?.plan, "agents", agents.length);
+      const lim = ensureLimit(tenantId, tenant?.plan, "agents", agents.length, isMaster);
       if (!lim.ok) throw new Error(lim.message ?? "Limite de agentes atingido");
       const ref = await fsAddDoc(tcol(tenantId, "agents"), {
         name: a.name,
@@ -256,7 +256,7 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
       if (!tenantId) return;
       await deleteDoc(tdoc(tenantId, "llm_providers", id));
     },
-  }), [loading, tenantId, profile, tenant?.plan, agents, providers, conversations, knowledge, instances, plan]);
+  }), [loading, tenantId, profile, tenant?.plan, isMaster, agents, providers, conversations, knowledge, instances, plan]);
 
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
 }

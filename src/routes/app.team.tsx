@@ -43,7 +43,7 @@ const ROLE_LABEL: Record<Role, string> = {
 };
 
 function Team() {
-  const { tenant, profile } = useAuth();
+  const { tenant, profile, isMaster } = useAuth();
   const [members, setMembers] = useState<Member[]>([]);
   const [invites, setInvites] = useState<Invite[]>([]);
   const [email, setEmail] = useState("");
@@ -73,7 +73,7 @@ function Team() {
     if (members.some((m) => m.email.toLowerCase() === e)) return toast.error("Já é membro");
     if (invites.some((i) => i.email === e)) return toast.error("Convite já enviado");
     const { ensureLimit } = await import("@/lib/limits");
-    const lim = ensureLimit(tenant.id, tenant.plan, "members", members.length + invites.length);
+    const lim = ensureLimit(tenant.id, tenant.plan, "members", members.length + invites.length, isMaster);
     if (!lim.ok) return toast.error(lim.message!);
 
 

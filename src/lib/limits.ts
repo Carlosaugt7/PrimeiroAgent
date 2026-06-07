@@ -27,9 +27,17 @@ export interface LimitCheck {
   message?: string;
 }
 
-export function checkLimit(kind: LimitKind, current: number, planId?: string): LimitCheck {
+export function checkLimit(
+  kind: LimitKind,
+  current: number,
+  planId?: string,
+  bypass?: boolean,
+): LimitCheck {
   const limits = planLimits(planId);
   const limit = limits[kind];
+  if (bypass) {
+    return { ok: true, limit: Infinity, current, remaining: Infinity };
+  }
   const ok = current < limit;
   return {
     ok,
@@ -40,14 +48,16 @@ export function checkLimit(kind: LimitKind, current: number, planId?: string): L
   };
 }
 
-/** Garante que a ação cabe no plano. Retorna true se ok, false (e notifica) se atingido. */
+/** Garante que a ação cabe no plano. Retorna true se ok, false (e notifica) se atingido.
+ *  Use `bypass` (ex.: Master Admin) para ignorar limites. */
 export function ensureLimit(
   tenantId: string,
   planId: string | undefined,
   kind: LimitKind,
   current: number,
+  bypass?: boolean,
 ): LimitCheck {
-  const r = checkLimit(kind, current, planId);
+  const r = checkLimit(kind, current, planId, bypass);
   if (!r.ok) {
     notify(tenantId, {
       type: "limit_reached",

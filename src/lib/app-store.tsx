@@ -168,8 +168,27 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
       setKnowledge(s.docs.map((d) => ({ id: d.id, ...(d.data() as object) })) as KnowledgeDoc[]);
     }));
 
+    const prevInstanceStatus = new Map<string, string>();
     subs.push(onSnapshot(tcol(tenantId, "instances"), (s) => {
-      setInstances(s.docs.map((d) => ({ id: d.id, ...(d.data() as object) })) as Instance[]);
+      const next = s.docs.map((d) => ({ id: d.id, ...(d.data() as object) })) as Instance[];
+      // Alerta quando uma instância sai de open/connected
+      for (const inst of next) {
+        const prev = prevInstanceStatus.get(inst.id);
+        const cur = String((inst as any).status ?? "").toLowerCase();
+        const wasOk = prev === "open" || prev === "connected";
+        const isDown = cur && cur !== "open" && cur !== "connected" && cur !== "connecting";
+        if (prev && wasOk && isDown) {
+          notify(tenantId, {
+            type: "instance_down", severity: "error",
+            title: "Instância WhatsApp caiu",
+            body: `${(inst as any).instanceName ?? inst.id} agora está "${cur}".`,
+            link: "/app/whatsapp",
+          });
+          logAudit(tenantId, { action: "instance.down", target: inst.id, targetLabel: (inst as any).instanceName, meta: { from: prev, to: cur } });
+        }
+        prevInstanceStatus.set(inst.id, cur);
+      }
+      setInstances(next);
     }));
 
     return () => subs.forEach((u) => u());

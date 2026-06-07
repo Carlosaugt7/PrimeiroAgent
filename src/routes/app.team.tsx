@@ -82,7 +82,7 @@ function Team() {
       const snap = await getDocs(query(collection(db, "invites"), where("email", "==", e)));
       if (!snap.empty) return toast.error("Esse e-mail já tem convite em outro workspace");
 
-      const id = e.replace(/[^a-zA-Z0-9_-]/g, "_");
+      const id = e;
       await setDoc(doc(db, "invites", id), {
         email: e,
         tenantId: tenant.id,

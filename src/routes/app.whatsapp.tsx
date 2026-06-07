@@ -30,7 +30,7 @@ function statusBadge(state: string) {
 }
 
 function Page() {
-  const { tenant } = useAuth();
+  const { tenant, isMaster } = useAuth();
   const list = useServerFn(listInstances);
   const create = useServerFn(createInstance);
   const connect = useServerFn(connectInstance);

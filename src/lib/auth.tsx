@@ -8,7 +8,17 @@ import {
   signOut as fbSignOut,
   type User,
 } from "firebase/auth";
-import { collection, deleteDoc, doc, getDoc, getDocs, query, serverTimestamp, setDoc, where } from "firebase/firestore";
+import {
+  collection,
+  deleteDoc,
+  doc,
+  getDoc,
+  getDocs,
+  query,
+  serverTimestamp,
+  setDoc,
+  where,
+} from "firebase/firestore";
 import { auth, db } from "@/integrations/firebase/client";
 import { isMasterEmail } from "@/lib/master";
 
@@ -43,22 +53,44 @@ interface AuthCtx {
   switchTenant: (tenantId: string) => Promise<void>;
   resetTenant: () => Promise<void>;
   signInEmail: (email: string, password: string) => Promise<void>;
-  signUpEmail: (email: string, password: string, displayName: string, company: string) => Promise<void>;
+  signUpEmail: (
+    email: string,
+    password: string,
+    displayName: string,
+    company: string,
+  ) => Promise<void>;
   signInGoogle: () => Promise<void>;
   signOut: () => Promise<void>;
 }
 
 const Ctx = createContext<AuthCtx | null>(null);
 
-async function ensureTenantAndProfile(user: User, companyHint?: string): Promise<{ profile: UserProfile; tenant: Tenant }> {
+async function ensureTenantAndProfile(
+  user: User,
+  companyHint?: string,
+): Promise<{ profile: UserProfile; tenant: Tenant }> {
   const profileRef = doc(db, "users", user.uid);
   const profileSnap = await getDoc(profileRef);
 
   if (profileSnap.exists()) {
     const profile = { uid: user.uid, ...(profileSnap.data() as Omit<UserProfile, "uid">) };
-    const tenantSnap = await getDoc(doc(db, "tenants", profile.tenantId));
-    if (tenantSnap.exists()) {
-      return { profile, tenant: { id: tenantSnap.id, ...(tenantSnap.data() as Omit<Tenant, "id">) } };
+    if (profile.tenantId) {
+      try {
+        const tenantSnap = await getDoc(doc(db, "tenants", profile.tenantId));
+        if (tenantSnap.exists()) {
+          return {
+            profile,
+            tenant: { id: tenantSnap.id, ...(tenantSnap.data() as Omit<Tenant, "id">) },
+          };
+        }
+        console.warn("[auth] perfil aponta para tenant inexistente; recriando workspace", {
+          tenantId: profile.tenantId,
+        });
+      } catch (e) {
+        console.warn("[auth] falha ao carregar tenant do perfil; tentando recuperar bootstrap", e);
+      }
+    } else {
+      console.warn("[auth] perfil sem tenantId; recriando workspace");
     }
   }
 
@@ -68,20 +100,24 @@ async function ensureTenantAndProfile(user: User, companyHint?: string): Promise
   let invitedRole: Role = "agent";
   let inviteDocId: string | null = null;
   if (email) {
-    let inv: Awaited<ReturnType<typeof getDoc>> | Awaited<ReturnType<typeof getDocs>>["docs"][number] | undefined;
+    let inv: { id: string; data: () => { tenantId?: string; role?: Role } } | undefined;
     try {
       const directInvite = await getDoc(doc(db, "invites", encodeURIComponent(email)));
       if (directInvite.exists()) inv = directInvite;
-    } catch (e) { console.warn("[auth] direct invite lookup falhou:", e); }
+    } catch (e) {
+      console.warn("[auth] direct invite lookup falhou:", e);
+    }
     if (!inv) {
       try {
         const snap = await getDocs(query(collection(db, "invites"), where("email", "==", email)));
         inv = snap.docs[0];
-      } catch (e) { console.warn("[auth] invite lookup falhou:", e); }
+      } catch (e) {
+        console.warn("[auth] invite lookup falhou:", e);
+      }
     }
     if (inv) {
-      const data = inv.data() as { tenantId: string; role: Role };
-      invitedTenantId = data.tenantId;
+      const data = inv.data();
+      invitedTenantId = data.tenantId || null;
       invitedRole = data.role || "agent";
       inviteDocId = inv.id;
     }
@@ -101,15 +137,28 @@ async function ensureTenantAndProfile(user: User, companyHint?: string): Promise
     // Cria o vínculo do usuário antes de ler o tenant; as regras liberam o tenant pelo vínculo.
     await setDoc(profileRef, { ...profile, _ts: serverTimestamp() });
 
-    const tSnap = await getDoc(doc(db, "tenants", invitedTenantId));
-    if (!tSnap.exists()) throw new Error("Tenant do convite não existe");
-    tenant = { id: tSnap.id, ...(tSnap.data() as Omit<Tenant, "id">) };
-    await setDoc(doc(db, "tenants", tenant.id, "members", user.uid), {
-      uid: user.uid, email: profile.email, displayName: profile.displayName,
-      role: invitedRole, joinedAt: new Date().toISOString(),
-    });
-    if (inviteDocId) { try { await deleteDoc(doc(db, "invites", inviteDocId)); } catch {} }
-    return { profile, tenant };
+    try {
+      const tSnap = await getDoc(doc(db, "tenants", invitedTenantId));
+      if (!tSnap.exists()) throw new Error("Tenant do convite não existe");
+      tenant = { id: tSnap.id, ...(tSnap.data() as Omit<Tenant, "id">) };
+      await setDoc(doc(db, "tenants", tenant.id, "members", user.uid), {
+        uid: user.uid,
+        email: profile.email,
+        displayName: profile.displayName,
+        role: invitedRole,
+        joinedAt: new Date().toISOString(),
+      });
+      if (inviteDocId) {
+        try {
+          await deleteDoc(doc(db, "invites", inviteDocId));
+        } catch (deleteError) {
+          console.warn("[auth] não foi possível remover convite consumido:", deleteError);
+        }
+      }
+      return { profile, tenant };
+    } catch (e) {
+      console.warn("[auth] convite inválido ou sem permissão; criando workspace próprio", e);
+    }
   }
 
   // Bootstrap: cria tenant + profile (novo owner)
@@ -122,8 +171,6 @@ async function ensureTenantAndProfile(user: User, companyHint?: string): Promise
     status: "active",
     createdAt: new Date().toISOString(),
   };
-  await setDoc(doc(db, "tenants", tenantId), { ...tenant, _ts: serverTimestamp() });
-
   profile = {
     uid: user.uid,
     email: user.email || "",
@@ -132,9 +179,13 @@ async function ensureTenantAndProfile(user: User, companyHint?: string): Promise
     role: "owner",
   };
   await setDoc(profileRef, { ...profile, _ts: serverTimestamp() });
+  await setDoc(doc(db, "tenants", tenantId), { ...tenant, _ts: serverTimestamp() });
   await setDoc(doc(db, "tenants", tenantId, "members", user.uid), {
-    uid: user.uid, email: profile.email, displayName: profile.displayName,
-    role: "owner", joinedAt: new Date().toISOString(),
+    uid: user.uid,
+    email: profile.email,
+    displayName: profile.displayName,
+    role: "owner",
+    joinedAt: new Date().toISOString(),
   });
 
   return { profile, tenant };
@@ -158,12 +209,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           // Master admin pode persistir um tenant ativo diferente do seu
           let activeTenant = tenant;
           if (isMasterEmail(u.email)) {
-            const saved = typeof window !== "undefined" ? localStorage.getItem(ACTIVE_TENANT_KEY) : null;
+            const saved =
+              typeof window !== "undefined" ? localStorage.getItem(ACTIVE_TENANT_KEY) : null;
             if (saved && saved !== tenant.id) {
               try {
                 const ts = await getDoc(doc(db, "tenants", saved));
-                if (ts.exists()) activeTenant = { id: ts.id, ...(ts.data() as Omit<Tenant, "id">) };
-              } catch (e) { console.warn("[auth] failed to load active tenant:", e); }
+                if (ts.exists()) {
+                  activeTenant = { id: ts.id, ...(ts.data() as Omit<Tenant, "id">) };
+                }
+              } catch (e) {
+                console.warn("[auth] failed to load active tenant:", e);
+              }
             }
           }
           setTenant(activeTenant);
@@ -198,10 +254,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   const value: AuthCtx = {
-    user, profile, tenant, loading,
+    user,
+    profile,
+    tenant,
+    loading,
     isMaster: isMasterEmail(user?.email),
-    switchTenant, resetTenant,
-    signInEmail: async (email, password) => { await signInWithEmailAndPassword(auth, email, password); },
+    switchTenant,
+    resetTenant,
+    signInEmail: async (email, password) => {
+      await signInWithEmailAndPassword(auth, email, password);
+    },
     signUpEmail: async (email, password, displayName, company) => {
       const cred = await createUserWithEmailAndPassword(auth, email, password);
       await ensureTenantAndProfile({ ...cred.user, displayName } as User, company);

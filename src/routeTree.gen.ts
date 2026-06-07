@@ -21,6 +21,7 @@ import { Route as AppScheduledRouteImport } from './routes/app.scheduled'
 import { Route as AppReportsRouteImport } from './routes/app.reports'
 import { Route as AppPlaygroundRouteImport } from './routes/app.playground'
 import { Route as AppOnboardingRouteImport } from './routes/app.onboarding'
+import { Route as AppNotificationsRouteImport } from './routes/app.notifications'
 import { Route as AppMasterRouteImport } from './routes/app.master'
 import { Route as AppLogsRouteImport } from './routes/app.logs'
 import { Route as AppLlmProvidersRouteImport } from './routes/app.llm-providers'
@@ -31,6 +32,7 @@ import { Route as AppDeployRouteImport } from './routes/app.deploy'
 import { Route as AppCrmRouteImport } from './routes/app.crm'
 import { Route as AppBillingRouteImport } from './routes/app.billing'
 import { Route as AppAutomationsRouteImport } from './routes/app.automations'
+import { Route as AppAuditRouteImport } from './routes/app.audit'
 import { Route as AppAgentsRouteImport } from './routes/app.agents'
 import { Route as AppAdminRouteImport } from './routes/app.admin'
 import { Route as ApiPublicMpWebhookRouteImport } from './routes/api/public/mp-webhook'
@@ -98,6 +100,11 @@ const AppOnboardingRoute = AppOnboardingRouteImport.update({
   path: '/onboarding',
   getParentRoute: () => AppRoute,
 } as any)
+const AppNotificationsRoute = AppNotificationsRouteImport.update({
+  id: '/notifications',
+  path: '/notifications',
+  getParentRoute: () => AppRoute,
+} as any)
 const AppMasterRoute = AppMasterRouteImport.update({
   id: '/master',
   path: '/master',
@@ -148,6 +155,11 @@ const AppAutomationsRoute = AppAutomationsRouteImport.update({
   path: '/automations',
   getParentRoute: () => AppRoute,
 } as any)
+const AppAuditRoute = AppAuditRouteImport.update({
+  id: '/audit',
+  path: '/audit',
+  getParentRoute: () => AppRoute,
+} as any)
 const AppAgentsRoute = AppAgentsRouteImport.update({
   id: '/agents',
   path: '/agents',
@@ -186,6 +198,7 @@ export interface FileRoutesByFullPath {
   '/auth': typeof AuthRoute
   '/app/admin': typeof AppAdminRoute
   '/app/agents': typeof AppAgentsRoute
+  '/app/audit': typeof AppAuditRoute
   '/app/automations': typeof AppAutomationsRoute
   '/app/billing': typeof AppBillingRoute
   '/app/crm': typeof AppCrmRoute
@@ -196,6 +209,7 @@ export interface FileRoutesByFullPath {
   '/app/llm-providers': typeof AppLlmProvidersRoute
   '/app/logs': typeof AppLogsRoute
   '/app/master': typeof AppMasterRoute
+  '/app/notifications': typeof AppNotificationsRoute
   '/app/onboarding': typeof AppOnboardingRoute
   '/app/playground': typeof AppPlaygroundRoute
   '/app/reports': typeof AppReportsRoute
@@ -215,6 +229,7 @@ export interface FileRoutesByTo {
   '/auth': typeof AuthRoute
   '/app/admin': typeof AppAdminRoute
   '/app/agents': typeof AppAgentsRoute
+  '/app/audit': typeof AppAuditRoute
   '/app/automations': typeof AppAutomationsRoute
   '/app/billing': typeof AppBillingRoute
   '/app/crm': typeof AppCrmRoute
@@ -225,6 +240,7 @@ export interface FileRoutesByTo {
   '/app/llm-providers': typeof AppLlmProvidersRoute
   '/app/logs': typeof AppLogsRoute
   '/app/master': typeof AppMasterRoute
+  '/app/notifications': typeof AppNotificationsRoute
   '/app/onboarding': typeof AppOnboardingRoute
   '/app/playground': typeof AppPlaygroundRoute
   '/app/reports': typeof AppReportsRoute
@@ -246,6 +262,7 @@ export interface FileRoutesById {
   '/auth': typeof AuthRoute
   '/app/admin': typeof AppAdminRoute
   '/app/agents': typeof AppAgentsRoute
+  '/app/audit': typeof AppAuditRoute
   '/app/automations': typeof AppAutomationsRoute
   '/app/billing': typeof AppBillingRoute
   '/app/crm': typeof AppCrmRoute
@@ -256,6 +273,7 @@ export interface FileRoutesById {
   '/app/llm-providers': typeof AppLlmProvidersRoute
   '/app/logs': typeof AppLogsRoute
   '/app/master': typeof AppMasterRoute
+  '/app/notifications': typeof AppNotificationsRoute
   '/app/onboarding': typeof AppOnboardingRoute
   '/app/playground': typeof AppPlaygroundRoute
   '/app/reports': typeof AppReportsRoute
@@ -278,6 +296,7 @@ export interface FileRouteTypes {
     | '/auth'
     | '/app/admin'
     | '/app/agents'
+    | '/app/audit'
     | '/app/automations'
     | '/app/billing'
     | '/app/crm'
@@ -288,6 +307,7 @@ export interface FileRouteTypes {
     | '/app/llm-providers'
     | '/app/logs'
     | '/app/master'
+    | '/app/notifications'
     | '/app/onboarding'
     | '/app/playground'
     | '/app/reports'
@@ -307,6 +327,7 @@ export interface FileRouteTypes {
     | '/auth'
     | '/app/admin'
     | '/app/agents'
+    | '/app/audit'
     | '/app/automations'
     | '/app/billing'
     | '/app/crm'
@@ -317,6 +338,7 @@ export interface FileRouteTypes {
     | '/app/llm-providers'
     | '/app/logs'
     | '/app/master'
+    | '/app/notifications'
     | '/app/onboarding'
     | '/app/playground'
     | '/app/reports'
@@ -337,6 +359,7 @@ export interface FileRouteTypes {
     | '/auth'
     | '/app/admin'
     | '/app/agents'
+    | '/app/audit'
     | '/app/automations'
     | '/app/billing'
     | '/app/crm'
@@ -347,6 +370,7 @@ export interface FileRouteTypes {
     | '/app/llm-providers'
     | '/app/logs'
     | '/app/master'
+    | '/app/notifications'
     | '/app/onboarding'
     | '/app/playground'
     | '/app/reports'
@@ -458,6 +482,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppOnboardingRouteImport
       parentRoute: typeof AppRoute
     }
+    '/app/notifications': {
+      id: '/app/notifications'
+      path: '/notifications'
+      fullPath: '/app/notifications'
+      preLoaderRoute: typeof AppNotificationsRouteImport
+      parentRoute: typeof AppRoute
+    }
     '/app/master': {
       id: '/app/master'
       path: '/master'
@@ -528,6 +559,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppAutomationsRouteImport
       parentRoute: typeof AppRoute
     }
+    '/app/audit': {
+      id: '/app/audit'
+      path: '/audit'
+      fullPath: '/app/audit'
+      preLoaderRoute: typeof AppAuditRouteImport
+      parentRoute: typeof AppRoute
+    }
     '/app/agents': {
       id: '/app/agents'
       path: '/agents'
@@ -576,6 +614,7 @@ declare module '@tanstack/react-router' {
 interface AppRouteChildren {
   AppAdminRoute: typeof AppAdminRoute
   AppAgentsRoute: typeof AppAgentsRoute
+  AppAuditRoute: typeof AppAuditRoute
   AppAutomationsRoute: typeof AppAutomationsRoute
   AppBillingRoute: typeof AppBillingRoute
   AppCrmRoute: typeof AppCrmRoute
@@ -586,6 +625,7 @@ interface AppRouteChildren {
   AppLlmProvidersRoute: typeof AppLlmProvidersRoute
   AppLogsRoute: typeof AppLogsRoute
   AppMasterRoute: typeof AppMasterRoute
+  AppNotificationsRoute: typeof AppNotificationsRoute
   AppOnboardingRoute: typeof AppOnboardingRoute
   AppPlaygroundRoute: typeof AppPlaygroundRoute
   AppReportsRoute: typeof AppReportsRoute
@@ -600,6 +640,7 @@ interface AppRouteChildren {
 const AppRouteChildren: AppRouteChildren = {
   AppAdminRoute: AppAdminRoute,
   AppAgentsRoute: AppAgentsRoute,
+  AppAuditRoute: AppAuditRoute,
   AppAutomationsRoute: AppAutomationsRoute,
   AppBillingRoute: AppBillingRoute,
   AppCrmRoute: AppCrmRoute,
@@ -610,6 +651,7 @@ const AppRouteChildren: AppRouteChildren = {
   AppLlmProvidersRoute: AppLlmProvidersRoute,
   AppLogsRoute: AppLogsRoute,
   AppMasterRoute: AppMasterRoute,
+  AppNotificationsRoute: AppNotificationsRoute,
   AppOnboardingRoute: AppOnboardingRoute,
   AppPlaygroundRoute: AppPlaygroundRoute,
   AppReportsRoute: AppReportsRoute,
@@ -635,3 +677,13 @@ const rootRouteChildren: RootRouteChildren = {
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
   ._addFileTypes<FileRouteTypes>()
+
+import type { getRouter } from './router.tsx'
+import type { startInstance } from './start.ts'
+declare module '@tanstack/react-start' {
+  interface Register {
+    ssr: true
+    router: Awaited<ReturnType<typeof getRouter>>
+    config: Awaited<ReturnType<typeof startInstance.getOptions>>
+  }
+}

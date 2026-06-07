@@ -241,6 +241,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           setTenant(activeTenant);
         } catch (e) {
           console.error("[auth] bootstrap failed:", e);
+          setIsMaster(false);
           setProfile(null);
           setTenant(null);
         }

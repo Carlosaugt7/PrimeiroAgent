@@ -48,8 +48,14 @@ const groups: { title: string; items: NavItem[] }[] = [
 
 export function AppSidebar({ tenantName, planName }: { tenantName: string; planName: string }) {
   const pathname = useRouterState({ select: (s) => s.location.pathname });
+  const { isMaster, profile, tenant, resetTenant } = useAuth();
+  const impersonating = isMaster && profile && tenant && profile.tenantId !== tenant.id;
+  const visibleGroups = isMaster
+    ? [...groups, { title: "Plataforma (Master)", items: [{ to: "/app/master", label: "Master Admin", icon: Crown }] }]
+    : groups;
   return (
     <aside className="hidden md:flex w-64 shrink-0 flex-col gap-2 p-4 border-r border-border bg-card/40 backdrop-blur-xl">
+
       <Link to="/" className="flex items-center gap-2 px-2 py-3">
         <div className="size-8 rounded-lg bg-gradient-primary grid place-items-center shadow-glow">
           <Sparkles className="size-4 text-primary-foreground" />

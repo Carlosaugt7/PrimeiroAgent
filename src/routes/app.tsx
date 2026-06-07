@@ -48,9 +48,7 @@ function AppLayout() {
                 />
               </div>
             </div>
-            <button className="size-9 rounded-lg grid place-items-center hover:bg-secondary/60">
-              <Bell className="size-4" />
-            </button>
+            <NotificationsBell />
 
             <DropdownMenu>
               <DropdownMenuTrigger asChild>

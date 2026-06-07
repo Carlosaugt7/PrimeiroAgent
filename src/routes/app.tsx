@@ -23,13 +23,32 @@ function AppLayout() {
     if (!loading && !user) navigate({ to: "/auth" });
   }, [loading, user, navigate]);
 
-  if (loading || !user || !profile || !tenant) {
+  if (loading || !user) {
     return (
       <div className="min-h-screen grid place-items-center">
         <Loader2 className="animate-spin size-6 text-muted-foreground" />
       </div>
     );
   }
+
+  // Logado, mas bootstrap de profile/tenant falhou — sai do loop e mostra erro
+  if (!profile || !tenant) {
+    return (
+      <div className="min-h-screen grid place-items-center p-6">
+        <div className="max-w-md text-center space-y-4">
+          <p className="font-display text-xl font-semibold">Não foi possível carregar seu workspace</p>
+          <p className="text-sm text-muted-foreground">
+            Verifique sua conexão ou as permissões do banco. Se persistir, saia e entre novamente.
+          </p>
+          <div className="flex gap-2 justify-center">
+            <button onClick={() => location.reload()} className="px-4 py-2 rounded-lg bg-secondary text-sm">Recarregar</button>
+            <button onClick={async () => { await signOut(); navigate({ to: "/auth" }); }} className="px-4 py-2 rounded-lg bg-destructive text-destructive-foreground text-sm">Sair</button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
 
   const initials = (profile.displayName || profile.email).split(/[\s@]/).filter(Boolean).slice(0, 2).map((s) => s[0]?.toUpperCase()).join("");
 

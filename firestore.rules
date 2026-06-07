@@ -55,5 +55,26 @@ service cloud.firestore {
       allow create: if isSignedIn() && request.auth.uid == request.resource.data.tenantId;
       allow update, delete: if isSignedIn() && request.auth.uid == resource.data.tenantId;
     }
+
+    // Convites pendentes (consultados no bootstrap por e-mail e na página de Equipe)
+    match /invites/{inviteId} {
+      // Usuário lê o próprio convite (pelo e-mail) e membros do tenant leem os convites do tenant
+      allow read: if isSignedIn() && (
+        request.auth.token.email == resource.data.email ||
+        belongsToTenant(resource.data.tenantId) ||
+        isMasterAdmin()
+      );
+      // Owner/admin do tenant cria convites
+      allow create: if isSignedIn() && (
+        belongsToTenant(request.resource.data.tenantId) || isMasterAdmin()
+      );
+      // O próprio convidado consome (deleta) ao logar; membros do tenant podem cancelar
+      allow delete: if isSignedIn() && (
+        request.auth.token.email == resource.data.email ||
+        belongsToTenant(resource.data.tenantId) ||
+        isMasterAdmin()
+      );
+      allow update: if isMasterAdmin();
+    }
   }
 }

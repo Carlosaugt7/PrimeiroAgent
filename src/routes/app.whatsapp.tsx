@@ -1,4 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
+import { useEffect, useState } from "react";
 import { doc, setDoc, deleteDoc, serverTimestamp } from "firebase/firestore";
 import { db } from "@/integrations/firebase/client";
 import { useAuth } from "@/lib/auth";

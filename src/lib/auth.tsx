@@ -56,9 +56,18 @@ async function ensureTenantAndProfile(user: User, companyHint?: string): Promise
 
   if (profileSnap.exists()) {
     const profile = { uid: user.uid, ...(profileSnap.data() as Omit<UserProfile, "uid">) };
-    const tenantSnap = await getDoc(doc(db, "tenants", profile.tenantId));
-    if (tenantSnap.exists()) {
-      return { profile, tenant: { id: tenantSnap.id, ...(tenantSnap.data() as Omit<Tenant, "id">) } };
+    if (profile.tenantId) {
+      try {
+        const tenantSnap = await getDoc(doc(db, "tenants", profile.tenantId));
+        if (tenantSnap.exists()) {
+          return { profile, tenant: { id: tenantSnap.id, ...(tenantSnap.data() as Omit<Tenant, "id">) } };
+        }
+        console.warn("[auth] perfil aponta para tenant inexistente; recriando workspace", { tenantId: profile.tenantId });
+      } catch (e) {
+        console.warn("[auth] falha ao carregar tenant do perfil; tentando recuperar bootstrap", e);
+      }
+    } else {
+      console.warn("[auth] perfil sem tenantId; recriando workspace");
     }
   }
 
@@ -68,7 +77,7 @@ async function ensureTenantAndProfile(user: User, companyHint?: string): Promise
   let invitedRole: Role = "agent";
   let inviteDocId: string | null = null;
   if (email) {
-    let inv: Awaited<ReturnType<typeof getDoc>> | Awaited<ReturnType<typeof getDocs>>["docs"][number] | undefined;
+    let inv: { id: string; data: () => { tenantId?: string; role?: Role } } | undefined;
     try {
       const directInvite = await getDoc(doc(db, "invites", encodeURIComponent(email)));
       if (directInvite.exists()) inv = directInvite;
@@ -80,8 +89,8 @@ async function ensureTenantAndProfile(user: User, companyHint?: string): Promise
       } catch (e) { console.warn("[auth] invite lookup falhou:", e); }
     }
     if (inv) {
-      const data = inv.data() as { tenantId: string; role: Role };
-      invitedTenantId = data.tenantId;
+      const data = inv.data();
+      invitedTenantId = data.tenantId || null;
       invitedRole = data.role || "agent";
       inviteDocId = inv.id;
     }
@@ -101,15 +110,19 @@ async function ensureTenantAndProfile(user: User, companyHint?: string): Promise
     // Cria o vínculo do usuário antes de ler o tenant; as regras liberam o tenant pelo vínculo.
     await setDoc(profileRef, { ...profile, _ts: serverTimestamp() });
 
-    const tSnap = await getDoc(doc(db, "tenants", invitedTenantId));
-    if (!tSnap.exists()) throw new Error("Tenant do convite não existe");
-    tenant = { id: tSnap.id, ...(tSnap.data() as Omit<Tenant, "id">) };
-    await setDoc(doc(db, "tenants", tenant.id, "members", user.uid), {
-      uid: user.uid, email: profile.email, displayName: profile.displayName,
-      role: invitedRole, joinedAt: new Date().toISOString(),
-    });
-    if (inviteDocId) { try { await deleteDoc(doc(db, "invites", inviteDocId)); } catch {} }
-    return { profile, tenant };
+    try {
+      const tSnap = await getDoc(doc(db, "tenants", invitedTenantId));
+      if (!tSnap.exists()) throw new Error("Tenant do convite não existe");
+      tenant = { id: tSnap.id, ...(tSnap.data() as Omit<Tenant, "id">) };
+      await setDoc(doc(db, "tenants", tenant.id, "members", user.uid), {
+        uid: user.uid, email: profile.email, displayName: profile.displayName,
+        role: invitedRole, joinedAt: new Date().toISOString(),
+      });
+      if (inviteDocId) { try { await deleteDoc(doc(db, "invites", inviteDocId)); } catch {} }
+      return { profile, tenant };
+    } catch (e) {
+      console.warn("[auth] convite inválido ou sem permissão; criando workspace próprio", e);
+    }
   }
 
   // Bootstrap: cria tenant + profile (novo owner)

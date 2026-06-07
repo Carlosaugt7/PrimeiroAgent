@@ -23,7 +23,9 @@ interface Conv {
   lastMessage: string;
   updatedAt: string;
   unread?: number;
-  status?: string;
+  status?: "aberta" | "resolvida" | "handoff" | string;
+  botPaused?: boolean;
+  tags?: string[];
 }
 interface Msg {
   id: string;

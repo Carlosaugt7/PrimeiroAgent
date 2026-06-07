@@ -104,12 +104,16 @@ async function ensureTenantAndProfile(
     try {
       const directInvite = await getDoc(doc(db, "invites", encodeURIComponent(email)));
       if (directInvite.exists()) inv = directInvite;
-    } catch (e) { console.warn("[auth] direct invite lookup falhou:", e); }
+    } catch (e) {
+      console.warn("[auth] direct invite lookup falhou:", e);
+    }
     if (!inv) {
       try {
         const snap = await getDocs(query(collection(db, "invites"), where("email", "==", email)));
         inv = snap.docs[0];
-      } catch (e) { console.warn("[auth] invite lookup falhou:", e); }
+      } catch (e) {
+        console.warn("[auth] invite lookup falhou:", e);
+      }
     }
     if (inv) {
       const data = inv.data();
@@ -138,10 +142,19 @@ async function ensureTenantAndProfile(
       if (!tSnap.exists()) throw new Error("Tenant do convite não existe");
       tenant = { id: tSnap.id, ...(tSnap.data() as Omit<Tenant, "id">) };
       await setDoc(doc(db, "tenants", tenant.id, "members", user.uid), {
-        uid: user.uid, email: profile.email, displayName: profile.displayName,
-        role: invitedRole, joinedAt: new Date().toISOString(),
+        uid: user.uid,
+        email: profile.email,
+        displayName: profile.displayName,
+        role: invitedRole,
+        joinedAt: new Date().toISOString(),
       });
-      if (inviteDocId) { try { await deleteDoc(doc(db, "invites", inviteDocId)); } catch {} }
+      if (inviteDocId) {
+        try {
+          await deleteDoc(doc(db, "invites", inviteDocId));
+        } catch (deleteError) {
+          console.warn("[auth] não foi possível remover convite consumido:", deleteError);
+        }
+      }
       return { profile, tenant };
     } catch (e) {
       console.warn("[auth] convite inválido ou sem permissão; criando workspace próprio", e);
@@ -168,8 +181,11 @@ async function ensureTenantAndProfile(
   await setDoc(profileRef, { ...profile, _ts: serverTimestamp() });
   await setDoc(doc(db, "tenants", tenantId), { ...tenant, _ts: serverTimestamp() });
   await setDoc(doc(db, "tenants", tenantId, "members", user.uid), {
-    uid: user.uid, email: profile.email, displayName: profile.displayName,
-    role: "owner", joinedAt: new Date().toISOString(),
+    uid: user.uid,
+    email: profile.email,
+    displayName: profile.displayName,
+    role: "owner",
+    joinedAt: new Date().toISOString(),
   });
 
   return { profile, tenant };

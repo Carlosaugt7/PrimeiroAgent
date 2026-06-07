@@ -14,6 +14,7 @@ import { Route as AppRouteImport } from './routes/app'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as AppIndexRouteImport } from './routes/app.index'
 import { Route as AppWhatsappRouteImport } from './routes/app.whatsapp'
+import { Route as AppTemplatesRouteImport } from './routes/app.templates'
 import { Route as AppTeamRouteImport } from './routes/app.team'
 import { Route as AppSettingsRouteImport } from './routes/app.settings'
 import { Route as AppPlaygroundRouteImport } from './routes/app.playground'
@@ -52,6 +53,11 @@ const AppIndexRoute = AppIndexRouteImport.update({
 const AppWhatsappRoute = AppWhatsappRouteImport.update({
   id: '/whatsapp',
   path: '/whatsapp',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppTemplatesRoute = AppTemplatesRouteImport.update({
+  id: '/templates',
+  path: '/templates',
   getParentRoute: () => AppRoute,
 } as any)
 const AppTeamRoute = AppTeamRouteImport.update({
@@ -143,6 +149,7 @@ export interface FileRoutesByFullPath {
   '/app/playground': typeof AppPlaygroundRoute
   '/app/settings': typeof AppSettingsRoute
   '/app/team': typeof AppTeamRoute
+  '/app/templates': typeof AppTemplatesRoute
   '/app/whatsapp': typeof AppWhatsappRoute
   '/app/': typeof AppIndexRoute
   '/api/public/evolution-webhook': typeof ApiPublicEvolutionWebhookRoute
@@ -163,6 +170,7 @@ export interface FileRoutesByTo {
   '/app/playground': typeof AppPlaygroundRoute
   '/app/settings': typeof AppSettingsRoute
   '/app/team': typeof AppTeamRoute
+  '/app/templates': typeof AppTemplatesRoute
   '/app/whatsapp': typeof AppWhatsappRoute
   '/app': typeof AppIndexRoute
   '/api/public/evolution-webhook': typeof ApiPublicEvolutionWebhookRoute
@@ -185,6 +193,7 @@ export interface FileRoutesById {
   '/app/playground': typeof AppPlaygroundRoute
   '/app/settings': typeof AppSettingsRoute
   '/app/team': typeof AppTeamRoute
+  '/app/templates': typeof AppTemplatesRoute
   '/app/whatsapp': typeof AppWhatsappRoute
   '/app/': typeof AppIndexRoute
   '/api/public/evolution-webhook': typeof ApiPublicEvolutionWebhookRoute
@@ -208,6 +217,7 @@ export interface FileRouteTypes {
     | '/app/playground'
     | '/app/settings'
     | '/app/team'
+    | '/app/templates'
     | '/app/whatsapp'
     | '/app/'
     | '/api/public/evolution-webhook'
@@ -228,6 +238,7 @@ export interface FileRouteTypes {
     | '/app/playground'
     | '/app/settings'
     | '/app/team'
+    | '/app/templates'
     | '/app/whatsapp'
     | '/app'
     | '/api/public/evolution-webhook'
@@ -249,6 +260,7 @@ export interface FileRouteTypes {
     | '/app/playground'
     | '/app/settings'
     | '/app/team'
+    | '/app/templates'
     | '/app/whatsapp'
     | '/app/'
     | '/api/public/evolution-webhook'
@@ -296,6 +308,13 @@ declare module '@tanstack/react-router' {
       path: '/whatsapp'
       fullPath: '/app/whatsapp'
       preLoaderRoute: typeof AppWhatsappRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/app/templates': {
+      id: '/app/templates'
+      path: '/templates'
+      fullPath: '/app/templates'
+      preLoaderRoute: typeof AppTemplatesRouteImport
       parentRoute: typeof AppRoute
     }
     '/app/team': {
@@ -413,6 +432,7 @@ interface AppRouteChildren {
   AppPlaygroundRoute: typeof AppPlaygroundRoute
   AppSettingsRoute: typeof AppSettingsRoute
   AppTeamRoute: typeof AppTeamRoute
+  AppTemplatesRoute: typeof AppTemplatesRoute
   AppWhatsappRoute: typeof AppWhatsappRoute
   AppIndexRoute: typeof AppIndexRoute
 }
@@ -431,6 +451,7 @@ const AppRouteChildren: AppRouteChildren = {
   AppPlaygroundRoute: AppPlaygroundRoute,
   AppSettingsRoute: AppSettingsRoute,
   AppTeamRoute: AppTeamRoute,
+  AppTemplatesRoute: AppTemplatesRoute,
   AppWhatsappRoute: AppWhatsappRoute,
   AppIndexRoute: AppIndexRoute,
 }

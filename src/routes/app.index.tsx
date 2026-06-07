@@ -1,8 +1,11 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useAppStore } from "@/lib/app-store";
-import { ArrowUpRight, Bot, Cpu, MessageCircle, Plug, Smartphone, TrendingUp } from "lucide-react";
+import { ArrowUpRight, Bot, BotOff, CheckCircle2, Cpu, MessageCircle, Plug, Smartphone, TrendingUp, Users } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
 import { useAuth } from "@/lib/auth";
+import { useMemo } from "react";
+import { Area, AreaChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 
 export const Route = createFileRoute("/app/")({
   component: Overview,

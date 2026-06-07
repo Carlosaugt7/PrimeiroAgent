@@ -9,8 +9,9 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Switch } from "@/components/ui/switch";
-import { MessagesSquare, Send, Loader2, Bot, BotOff, X, Plus, CheckCircle2 } from "lucide-react";
+import { MessagesSquare, Send, Loader2, Bot, BotOff, X, Plus, CheckCircle2, MessageSquareText } from "lucide-react";
 import { toast } from "sonner";
+import type { Template } from "@/routes/app.templates";
 
 export const Route = createFileRoute("/app/inbox")({ component: Inbox });
 

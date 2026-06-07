@@ -73,7 +73,7 @@ function Team() {
     if (members.some((m) => m.email.toLowerCase() === e)) return toast.error("Já é membro");
     if (invites.some((i) => i.email === e)) return toast.error("Convite já enviado");
     const { ensureLimit } = await import("@/lib/limits");
-    const lim = ensureLimit(tenant.id, tenant.plan, "members", members.length + invites.length);
+    const lim = ensureLimit(tenant.id, tenant.plan, "members", members.length + invites.length, isMaster);
     if (!lim.ok) return toast.error(lim.message!);
 
 

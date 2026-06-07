@@ -1,8 +1,11 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useAppStore } from "@/lib/app-store";
-import { ArrowUpRight, Bot, Cpu, MessageCircle, Plug, Smartphone, TrendingUp } from "lucide-react";
+import { ArrowUpRight, Bot, BotOff, CheckCircle2, Cpu, MessageCircle, Plug, Smartphone, TrendingUp, Users } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
 import { useAuth } from "@/lib/auth";
+import { useMemo } from "react";
+import { Area, AreaChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 
 export const Route = createFileRoute("/app/")({
   component: Overview,
@@ -106,6 +109,98 @@ function Overview() {
           <Row icon={Plug} label="Mensagens do plano" value={`${plan.messagesUsed}/${plan.messagesLimit}`} to="/app/billing" />
           <Row icon={MessageCircle} label="Conversas" value={String(conversations.length)} to="/app/inbox" />
         </div>
+      </div>
+
+      <LiveMetrics />
+    </div>
+  );
+}
+
+function LiveMetrics() {
+  const { conversations } = useAppStore();
+
+  const metrics = useMemo(() => {
+    const now = Date.now();
+    const day = 86400000;
+    const abertas = conversations.filter((c) => c.status === "aberta").length;
+    const resolvidas = conversations.filter((c) => c.status === "resolvida").length;
+    const handoff = conversations.filter((c) => c.status === "handoff" || c.botPaused).length;
+    const unique = new Set(conversations.map((c) => c.contactPhone)).size;
+
+    // série últimos 7 dias por updatedAt
+    const series: { label: string; value: number }[] = [];
+    for (let i = 6; i >= 0; i--) {
+      const start = now - i * day;
+      const d = new Date(start);
+      const key = d.toISOString().slice(0, 10);
+      const count = conversations.filter((c) => (c.updatedAt ?? "").slice(0, 10) === key).length;
+      series.push({ label: d.toLocaleDateString("pt-BR", { weekday: "short" }).replace(".", ""), value: count });
+    }
+
+    // top tags
+    const tagCount = new Map<string, number>();
+    conversations.forEach((c) => (c.tags ?? []).forEach((t) => tagCount.set(t, (tagCount.get(t) ?? 0) + 1)));
+    const topTags = [...tagCount.entries()].sort((a, b) => b[1] - a[1]).slice(0, 8);
+
+    return { abertas, resolvidas, handoff, unique, series, topTags };
+  }, [conversations]);
+
+  return (
+    <div className="grid lg:grid-cols-3 gap-5">
+      <div className="lg:col-span-2 rounded-2xl bg-gradient-card border border-border p-6">
+        <div className="flex items-center justify-between mb-4">
+          <div>
+            <h2 className="font-display text-lg font-semibold">Conversas — últimos 7 dias</h2>
+            <p className="text-xs text-muted-foreground mt-0.5">Atualizadas no período</p>
+          </div>
+          <div className="flex gap-2">
+            <Badge variant="secondary" className="gap-1"><MessageCircle className="size-3" /> {metrics.abertas} abertas</Badge>
+            <Badge variant="secondary" className="gap-1"><CheckCircle2 className="size-3" /> {metrics.resolvidas} resolvidas</Badge>
+            <Badge variant="outline" className="gap-1"><BotOff className="size-3" /> {metrics.handoff} handoff</Badge>
+            <Badge variant="outline" className="gap-1"><Users className="size-3" /> {metrics.unique} contatos</Badge>
+          </div>
+        </div>
+        <div className="h-56">
+          <ResponsiveContainer width="100%" height="100%">
+            <AreaChart data={metrics.series}>
+              <defs>
+                <linearGradient id="g1" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0%" stopColor="hsl(var(--primary))" stopOpacity={0.6} />
+                  <stop offset="100%" stopColor="hsl(var(--primary))" stopOpacity={0} />
+                </linearGradient>
+              </defs>
+              <XAxis dataKey="label" tick={{ fontSize: 11 }} stroke="hsl(var(--muted-foreground))" />
+              <YAxis allowDecimals={false} tick={{ fontSize: 11 }} stroke="hsl(var(--muted-foreground))" width={28} />
+              <Tooltip contentStyle={{ background: "hsl(var(--card))", border: "1px solid hsl(var(--border))", borderRadius: 8, fontSize: 12 }} />
+              <Area type="monotone" dataKey="value" stroke="hsl(var(--primary))" fill="url(#g1)" strokeWidth={2} />
+            </AreaChart>
+          </ResponsiveContainer>
+        </div>
+      </div>
+
+      <div className="rounded-2xl bg-gradient-card border border-border p-6">
+        <h2 className="font-display text-lg font-semibold mb-3">Top tags</h2>
+        {metrics.topTags.length === 0 ? (
+          <p className="text-sm text-muted-foreground">Nenhuma tag ainda. Adicione tags no Inbox para segmentar contatos.</p>
+        ) : (
+          <div className="space-y-2">
+            {metrics.topTags.map(([t, n]) => {
+              const max = metrics.topTags[0][1];
+              const pct = Math.round((n / max) * 100);
+              return (
+                <div key={t}>
+                  <div className="flex items-center justify-between text-xs mb-1">
+                    <span className="font-medium">{t}</span>
+                    <span className="text-muted-foreground">{n}</span>
+                  </div>
+                  <div className="h-1.5 rounded-full bg-secondary overflow-hidden">
+                    <div className="h-full bg-gradient-primary" style={{ width: `${pct}%` }} />
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
       </div>
     </div>
   );

@@ -80,12 +80,10 @@ async function ensureTenantAndProfile(user: User, companyHint?: string): Promise
       } catch (e) { console.warn("[auth] invite lookup falhou:", e); }
     }
     if (inv) {
-      if (inv) {
-        const data = inv.data() as { tenantId: string; role: Role };
-        invitedTenantId = data.tenantId;
-        invitedRole = data.role || "agent";
-        inviteDocId = inv.id;
-      }
+      const data = inv.data() as { tenantId: string; role: Role };
+      invitedTenantId = data.tenantId;
+      invitedRole = data.role || "agent";
+      inviteDocId = inv.id;
     }
   }
 

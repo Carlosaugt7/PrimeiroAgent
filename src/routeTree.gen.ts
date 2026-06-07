@@ -29,6 +29,7 @@ import { Route as AppBillingRouteImport } from './routes/app.billing'
 import { Route as AppAgentsRouteImport } from './routes/app.agents'
 import { Route as AppAdminRouteImport } from './routes/app.admin'
 import { Route as ApiPublicEvolutionWebhookRouteImport } from './routes/api/public/evolution-webhook'
+import { Route as ApiPublicCronSendRouteImport } from './routes/api/public/cron-send'
 
 const AuthRoute = AuthRouteImport.update({
   id: '/auth',
@@ -131,6 +132,11 @@ const ApiPublicEvolutionWebhookRoute =
     path: '/api/public/evolution-webhook',
     getParentRoute: () => rootRouteImport,
   } as any)
+const ApiPublicCronSendRoute = ApiPublicCronSendRouteImport.update({
+  id: '/api/public/cron-send',
+  path: '/api/public/cron-send',
+  getParentRoute: () => rootRouteImport,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
@@ -152,6 +158,7 @@ export interface FileRoutesByFullPath {
   '/app/templates': typeof AppTemplatesRoute
   '/app/whatsapp': typeof AppWhatsappRoute
   '/app/': typeof AppIndexRoute
+  '/api/public/cron-send': typeof ApiPublicCronSendRoute
   '/api/public/evolution-webhook': typeof ApiPublicEvolutionWebhookRoute
 }
 export interface FileRoutesByTo {
@@ -173,6 +180,7 @@ export interface FileRoutesByTo {
   '/app/templates': typeof AppTemplatesRoute
   '/app/whatsapp': typeof AppWhatsappRoute
   '/app': typeof AppIndexRoute
+  '/api/public/cron-send': typeof ApiPublicCronSendRoute
   '/api/public/evolution-webhook': typeof ApiPublicEvolutionWebhookRoute
 }
 export interface FileRoutesById {
@@ -196,6 +204,7 @@ export interface FileRoutesById {
   '/app/templates': typeof AppTemplatesRoute
   '/app/whatsapp': typeof AppWhatsappRoute
   '/app/': typeof AppIndexRoute
+  '/api/public/cron-send': typeof ApiPublicCronSendRoute
   '/api/public/evolution-webhook': typeof ApiPublicEvolutionWebhookRoute
 }
 export interface FileRouteTypes {
@@ -220,6 +229,7 @@ export interface FileRouteTypes {
     | '/app/templates'
     | '/app/whatsapp'
     | '/app/'
+    | '/api/public/cron-send'
     | '/api/public/evolution-webhook'
   fileRoutesByTo: FileRoutesByTo
   to:
@@ -241,6 +251,7 @@ export interface FileRouteTypes {
     | '/app/templates'
     | '/app/whatsapp'
     | '/app'
+    | '/api/public/cron-send'
     | '/api/public/evolution-webhook'
   id:
     | '__root__'
@@ -263,6 +274,7 @@ export interface FileRouteTypes {
     | '/app/templates'
     | '/app/whatsapp'
     | '/app/'
+    | '/api/public/cron-send'
     | '/api/public/evolution-webhook'
   fileRoutesById: FileRoutesById
 }
@@ -270,6 +282,7 @@ export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   AppRoute: typeof AppRouteWithChildren
   AuthRoute: typeof AuthRoute
+  ApiPublicCronSendRoute: typeof ApiPublicCronSendRoute
   ApiPublicEvolutionWebhookRoute: typeof ApiPublicEvolutionWebhookRoute
 }
 
@@ -415,6 +428,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiPublicEvolutionWebhookRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/public/cron-send': {
+      id: '/api/public/cron-send'
+      path: '/api/public/cron-send'
+      fullPath: '/api/public/cron-send'
+      preLoaderRoute: typeof ApiPublicCronSendRouteImport
+      parentRoute: typeof rootRouteImport
+    }
   }
 }
 
@@ -462,8 +482,19 @@ const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   AppRoute: AppRouteWithChildren,
   AuthRoute: AuthRoute,
+  ApiPublicCronSendRoute: ApiPublicCronSendRoute,
   ApiPublicEvolutionWebhookRoute: ApiPublicEvolutionWebhookRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
   ._addFileTypes<FileRouteTypes>()
+
+import type { getRouter } from './router.tsx'
+import type { startInstance } from './start.ts'
+declare module '@tanstack/react-start' {
+  interface Register {
+    ssr: true
+    router: Awaited<ReturnType<typeof getRouter>>
+    config: Awaited<ReturnType<typeof startInstance.getOptions>>
+  }
+}

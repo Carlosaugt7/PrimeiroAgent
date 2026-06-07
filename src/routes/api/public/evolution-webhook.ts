@@ -13,6 +13,83 @@ async function evoSendText(instanceName: string, number: string, text: string) {
   if (!r.ok) throw new Error(`sendText ${r.status}: ${(await r.text()).slice(0, 200)}`);
 }
 
+// ===== Motor de Automações =====
+type AutoAction = { type: "addTag" | "pauseBot" | "reply" | "setStatus"; value: string };
+interface AutoRule {
+  id: string;
+  name: string;
+  enabled: boolean;
+  matchType: "contains" | "equals" | "regex";
+  pattern: string;
+  caseSensitive?: boolean;
+  actions: AutoAction[];
+  order?: number;
+}
+
+function matches(rule: AutoRule, text: string): boolean {
+  if (!rule.enabled || !rule.pattern) return false;
+  const cs = !!rule.caseSensitive;
+  const t = cs ? text : text.toLowerCase();
+  const p = cs ? rule.pattern : rule.pattern.toLowerCase();
+  if (rule.matchType === "equals") return t.trim() === p.trim();
+  if (rule.matchType === "regex") {
+    try { return new RegExp(rule.pattern, cs ? "" : "i").test(text); } catch { return false; }
+  }
+  // contains (lista separada por vírgula)
+  return p.split(",").map((s) => s.trim()).filter(Boolean).some((kw) => t.includes(kw));
+}
+
+async function runAutomations(
+  fb: typeof import("@/lib/firebase-admin.server"),
+  tenantId: string,
+  instanceName: string,
+  remoteJid: string,
+  text: string,
+  convPath: string,
+  currentConv: Record<string, any> | null,
+): Promise<{ pauseBot: boolean; replied: boolean; triggered: string[] }> {
+  const rules = (await fb.listCollection(`tenants/${tenantId}/automations`)) as unknown as AutoRule[];
+  rules.sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
+
+  const triggered: string[] = [];
+  const updates: Record<string, any> = {};
+  const newTags = new Set<string>(Array.isArray(currentConv?.tags) ? currentConv!.tags : []);
+  let pauseBot = false;
+  let replied = false;
+  const number = remoteJid.split("@")[0];
+
+  for (const rule of rules) {
+    if (!matches(rule, text)) continue;
+    triggered.push(rule.name);
+    for (const act of rule.actions ?? []) {
+      if (act.type === "addTag" && act.value) newTags.add(act.value.trim());
+      else if (act.type === "pauseBot") { pauseBot = true; updates.botPaused = true; }
+      else if (act.type === "setStatus" && act.value) updates.status = act.value;
+      else if (act.type === "reply" && act.value) {
+        try {
+          await evoSendText(instanceName, number, act.value);
+          const rid = `auto_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
+          await fb.setDoc(`${convPath}/messages/${rid}`, {
+            id: rid, text: act.value, fromMe: true, createdAt: new Date().toISOString(), automation: rule.name,
+          }, { merge: true });
+          replied = true;
+        } catch (e) {
+          console.error("[automation reply] erro:", e);
+        }
+      }
+    }
+  }
+
+  if (newTags.size > (Array.isArray(currentConv?.tags) ? currentConv!.tags.length : 0)) {
+    updates.tags = [...newTags];
+  }
+  if (Object.keys(updates).length > 0) {
+    await fb.setDoc(convPath, updates, { merge: true });
+  }
+  return { pauseBot, replied, triggered };
+}
+
+
 function cosine(a: number[], b: number[]) {
   let dot = 0, na = 0, nb = 0;
   const n = Math.min(a.length, b.length);

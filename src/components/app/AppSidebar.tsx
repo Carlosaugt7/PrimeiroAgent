@@ -66,7 +66,7 @@ export function AppSidebar({ tenantName, planName }: { tenantName: string; planN
       </Link>
 
       <div className="mt-2 flex flex-col gap-4 overflow-y-auto">
-        {groups.map((g) => (
+        {visibleGroups.map((g) => (
           <div key={g.title}>
             <p className="px-3 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground mb-1.5">{g.title}</p>
             <div className="flex flex-col gap-0.5">

@@ -17,6 +17,7 @@ import { Route as AppWhatsappRouteImport } from './routes/app.whatsapp'
 import { Route as AppTemplatesRouteImport } from './routes/app.templates'
 import { Route as AppTeamRouteImport } from './routes/app.team'
 import { Route as AppSettingsRouteImport } from './routes/app.settings'
+import { Route as AppScheduledRouteImport } from './routes/app.scheduled'
 import { Route as AppPlaygroundRouteImport } from './routes/app.playground'
 import { Route as AppLogsRouteImport } from './routes/app.logs'
 import { Route as AppLlmProvidersRouteImport } from './routes/app.llm-providers'
@@ -29,6 +30,7 @@ import { Route as AppBillingRouteImport } from './routes/app.billing'
 import { Route as AppAgentsRouteImport } from './routes/app.agents'
 import { Route as AppAdminRouteImport } from './routes/app.admin'
 import { Route as ApiPublicEvolutionWebhookRouteImport } from './routes/api/public/evolution-webhook'
+import { Route as ApiPublicCronSendRouteImport } from './routes/api/public/cron-send'
 
 const AuthRoute = AuthRouteImport.update({
   id: '/auth',
@@ -68,6 +70,11 @@ const AppTeamRoute = AppTeamRouteImport.update({
 const AppSettingsRoute = AppSettingsRouteImport.update({
   id: '/settings',
   path: '/settings',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppScheduledRoute = AppScheduledRouteImport.update({
+  id: '/scheduled',
+  path: '/scheduled',
   getParentRoute: () => AppRoute,
 } as any)
 const AppPlaygroundRoute = AppPlaygroundRouteImport.update({
@@ -131,6 +138,11 @@ const ApiPublicEvolutionWebhookRoute =
     path: '/api/public/evolution-webhook',
     getParentRoute: () => rootRouteImport,
   } as any)
+const ApiPublicCronSendRoute = ApiPublicCronSendRouteImport.update({
+  id: '/api/public/cron-send',
+  path: '/api/public/cron-send',
+  getParentRoute: () => rootRouteImport,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
@@ -147,11 +159,13 @@ export interface FileRoutesByFullPath {
   '/app/llm-providers': typeof AppLlmProvidersRoute
   '/app/logs': typeof AppLogsRoute
   '/app/playground': typeof AppPlaygroundRoute
+  '/app/scheduled': typeof AppScheduledRoute
   '/app/settings': typeof AppSettingsRoute
   '/app/team': typeof AppTeamRoute
   '/app/templates': typeof AppTemplatesRoute
   '/app/whatsapp': typeof AppWhatsappRoute
   '/app/': typeof AppIndexRoute
+  '/api/public/cron-send': typeof ApiPublicCronSendRoute
   '/api/public/evolution-webhook': typeof ApiPublicEvolutionWebhookRoute
 }
 export interface FileRoutesByTo {
@@ -168,11 +182,13 @@ export interface FileRoutesByTo {
   '/app/llm-providers': typeof AppLlmProvidersRoute
   '/app/logs': typeof AppLogsRoute
   '/app/playground': typeof AppPlaygroundRoute
+  '/app/scheduled': typeof AppScheduledRoute
   '/app/settings': typeof AppSettingsRoute
   '/app/team': typeof AppTeamRoute
   '/app/templates': typeof AppTemplatesRoute
   '/app/whatsapp': typeof AppWhatsappRoute
   '/app': typeof AppIndexRoute
+  '/api/public/cron-send': typeof ApiPublicCronSendRoute
   '/api/public/evolution-webhook': typeof ApiPublicEvolutionWebhookRoute
 }
 export interface FileRoutesById {
@@ -191,11 +207,13 @@ export interface FileRoutesById {
   '/app/llm-providers': typeof AppLlmProvidersRoute
   '/app/logs': typeof AppLogsRoute
   '/app/playground': typeof AppPlaygroundRoute
+  '/app/scheduled': typeof AppScheduledRoute
   '/app/settings': typeof AppSettingsRoute
   '/app/team': typeof AppTeamRoute
   '/app/templates': typeof AppTemplatesRoute
   '/app/whatsapp': typeof AppWhatsappRoute
   '/app/': typeof AppIndexRoute
+  '/api/public/cron-send': typeof ApiPublicCronSendRoute
   '/api/public/evolution-webhook': typeof ApiPublicEvolutionWebhookRoute
 }
 export interface FileRouteTypes {
@@ -215,11 +233,13 @@ export interface FileRouteTypes {
     | '/app/llm-providers'
     | '/app/logs'
     | '/app/playground'
+    | '/app/scheduled'
     | '/app/settings'
     | '/app/team'
     | '/app/templates'
     | '/app/whatsapp'
     | '/app/'
+    | '/api/public/cron-send'
     | '/api/public/evolution-webhook'
   fileRoutesByTo: FileRoutesByTo
   to:
@@ -236,11 +256,13 @@ export interface FileRouteTypes {
     | '/app/llm-providers'
     | '/app/logs'
     | '/app/playground'
+    | '/app/scheduled'
     | '/app/settings'
     | '/app/team'
     | '/app/templates'
     | '/app/whatsapp'
     | '/app'
+    | '/api/public/cron-send'
     | '/api/public/evolution-webhook'
   id:
     | '__root__'
@@ -258,11 +280,13 @@ export interface FileRouteTypes {
     | '/app/llm-providers'
     | '/app/logs'
     | '/app/playground'
+    | '/app/scheduled'
     | '/app/settings'
     | '/app/team'
     | '/app/templates'
     | '/app/whatsapp'
     | '/app/'
+    | '/api/public/cron-send'
     | '/api/public/evolution-webhook'
   fileRoutesById: FileRoutesById
 }
@@ -270,6 +294,7 @@ export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   AppRoute: typeof AppRouteWithChildren
   AuthRoute: typeof AuthRoute
+  ApiPublicCronSendRoute: typeof ApiPublicCronSendRoute
   ApiPublicEvolutionWebhookRoute: typeof ApiPublicEvolutionWebhookRoute
 }
 
@@ -329,6 +354,13 @@ declare module '@tanstack/react-router' {
       path: '/settings'
       fullPath: '/app/settings'
       preLoaderRoute: typeof AppSettingsRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/app/scheduled': {
+      id: '/app/scheduled'
+      path: '/scheduled'
+      fullPath: '/app/scheduled'
+      preLoaderRoute: typeof AppScheduledRouteImport
       parentRoute: typeof AppRoute
     }
     '/app/playground': {
@@ -415,6 +447,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiPublicEvolutionWebhookRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/public/cron-send': {
+      id: '/api/public/cron-send'
+      path: '/api/public/cron-send'
+      fullPath: '/api/public/cron-send'
+      preLoaderRoute: typeof ApiPublicCronSendRouteImport
+      parentRoute: typeof rootRouteImport
+    }
   }
 }
 
@@ -430,6 +469,7 @@ interface AppRouteChildren {
   AppLlmProvidersRoute: typeof AppLlmProvidersRoute
   AppLogsRoute: typeof AppLogsRoute
   AppPlaygroundRoute: typeof AppPlaygroundRoute
+  AppScheduledRoute: typeof AppScheduledRoute
   AppSettingsRoute: typeof AppSettingsRoute
   AppTeamRoute: typeof AppTeamRoute
   AppTemplatesRoute: typeof AppTemplatesRoute
@@ -449,6 +489,7 @@ const AppRouteChildren: AppRouteChildren = {
   AppLlmProvidersRoute: AppLlmProvidersRoute,
   AppLogsRoute: AppLogsRoute,
   AppPlaygroundRoute: AppPlaygroundRoute,
+  AppScheduledRoute: AppScheduledRoute,
   AppSettingsRoute: AppSettingsRoute,
   AppTeamRoute: AppTeamRoute,
   AppTemplatesRoute: AppTemplatesRoute,
@@ -462,6 +503,7 @@ const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   AppRoute: AppRouteWithChildren,
   AuthRoute: AuthRoute,
+  ApiPublicCronSendRoute: ApiPublicCronSendRoute,
   ApiPublicEvolutionWebhookRoute: ApiPublicEvolutionWebhookRoute,
 }
 export const routeTree = rootRouteImport

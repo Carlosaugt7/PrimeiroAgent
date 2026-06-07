@@ -2,7 +2,7 @@ import { Link, useRouterState } from "@tanstack/react-router";
 import {
   LayoutDashboard, Bot, MessagesSquare, Database, Smartphone,
   CreditCard, Users, Settings, ShieldCheck, Sparkles, Plug, ScrollText, Rocket,
-  Cpu, FlaskConical, Contact, MessageSquareText,
+  Cpu, FlaskConical, Contact, MessageSquareText, CalendarClock,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -18,6 +18,7 @@ const groups: { title: string; items: NavItem[] }[] = [
       { to: "/app/inbox", label: "Inbox", icon: MessagesSquare },
       { to: "/app/crm", label: "Contatos (CRM)", icon: Contact },
       { to: "/app/templates", label: "Templates", icon: MessageSquareText },
+      { to: "/app/scheduled", label: "Agendamentos", icon: CalendarClock },
     ],
   },
   {

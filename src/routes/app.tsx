@@ -1,9 +1,10 @@
 import { createFileRoute, Outlet, useNavigate } from "@tanstack/react-router";
 import { useEffect } from "react";
 import { AppSidebar } from "@/components/app/AppSidebar";
+import { NotificationsBell } from "@/components/app/NotificationsBell";
 import { AppStoreProvider } from "@/lib/app-store";
 import { useAuth } from "@/lib/auth";
-import { Bell, Loader2, LogOut, Search } from "lucide-react";
+import { Loader2, LogOut, Search } from "lucide-react";
 import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem,
   DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger,

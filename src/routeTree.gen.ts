@@ -23,6 +23,7 @@ import { Route as AppKnowledgeRouteImport } from './routes/app.knowledge'
 import { Route as AppIntegrationsRouteImport } from './routes/app.integrations'
 import { Route as AppInboxRouteImport } from './routes/app.inbox'
 import { Route as AppDeployRouteImport } from './routes/app.deploy'
+import { Route as AppCrmRouteImport } from './routes/app.crm'
 import { Route as AppBillingRouteImport } from './routes/app.billing'
 import { Route as AppAgentsRouteImport } from './routes/app.agents'
 import { Route as AppAdminRouteImport } from './routes/app.admin'
@@ -98,6 +99,11 @@ const AppDeployRoute = AppDeployRouteImport.update({
   path: '/deploy',
   getParentRoute: () => AppRoute,
 } as any)
+const AppCrmRoute = AppCrmRouteImport.update({
+  id: '/crm',
+  path: '/crm',
+  getParentRoute: () => AppRoute,
+} as any)
 const AppBillingRoute = AppBillingRouteImport.update({
   id: '/billing',
   path: '/billing',
@@ -127,6 +133,7 @@ export interface FileRoutesByFullPath {
   '/app/admin': typeof AppAdminRoute
   '/app/agents': typeof AppAgentsRoute
   '/app/billing': typeof AppBillingRoute
+  '/app/crm': typeof AppCrmRoute
   '/app/deploy': typeof AppDeployRoute
   '/app/inbox': typeof AppInboxRoute
   '/app/integrations': typeof AppIntegrationsRoute
@@ -146,6 +153,7 @@ export interface FileRoutesByTo {
   '/app/admin': typeof AppAdminRoute
   '/app/agents': typeof AppAgentsRoute
   '/app/billing': typeof AppBillingRoute
+  '/app/crm': typeof AppCrmRoute
   '/app/deploy': typeof AppDeployRoute
   '/app/inbox': typeof AppInboxRoute
   '/app/integrations': typeof AppIntegrationsRoute
@@ -167,6 +175,7 @@ export interface FileRoutesById {
   '/app/admin': typeof AppAdminRoute
   '/app/agents': typeof AppAgentsRoute
   '/app/billing': typeof AppBillingRoute
+  '/app/crm': typeof AppCrmRoute
   '/app/deploy': typeof AppDeployRoute
   '/app/inbox': typeof AppInboxRoute
   '/app/integrations': typeof AppIntegrationsRoute
@@ -189,6 +198,7 @@ export interface FileRouteTypes {
     | '/app/admin'
     | '/app/agents'
     | '/app/billing'
+    | '/app/crm'
     | '/app/deploy'
     | '/app/inbox'
     | '/app/integrations'
@@ -208,6 +218,7 @@ export interface FileRouteTypes {
     | '/app/admin'
     | '/app/agents'
     | '/app/billing'
+    | '/app/crm'
     | '/app/deploy'
     | '/app/inbox'
     | '/app/integrations'
@@ -228,6 +239,7 @@ export interface FileRouteTypes {
     | '/app/admin'
     | '/app/agents'
     | '/app/billing'
+    | '/app/crm'
     | '/app/deploy'
     | '/app/inbox'
     | '/app/integrations'
@@ -349,6 +361,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppDeployRouteImport
       parentRoute: typeof AppRoute
     }
+    '/app/crm': {
+      id: '/app/crm'
+      path: '/crm'
+      fullPath: '/app/crm'
+      preLoaderRoute: typeof AppCrmRouteImport
+      parentRoute: typeof AppRoute
+    }
     '/app/billing': {
       id: '/app/billing'
       path: '/billing'
@@ -384,6 +403,7 @@ interface AppRouteChildren {
   AppAdminRoute: typeof AppAdminRoute
   AppAgentsRoute: typeof AppAgentsRoute
   AppBillingRoute: typeof AppBillingRoute
+  AppCrmRoute: typeof AppCrmRoute
   AppDeployRoute: typeof AppDeployRoute
   AppInboxRoute: typeof AppInboxRoute
   AppIntegrationsRoute: typeof AppIntegrationsRoute
@@ -401,6 +421,7 @@ const AppRouteChildren: AppRouteChildren = {
   AppAdminRoute: AppAdminRoute,
   AppAgentsRoute: AppAgentsRoute,
   AppBillingRoute: AppBillingRoute,
+  AppCrmRoute: AppCrmRoute,
   AppDeployRoute: AppDeployRoute,
   AppInboxRoute: AppInboxRoute,
   AppIntegrationsRoute: AppIntegrationsRoute,

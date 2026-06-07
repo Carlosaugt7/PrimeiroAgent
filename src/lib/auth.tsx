@@ -213,8 +213,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             if (saved && saved !== tenant.id) {
               try {
                 const ts = await getDoc(doc(db, "tenants", saved));
-                if (ts.exists()) activeTenant = { id: ts.id, ...(ts.data() as Omit<Tenant, "id">) };
-              } catch (e) { console.warn("[auth] failed to load active tenant:", e); }
+                if (ts.exists()) {
+                  activeTenant = { id: ts.id, ...(ts.data() as Omit<Tenant, "id">) };
+                }
+              } catch (e) {
+                console.warn("[auth] failed to load active tenant:", e);
+              }
             }
           }
           setTenant(activeTenant);
@@ -249,10 +253,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   const value: AuthCtx = {
-    user, profile, tenant, loading,
+    user,
+    profile,
+    tenant,
+    loading,
     isMaster: isMasterEmail(user?.email),
-    switchTenant, resetTenant,
-    signInEmail: async (email, password) => { await signInWithEmailAndPassword(auth, email, password); },
+    switchTenant,
+    resetTenant,
+    signInEmail: async (email, password) => {
+      await signInWithEmailAndPassword(auth, email, password);
+    },
     signUpEmail: async (email, password, displayName, company) => {
       const cred = await createUserWithEmailAndPassword(auth, email, password);
       await ensureTenantAndProfile({ ...cred.user, displayName } as User, company);

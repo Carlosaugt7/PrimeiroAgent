@@ -13,6 +13,7 @@ import {
   limit,
 } from "firebase/firestore";
 import { useAuth } from "@/lib/auth";
+import { logAudit, notify } from "@/lib/notifications";
 
 export type AgentStatus = "online" | "offline" | "treinando";
 

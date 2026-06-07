@@ -256,7 +256,7 @@ function AgentsList() {
             <Button variant="outline" onClick={() => setOpen(false)}>Cancelar</Button>
             {step !== "model" ? (
               <Button variant="hero" onClick={() => {
-                const order: typeof step[] = ["basic", "persona", "prompt", "model"];
+                const order = ["basic", "persona", "prompt", "model"] as const;
                 const i = order.indexOf(step);
                 setStep(order[i + 1]);
               }}>Próximo</Button>

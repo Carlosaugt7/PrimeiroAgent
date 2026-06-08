@@ -114,7 +114,25 @@ function Master() {
             </Badge>
           </p>
         </div>
-        <div className="flex gap-2">
+        <div className="flex gap-2 flex-wrap">
+          <Button
+            onClick={async () => {
+              const name = window.prompt("Nome do cliente (workspace):");
+              if (!name) return;
+              try {
+                const idToken = await user?.getIdToken(true);
+                if (!idToken) throw new Error("Sem sessão");
+                const { createTenantAsMaster } = await import("@/lib/master.functions");
+                const res = await createTenantAsMaster({ data: { idToken, name } });
+                toast.success(`Cliente criado: ${res.name}`);
+                setTimeout(() => window.location.reload(), 600);
+              } catch (e) {
+                toast.error(messageFromError(e, "Falha ao criar cliente"));
+              }
+            }}
+          >
+            <Plus className="size-4" /> Novo cliente
+          </Button>
           <Button
             variant="outline"
             onClick={async () => {

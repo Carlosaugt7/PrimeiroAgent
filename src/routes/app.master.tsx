@@ -113,11 +113,30 @@ function Master() {
             </Badge>
           </p>
         </div>
-        {tenant?.id !== profile?.tenantId && (
-          <Button variant="outline" onClick={back}>
-            <RefreshCw className="size-4" /> Voltar ao meu workspace
+        <div className="flex gap-2">
+          <Button
+            variant="outline"
+            onClick={async () => {
+              try {
+                const idToken = await user?.getIdToken(true);
+                if (!idToken) throw new Error("Sem sessão");
+                const { promoteSelfToMaster } = await import("@/lib/master.functions");
+                const res = await promoteSelfToMaster({ data: { idToken } });
+                toast.success(`Promovido: ${res.email}. Recarregando...`);
+                setTimeout(() => window.location.reload(), 800);
+              } catch (e) {
+                toast.error(messageFromError(e, "Falha ao promover"));
+              }
+            }}
+          >
+            <Crown className="size-4" /> Promover-me a Master
           </Button>
-        )}
+          {tenant?.id !== profile?.tenantId && (
+            <Button variant="outline" onClick={back}>
+              <RefreshCw className="size-4" /> Voltar ao meu workspace
+            </Button>
+          )}
+        </div>
       </div>
 
       <div className="relative">

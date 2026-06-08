@@ -5,6 +5,7 @@ import {
   ArrowRightCircle,
   Building2,
   Crown,
+  Plus,
   RefreshCw,
   Search,
   ShieldAlert,

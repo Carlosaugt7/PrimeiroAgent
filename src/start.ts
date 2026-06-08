@@ -1,7 +1,5 @@
 import { createStart, createMiddleware } from "@tanstack/react-start";
-
 import { renderErrorPage } from "./lib/error-page";
-import { attachSupabaseAuth } from "@/integrations/supabase/auth-attacher";
 
 const errorMiddleware = createMiddleware().server(async ({ next }) => {
   try {
@@ -19,6 +17,9 @@ const errorMiddleware = createMiddleware().server(async ({ next }) => {
 });
 
 export const startInstance = createStart(() => ({
-  functionMiddleware: [attachSupabaseAuth],
+  // Supabase is not used in this project — auth is handled by Firebase.
+  // The supabase middleware was removed to prevent crashes when
+  // VITE_SUPABASE_URL / VITE_SUPABASE_PUBLISHABLE_KEY are not set.
+  functionMiddleware: [],
   requestMiddleware: [errorMiddleware],
 }));

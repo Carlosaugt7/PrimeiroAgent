@@ -3,41 +3,51 @@ import { Check } from "lucide-react";
 
 const plans = [
   {
-    name: "Starter",
-    price: "R$ 197",
-    desc: "Para pequenos negócios começando com IA.",
+    name: "Trial",
+    price: "Grátis",
+    desc: "14 dias para experimentar tudo.",
     features: [
       "1 agente ativo",
-      "1.000 mensagens/mês",
-      "1 número de WhatsApp",
-      "Base de conhecimento (50 MB)",
+      "500 mensagens",
+      "1 instância WhatsApp",
       "Suporte por e-mail",
     ],
   },
   {
+    name: "Starter",
+    price: "R$ 97",
+    desc: "Para autônomos e pequenos times.",
+    features: [
+      "3 agentes ativos",
+      "5.000 mensagens/mês",
+      "2 instâncias WhatsApp",
+      "Templates ilimitados",
+      "Suporte prioritário",
+    ],
+  },
+  {
     name: "Pro",
-    price: "R$ 597",
-    desc: "Para empresas em crescimento.",
+    price: "R$ 297",
+    desc: "Para operações crescendo e múltiplos canais.",
     highlighted: true,
     features: [
-      "5 agentes ativos",
-      "10.000 mensagens/mês",
-      "5 números de WhatsApp",
-      "Base de conhecimento (1 GB)",
-      "Automações e webhooks",
-      "Suporte prioritário",
+      "10 agentes ativos",
+      "30.000 mensagens/mês",
+      "5 instâncias WhatsApp",
+      "Automações avançadas",
+      "Integrações + API",
     ],
   },
   {
     name: "Enterprise",
     price: "Sob consulta",
-    desc: "Para operações em larga escala.",
+    desc: "Customização total, SLA e onboarding dedicado.",
     features: [
       "Agentes ilimitados",
       "Mensagens ilimitadas",
-      "Números ilimitados",
-      "SSO, RBAC e auditoria",
-      "SLA dedicado 99.9%",
+      "Instâncias ilimitadas",
+      "SSO/SAML",
+      "SLA 99,9%",
       "Customer Success dedicado",
     ],
   },
@@ -55,7 +65,7 @@ export function Pricing() {
           <p className="mt-4 text-muted-foreground">Comece grátis por 14 dias. Sem fidelidade.</p>
         </div>
 
-        <div className="grid md:grid-cols-3 gap-5 max-w-5xl mx-auto">
+        <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-5 max-w-6xl mx-auto">
           {plans.map((p) => (
             <div
               key={p.name}
@@ -81,7 +91,7 @@ export function Pricing() {
                 className="w-full mt-6"
                 size="lg"
               >
-                {p.name === "Enterprise" ? "Falar com vendas" : "Começar agora"}
+                {p.name === "Enterprise" ? "Falar com vendas" : p.name === "Trial" ? "Começar grátis" : "Assinar agora"}
               </Button>
               <ul className="mt-7 space-y-3">
                 {p.features.map((f) => (

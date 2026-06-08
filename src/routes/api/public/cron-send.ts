@@ -1,4 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
+import { supabase } from "@/integrations/supabase/client";
 
 const EVO_BASE = "https://evolution-api.rsconsultoria.pro";
 
@@ -14,30 +15,40 @@ async function evoSendText(instanceName: string, number: string, text: string) {
 }
 
 async function run() {
-  const fb = await import("@/lib/firebase-admin.server");
   const nowIso = new Date().toISOString();
 
-  const tenants = await fb.listCollection("tenants", { pageSize: 500 });
+  // Buscar todas as mensagens pendentes com data agendada <= agora
+  const { data: dueMessages, error } = await supabase
+    .from("scheduled_messages")
+    .select("*")
+    .eq("status", "pending")
+    .lte("scheduledAt", nowIso);
+
+  if (error) throw new Error("Erro ao buscar scheduled_messages: " + error.message);
+
   const results: any[] = [];
 
-  for (const t of tenants) {
-    const path = `tenants/${t.id}/scheduled_messages`;
-    const items = await fb.listCollection(path, { pageSize: 200 });
-    const due = items.filter(
-      (m) => m.status === "pending" && typeof m.scheduledAt === "string" && m.scheduledAt <= nowIso,
-    );
-
-    for (const m of due) {
-      try {
-        if (!m.instanceName || !m.number || !m.text) throw new Error("dados incompletos");
-        await evoSendText(m.instanceName, m.number, m.text);
-        await fb.setDoc(`${path}/${m.id}`, { status: "sent", sentAt: new Date().toISOString() }, { merge: true });
-        results.push({ tenant: t.id, id: m.id, ok: true });
-      } catch (e) {
-        const msg = e instanceof Error ? e.message : String(e);
-        await fb.setDoc(`${path}/${m.id}`, { status: "failed", error: msg, sentAt: new Date().toISOString() }, { merge: true });
-        results.push({ tenant: t.id, id: m.id, ok: false, error: msg });
-      }
+  for (const m of (dueMessages || [])) {
+    try {
+      if (!m.instanceName || !m.number || !m.text) throw new Error("dados incompletos");
+      await evoSendText(m.instanceName, m.number, m.text);
+      
+      await supabase.from("scheduled_messages").update({ 
+        status: "sent", 
+        sentAt: new Date().toISOString() 
+      }).eq("id", m.id);
+      
+      results.push({ tenant: m.tenantId, id: m.id, ok: true });
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      
+      await supabase.from("scheduled_messages").update({ 
+        status: "failed", 
+        error: msg, 
+        sentAt: new Date().toISOString() 
+      }).eq("id", m.id);
+      
+      results.push({ tenant: m.tenantId, id: m.id, ok: false, error: msg });
     }
   }
 

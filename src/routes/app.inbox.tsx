@@ -1,15 +1,24 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, type KeyboardEvent } from "react";
 import { useServerFn } from "@tanstack/react-start";
 import { useAuth } from "@/lib/auth";
-import { db } from "@/integrations/firebase/client";
-import { collection, doc, onSnapshot, orderBy, query, updateDoc, limit, arrayUnion, arrayRemove } from "firebase/firestore";
+import { supabase } from "@/integrations/supabase/client";
 import { sendText } from "@/lib/evolution.functions";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Switch } from "@/components/ui/switch";
-import { MessagesSquare, Send, Loader2, Bot, BotOff, X, Plus, CheckCircle2, MessageSquareText } from "lucide-react";
+import {
+  MessagesSquare,
+  Send,
+  Loader2,
+  Bot,
+  BotOff,
+  X,
+  Plus,
+  CheckCircle2,
+  MessageSquareText,
+} from "lucide-react";
 import { toast } from "sonner";
 import type { Template } from "@/routes/app.templates";
 
@@ -24,7 +33,7 @@ interface Conv {
   lastMessage: string;
   updatedAt: string;
   unread?: number;
-  status?: "aberta" | "resolvida" | "handoff" | string;
+  status?: "aberta" | "resolvida" | "handoff";
   botPaused?: boolean;
   tags?: string[];
 }
@@ -53,16 +62,37 @@ function Inbox() {
   // Templates do tenant
   useEffect(() => {
     if (!tenant) return;
-    return onSnapshot(
-      query(collection(db, "tenants", tenant.id, "templates"), orderBy("shortcut", "asc")),
-      (s) => setTemplates(s.docs.map((d) => ({ id: d.id, ...(d.data() as object) })) as Template[]),
-    );
+
+    const fetchTemplates = async () => {
+      const { data } = await supabase
+        .from("templates")
+        .select("*")
+        .eq("tenantId", tenant.id)
+        .order("shortcut", { ascending: true });
+      if (data) setTemplates(data as Template[]);
+    };
+    fetchTemplates();
+
+    const channel = supabase
+      .channel("public:templates")
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "templates", filter: `tenantId=eq.${tenant.id}` },
+        fetchTemplates,
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
   }, [tenant]);
 
   // Filtra templates pelo termo após "/"
   const tplQuery = draft.startsWith("/") ? draft.slice(1).toLowerCase() : "";
   const tplMatches = draft.startsWith("/")
-    ? templates.filter((t) => t.shortcut.includes(tplQuery) || t.title.toLowerCase().includes(tplQuery)).slice(0, 6)
+    ? templates
+        .filter((t) => t.shortcut.includes(tplQuery) || t.title.toLowerCase().includes(tplQuery))
+        .slice(0, 6)
     : [];
 
   const applyTemplate = (t: Template) => {
@@ -71,54 +101,130 @@ function Inbox() {
     setTplIdx(0);
   };
 
-
-  const convRef = (id: string) => doc(db, "tenants", tenant!.id, "conversations", id);
-
   const toggleBot = async (paused: boolean) => {
     if (!tenant || !activeId) return;
-    await updateDoc(convRef(activeId), {
-      botPaused: paused,
-      status: paused ? "handoff" : "aberta",
-    }).catch((e) => toast.error(e?.message ?? "Falha ao atualizar"));
+    const { error } = await supabase
+      .from("conversations")
+      .update({
+        botPaused: paused,
+        status: paused ? "handoff" : "aberta",
+      })
+      .eq("id", activeId);
+    if (error) toast.error(error.message);
   };
 
   const setStatus = async (status: "aberta" | "resolvida") => {
     if (!tenant || !activeId) return;
-    await updateDoc(convRef(activeId), { status }).catch((e) => toast.error(e?.message));
+    const { error } = await supabase.from("conversations").update({ status }).eq("id", activeId);
+    if (error) toast.error(error.message);
   };
 
   const addTag = async () => {
     const t = tagInput.trim();
     if (!t || !tenant || !activeId) return;
-    await updateDoc(convRef(activeId), { tags: arrayUnion(t) }).catch((e) => toast.error(e?.message));
-    setTagInput("");
+
+    const c = convs.find((x) => x.id === activeId);
+    if (!c) return;
+
+    const newTags = Array.from(new Set([...(c.tags || []), t]));
+    const { error } = await supabase
+      .from("conversations")
+      .update({ tags: newTags })
+      .eq("id", activeId);
+    if (error) toast.error(error.message);
+    else setTagInput("");
   };
 
   const removeTag = async (t: string) => {
     if (!tenant || !activeId) return;
-    await updateDoc(convRef(activeId), { tags: arrayRemove(t) }).catch((e) => toast.error(e?.message));
+    const c = convs.find((x) => x.id === activeId);
+    if (!c) return;
+
+    const newTags = (c.tags || []).filter((x) => x !== t);
+    const { error } = await supabase
+      .from("conversations")
+      .update({ tags: newTags })
+      .eq("id", activeId);
+    if (error) toast.error(error.message);
   };
 
   useEffect(() => {
     if (!tenant) return;
-    const q = query(collection(db, "tenants", tenant.id, "conversations"), orderBy("updatedAt", "desc"), limit(100));
-    return onSnapshot(q, (s) => {
-      setConvs(s.docs.map((d) => ({ id: d.id, ...(d.data() as object) })) as Conv[]);
-    }, (e) => console.error("[inbox] convs:", e));
+
+    const fetchConvs = async () => {
+      const { data } = await supabase
+        .from("conversations")
+        .select("*")
+        .eq("tenantId", tenant.id)
+        .order("updatedAt", { ascending: false })
+        .limit(100);
+      if (data) setConvs(data as Conv[]);
+    };
+    fetchConvs();
+
+    const channel = supabase
+      .channel("public:conversations")
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "conversations",
+          filter: `tenantId=eq.${tenant.id}`,
+        },
+        fetchConvs,
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
   }, [tenant]);
 
   // Subscribe messages of active conversation
   useEffect(() => {
-    if (!tenant || !activeId) { setMessages([]); return; }
-    const q = query(collection(db, "tenants", tenant.id, "conversations", activeId, "messages"), orderBy("createdAt", "asc"), limit(500));
-    return onSnapshot(q, (s) => {
-      setMessages(s.docs.map((d) => ({ id: d.id, ...(d.data() as object) })) as Msg[]);
+    if (!tenant || !activeId) {
+      setMessages([]);
+      return;
+    }
+
+    const fetchMessages = async () => {
+      const { data } = await supabase
+        .from("messages")
+        .select("*")
+        .eq("tenantId", tenant.id)
+        .eq("conversationId", activeId)
+        .order("createdAt", { ascending: true })
+        .limit(500);
+      if (data) setMessages(data as Msg[]);
+
       // Zera unread
-      updateDoc(doc(db, "tenants", tenant.id, "conversations", activeId), { unread: 0 }).catch(() => {});
-    });
+      await supabase.from("conversations").update({ unread: 0 }).eq("id", activeId);
+    };
+    fetchMessages();
+
+    const channel = supabase
+      .channel("public:messages")
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "messages",
+          filter: `conversationId=eq.${activeId}`,
+        },
+        fetchMessages,
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
   }, [tenant, activeId]);
 
-  useEffect(() => { bottomRef.current?.scrollIntoView({ behavior: "smooth" }); }, [messages.length]);
+  useEffect(() => {
+    bottomRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [messages.length]);
 
   const active = useMemo(() => convs.find((c) => c.id === activeId) ?? null, [convs, activeId]);
 
@@ -131,7 +237,38 @@ function Inbox() {
       setDraft("");
     } catch (e: any) {
       toast.error(e?.message ?? "Falha ao enviar");
-    } finally { setSending(false); }
+    } finally {
+      setSending(false);
+    }
+  };
+
+  const handleDraftKeyDown = (e: KeyboardEvent<HTMLInputElement>) => {
+    if (tplOpen && tplMatches.length > 0) {
+      if (e.key === "ArrowDown") {
+        e.preventDefault();
+        setTplIdx((i) => (i + 1) % tplMatches.length);
+        return;
+      }
+      if (e.key === "ArrowUp") {
+        e.preventDefault();
+        setTplIdx((i) => (i - 1 + tplMatches.length) % tplMatches.length);
+        return;
+      }
+      if (e.key === "Escape") {
+        e.preventDefault();
+        setTplOpen(false);
+        return;
+      }
+      if (e.key === "Tab" || (e.key === "Enter" && !e.shiftKey)) {
+        e.preventDefault();
+        applyTemplate(tplMatches[tplIdx]);
+        return;
+      }
+    }
+    if (e.key === "Enter" && !e.shiftKey) {
+      e.preventDefault();
+      handleSend();
+    }
   };
 
   return (
@@ -145,7 +282,9 @@ function Inbox() {
         <div className="rounded-2xl border-2 border-dashed border-border p-12 text-center">
           <MessagesSquare className="size-10 mx-auto text-muted-foreground mb-3" />
           <p className="font-semibold">Nenhuma conversa ainda</p>
-          <p className="text-sm text-muted-foreground mt-1">Conecte uma instância em WhatsApp e envie uma mensagem para começar.</p>
+          <p className="text-sm text-muted-foreground mt-1">
+            Conecte uma instância em WhatsApp e envie uma mensagem para começar.
+          </p>
         </div>
       ) : (
         <div className="grid md:grid-cols-[320px_1fr] gap-4 h-[calc(100vh-220px)]">
@@ -162,16 +301,24 @@ function Inbox() {
                       <p className="font-medium text-sm truncate">{c.contactName}</p>
                       <div className="flex items-center gap-1 shrink-0">
                         {c.botPaused && <BotOff className="size-3 text-muted-foreground" />}
-                        {c.unread ? <Badge className="bg-primary text-primary-foreground">{c.unread}</Badge> : null}
+                        {c.unread ? (
+                          <Badge className="bg-primary text-primary-foreground">{c.unread}</Badge>
+                        ) : null}
                       </div>
                     </div>
                     <p className="text-xs text-muted-foreground truncate mt-0.5">{c.lastMessage}</p>
                     {(c.tags?.length ?? 0) > 0 && (
                       <div className="flex flex-wrap gap-1 mt-1">
-                        {c.tags!.slice(0, 3).map((t) => <Badge key={t} variant="outline" className="text-[9px] px-1 py-0">{t}</Badge>)}
+                        {c.tags!.slice(0, 3).map((t) => (
+                          <Badge key={t} variant="outline" className="text-[9px] px-1 py-0">
+                            {t}
+                          </Badge>
+                        ))}
                       </div>
                     )}
-                    <p className="text-[10px] text-muted-foreground mt-1">{new Date(c.updatedAt).toLocaleString()}</p>
+                    <p className="text-[10px] text-muted-foreground mt-1">
+                      {new Date(c.updatedAt).toLocaleString()}
+                    </p>
                   </button>
                 </li>
               ))}
@@ -180,29 +327,44 @@ function Inbox() {
 
           {/* Painel */}
           <div className="rounded-2xl border border-border bg-card/30 flex flex-col overflow-hidden">
-            {!active ? (
-              <div className="flex-1 grid place-items-center text-sm text-muted-foreground">Selecione uma conversa</div>
-            ) : (
+            {active ? (
               <>
                 <div className="border-b border-border px-4 py-3 flex items-start justify-between gap-3 flex-wrap">
                   <div className="min-w-0">
                     <div className="flex items-center gap-2">
                       <p className="font-semibold text-sm truncate">{active.contactName}</p>
-                      {active.status === "resolvida" && <Badge variant="secondary" className="gap-1"><CheckCircle2 className="size-3" />Resolvida</Badge>}
-                      {active.status === "handoff" && <Badge variant="outline">Handoff humano</Badge>}
+                      {active.status === "resolvida" && (
+                        <Badge variant="secondary" className="gap-1">
+                          <CheckCircle2 className="size-3" />
+                          Resolvida
+                        </Badge>
+                      )}
+                      {active.status === "handoff" && (
+                        <Badge variant="outline">Handoff humano</Badge>
+                      )}
                     </div>
-                    <p className="text-xs text-muted-foreground truncate">{active.contactPhone} · {active.instanceName}</p>
+                    <p className="text-xs text-muted-foreground truncate">
+                      {active.contactPhone} · {active.instanceName}
+                    </p>
                   </div>
                   <div className="flex items-center gap-3">
                     <label className="flex items-center gap-2 text-xs select-none cursor-pointer">
-                      {active.botPaused ? <BotOff className="size-4 text-muted-foreground" /> : <Bot className="size-4 text-primary" />}
+                      {active.botPaused ? (
+                        <BotOff className="size-4 text-muted-foreground" />
+                      ) : (
+                        <Bot className="size-4 text-primary" />
+                      )}
                       <span>{active.botPaused ? "IA pausada" : "IA ativa"}</span>
                       <Switch checked={!active.botPaused} onCheckedChange={(v) => toggleBot(!v)} />
                     </label>
-                    {active.status !== "resolvida" ? (
-                      <Button size="sm" variant="outline" onClick={() => setStatus("resolvida")}>Resolver</Button>
+                    {active.status === "resolvida" ? (
+                      <Button size="sm" variant="outline" onClick={() => setStatus("aberta")}>
+                        Reabrir
+                      </Button>
                     ) : (
-                      <Button size="sm" variant="outline" onClick={() => setStatus("aberta")}>Reabrir</Button>
+                      <Button size="sm" variant="outline" onClick={() => setStatus("resolvida")}>
+                        Resolver
+                      </Button>
                     )}
                   </div>
                 </div>
@@ -212,26 +374,42 @@ function Inbox() {
                   {(active.tags ?? []).map((t) => (
                     <Badge key={t} variant="secondary" className="gap-1 pr-1">
                       {t}
-                      <button onClick={() => removeTag(t)} className="hover:text-destructive ml-1"><X className="size-3" /></button>
+                      <button onClick={() => removeTag(t)} className="hover:text-destructive ml-1">
+                        <X className="size-3" />
+                      </button>
                     </Badge>
                   ))}
                   <div className="flex items-center gap-1">
                     <Input
                       value={tagInput}
                       onChange={(e) => setTagInput(e.target.value)}
-                      onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); addTag(); } }}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") {
+                          e.preventDefault();
+                          addTag();
+                        }
+                      }}
                       placeholder="Adicionar tag"
                       className="h-7 w-32 text-xs"
                     />
-                    <Button size="icon" variant="ghost" className="size-7" onClick={addTag}><Plus className="size-3" /></Button>
+                    <Button size="icon" variant="ghost" className="size-7" onClick={addTag}>
+                      <Plus className="size-3" />
+                    </Button>
                   </div>
                 </div>
                 <div className="flex-1 overflow-y-auto p-4 space-y-2">
                   {messages.map((m) => (
-                    <div key={m.id} className={`flex ${m.fromMe ? "justify-end" : "justify-start"}`}>
-                      <div className={`max-w-[75%] rounded-2xl px-3 py-2 text-sm ${m.fromMe ? "bg-primary text-primary-foreground" : "bg-secondary"}`}>
+                    <div
+                      key={m.id}
+                      className={`flex ${m.fromMe ? "justify-end" : "justify-start"}`}
+                    >
+                      <div
+                        className={`max-w-[75%] rounded-2xl px-3 py-2 text-sm ${m.fromMe ? "bg-primary text-primary-foreground" : "bg-secondary"}`}
+                      >
                         <p className="whitespace-pre-wrap break-words">{m.text}</p>
-                        <p className="text-[10px] opacity-70 mt-1">{new Date(m.createdAt).toLocaleTimeString()}</p>
+                        <p className="text-[10px] opacity-70 mt-1">
+                          {new Date(m.createdAt).toLocaleTimeString()}
+                        </p>
                       </div>
                     </div>
                   ))}
@@ -241,7 +419,8 @@ function Inbox() {
                   {tplOpen && tplMatches.length > 0 && (
                     <div className="absolute bottom-full left-3 right-3 mb-2 rounded-xl border border-border bg-popover shadow-lg overflow-hidden z-10">
                       <div className="px-3 py-1.5 text-[10px] uppercase tracking-wider text-muted-foreground border-b border-border flex items-center gap-1.5">
-                        <MessageSquareText className="size-3" /> Templates · ↑↓ navegar · Enter aplicar · Esc fechar
+                        <MessageSquareText className="size-3" /> Templates · ↑↓ navegar · Enter
+                        aplicar · Esc fechar
                       </div>
                       <ul>
                         {tplMatches.map((t, i) => (
@@ -251,9 +430,13 @@ function Inbox() {
                               onClick={() => applyTemplate(t)}
                               className={`w-full text-left px-3 py-2 text-sm flex items-center gap-2 ${i === tplIdx ? "bg-secondary" : "hover:bg-secondary/60"}`}
                             >
-                              <Badge variant="outline" className="font-mono shrink-0">/{t.shortcut}</Badge>
+                              <Badge variant="outline" className="font-mono shrink-0">
+                                /{t.shortcut}
+                              </Badge>
                               <span className="font-medium truncate">{t.title}</span>
-                              <span className="text-xs text-muted-foreground truncate">— {t.body}</span>
+                              <span className="text-xs text-muted-foreground truncate">
+                                — {t.body}
+                              </span>
                             </button>
                           </li>
                         ))}
@@ -270,24 +453,23 @@ function Inbox() {
                         setTplIdx(0);
                       }}
                       placeholder="Digite uma mensagem ou /atalho para templates..."
-                      onKeyDown={(e) => {
-                        if (tplOpen && tplMatches.length > 0) {
-                          if (e.key === "ArrowDown") { e.preventDefault(); setTplIdx((i) => (i + 1) % tplMatches.length); return; }
-                          if (e.key === "ArrowUp") { e.preventDefault(); setTplIdx((i) => (i - 1 + tplMatches.length) % tplMatches.length); return; }
-                          if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); applyTemplate(tplMatches[tplIdx]); return; }
-                          if (e.key === "Escape") { e.preventDefault(); setTplOpen(false); return; }
-                          if (e.key === "Tab") { e.preventDefault(); applyTemplate(tplMatches[tplIdx]); return; }
-                        }
-                        if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); handleSend(); }
-                      }}
+                      onKeyDown={handleDraftKeyDown}
                       disabled={sending}
                     />
                     <Button onClick={handleSend} disabled={sending || !draft.trim()}>
-                      {sending ? <Loader2 className="size-4 animate-spin" /> : <Send className="size-4" />}
+                      {sending ? (
+                        <Loader2 className="size-4 animate-spin" />
+                      ) : (
+                        <Send className="size-4" />
+                      )}
                     </Button>
                   </div>
                 </div>
               </>
+            ) : (
+              <div className="flex-1 grid place-items-center text-sm text-muted-foreground">
+                Selecione uma conversa
+              </div>
             )}
           </div>
         </div>

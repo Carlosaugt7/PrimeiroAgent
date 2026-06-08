@@ -1,11 +1,15 @@
-// Helpers de notificações & auditoria — client-side (Firestore).
-import { addDoc, collection, serverTimestamp } from "firebase/firestore";
-import { db } from "@/integrations/firebase/client";
+import { supabase } from "@/integrations/supabase/client";
 
 export type NotificationSeverity = "info" | "success" | "warning" | "error";
 export type NotificationType =
-  | "handoff" | "ai_failure" | "instance_down" | "limit_reached"
-  | "billing" | "system" | "team" | "automation";
+  | "handoff"
+  | "ai_failure"
+  | "instance_down"
+  | "limit_reached"
+  | "billing"
+  | "system"
+  | "team"
+  | "automation";
 
 export interface NotificationInput {
   type: NotificationType;
@@ -18,7 +22,8 @@ export interface NotificationInput {
 
 export async function notify(tenantId: string, n: NotificationInput) {
   try {
-    await addDoc(collection(db, "tenants", tenantId, "notifications"), {
+    await supabase.from("notifications").insert({
+      tenantId,
       type: n.type,
       title: n.title,
       body: n.body ?? null,
@@ -26,15 +31,16 @@ export async function notify(tenantId: string, n: NotificationInput) {
       link: n.link ?? null,
       meta: n.meta ?? null,
       read: false,
-      createdAt: serverTimestamp(),
     });
-  } catch (e) { console.warn("[notify] falhou:", e); }
+  } catch (e) {
+    console.warn("[notify] falhou:", e);
+  }
 }
 
 export interface AuditEntry {
-  action: string;            // ex: "agent.update", "member.invite", "role.change"
-  target?: string;           // id ou path do recurso
-  targetLabel?: string;      // nome humano
+  action: string; // ex: "agent.update", "member.invite", "role.change"
+  target?: string; // id ou path do recurso
+  targetLabel?: string; // nome humano
   actorId?: string;
   actorEmail?: string;
   actorName?: string;
@@ -43,7 +49,8 @@ export interface AuditEntry {
 
 export async function logAudit(tenantId: string, entry: AuditEntry) {
   try {
-    await addDoc(collection(db, "tenants", tenantId, "audit"), {
+    await supabase.from("audit").insert({
+      tenantId,
       action: entry.action,
       target: entry.target ?? null,
       targetLabel: entry.targetLabel ?? null,
@@ -51,7 +58,8 @@ export async function logAudit(tenantId: string, entry: AuditEntry) {
       actorEmail: entry.actorEmail ?? null,
       actorName: entry.actorName ?? null,
       meta: entry.meta ?? null,
-      createdAt: serverTimestamp(),
     });
-  } catch (e) { console.warn("[logAudit] falhou:", e); }
+  } catch (e) {
+    console.warn("[logAudit] falhou:", e);
+  }
 }

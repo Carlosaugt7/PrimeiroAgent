@@ -1,6 +1,6 @@
 import { createServerFn } from "@tanstack/react-start";
 import { getPlan, type BillingProvider, type PlanId } from "@/lib/billing-plans";
-import { setDoc as fsSetDoc } from "@/lib/firebase-admin.server";
+import { supabase } from "@/integrations/supabase/client";
 
 // ---------- Asaas ----------
 
@@ -108,14 +108,20 @@ export const createCheckout = createServerFn({ method: "POST" })
           externalReference: ref,
         }),
       });
-      // 3) Registra intent em Firestore
+      // 3) Registra intent em Supabase
       try {
-        await fsSetDoc(`tenants/${data.tenantId}/billing_intents/${pay.id}`, {
-          provider: "asaas", planId: data.planId, externalId: pay.id,
-          status: "pending", amount: plan.priceBRL, createdAt: new Date().toISOString(),
+        await supabase.from("billing_intents").upsert({
+          id: pay.id,
+          tenantId: data.tenantId,
+          provider: "asaas", 
+          planId: data.planId, 
+          externalId: pay.id,
+          status: "pending", 
+          amount: plan.priceBRL, 
+          createdAt: new Date().toISOString(),
           url: pay.invoiceUrl,
-        }, { merge: true });
-      } catch (e) { console.warn("[billing] firestore intent skip:", e); }
+        });
+      } catch (e) { console.warn("[billing] supabase intent skip:", e); }
       return { url: pay.invoiceUrl, externalId: pay.id };
     }
 
@@ -141,11 +147,17 @@ export const createCheckout = createServerFn({ method: "POST" })
     const useSandbox = process.env.MERCADOPAGO_ENV !== "production";
     const url = useSandbox ? pref.sandbox_init_point : pref.init_point;
     try {
-      await fsSetDoc(`tenants/${data.tenantId}/billing_intents/${pref.id}`, {
-        provider: "mercadopago", planId: data.planId, externalId: pref.id,
-        status: "pending", amount: plan.priceBRL, createdAt: new Date().toISOString(),
+      await supabase.from("billing_intents").upsert({
+        id: pref.id,
+        tenantId: data.tenantId,
+        provider: "mercadopago", 
+        planId: data.planId, 
+        externalId: pref.id,
+        status: "pending", 
+        amount: plan.priceBRL, 
+        createdAt: new Date().toISOString(),
         url,
-      }, { merge: true });
-    } catch (e) { console.warn("[billing] firestore intent skip:", e); }
+      });
+    } catch (e) { console.warn("[billing] supabase intent skip:", e); }
     return { url, externalId: pref.id };
   });

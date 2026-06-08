@@ -1,8 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
-import { collection, onSnapshot, orderBy, query } from "firebase/firestore";
 import { useServerFn } from "@tanstack/react-start";
-import { db } from "@/integrations/firebase/client";
+import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/lib/auth";
 import { PLANS, type BillingProvider, type PlanId } from "@/lib/billing-plans";
 import { createCheckout } from "@/lib/billing.functions";
@@ -10,8 +9,12 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
-  Dialog, DialogContent, DialogDescription, DialogFooter,
-  DialogHeader, DialogTitle,
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
 } from "@/components/ui/dialog";
 import { Check, CreditCard, ExternalLink, Loader2, ShieldCheck, Sparkles } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -50,10 +53,37 @@ function BillingPage() {
 
   useEffect(() => {
     if (!tenant?.id) return;
-    const q = query(collection(db, "tenants", tenant.id, "invoices"), orderBy("updatedAt", "desc"));
-    return onSnapshot(q, (s) => {
-      setInvoices(s.docs.map((d) => ({ id: d.id, ...(d.data() as object) })) as Invoice[]);
-    }, (e) => console.warn("[billing] invoices:", e));
+
+    const fetchInvoices = async () => {
+      const { data, error } = await supabase
+        .from("invoices")
+        .select("*")
+        .eq("tenantId", tenant.id)
+        .order("updatedAt", { ascending: false });
+
+      if (error) {
+        console.warn("[billing] invoices:", error);
+      } else if (data) {
+        setInvoices(data as Invoice[]);
+      }
+    };
+
+    fetchInvoices();
+
+    const channel = supabase
+      .channel("public:invoices")
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "invoices", filter: `tenantId=eq.${tenant.id}` },
+        () => {
+          fetchInvoices();
+        },
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
   }, [tenant?.id]);
 
   const currentPlan = tenant?.plan ?? "trial";
@@ -70,20 +100,26 @@ function BillingPage() {
 
   const submit = async () => {
     if (!tenant) return;
-    setErr(null); setBusy(true);
+    setErr(null);
+    setBusy(true);
     try {
       const res = await checkout({
         data: {
-          provider, planId: selectedPlan, tenantId: tenant.id,
+          provider,
+          planId: selectedPlan,
+          tenantId: tenant.id,
           customer: { name, email, phone, cpfCnpj },
-          successUrl: typeof window !== "undefined" ? `${window.location.origin}/app/billing` : undefined,
+          successUrl:
+            typeof window !== "undefined" ? `${window.location.origin}/app/billing` : undefined,
         },
       });
       window.open(res.url, "_blank", "noopener");
       setOpen(false);
     } catch (e: any) {
       setErr(e?.message ?? "Falha ao gerar checkout");
-    } finally { setBusy(false); }
+    } finally {
+      setBusy(false);
+    }
   };
 
   return (
@@ -92,8 +128,12 @@ function BillingPage() {
         <div>
           <h1 className="font-display text-3xl font-bold">Planos & faturamento</h1>
           <p className="text-muted-foreground mt-1">
-            Plano atual: <span className="capitalize font-semibold text-foreground">{currentPlan}</span>
-            {" · "}Total pago: <span className="font-semibold text-foreground">R$ {totalPaid.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}</span>
+            Plano atual:{" "}
+            <span className="capitalize font-semibold text-foreground">{currentPlan}</span>
+            {" · "}Total pago:{" "}
+            <span className="font-semibold text-foreground">
+              R$ {totalPaid.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
+            </span>
           </p>
         </div>
         <div className="flex items-center gap-2 text-xs text-muted-foreground">
@@ -119,7 +159,11 @@ function BillingPage() {
               <div>
                 <div className="flex items-center justify-between">
                   <h3 className="font-display text-xl font-bold">{p.name}</h3>
-                  {p.highlight && <span className="text-[10px] uppercase tracking-wider font-bold text-accent">Recomendado</span>}
+                  {p.highlight && (
+                    <span className="text-[10px] uppercase tracking-wider font-bold text-accent">
+                      Recomendado
+                    </span>
+                  )}
                 </div>
                 <p className="text-sm text-muted-foreground mt-1 min-h-[40px]">{p.description}</p>
               </div>
@@ -130,7 +174,8 @@ function BillingPage() {
                   </p>
                 ) : (
                   <p className="font-display text-3xl font-bold">
-                    R$ {p.priceBRL}<span className="text-sm text-muted-foreground font-normal">/mês</span>
+                    R$ {p.priceBRL}
+                    <span className="text-sm text-muted-foreground font-normal">/mês</span>
                   </p>
                 )}
               </div>
@@ -143,15 +188,25 @@ function BillingPage() {
                 ))}
               </ul>
               {isCurrent ? (
-                <Button variant="outline" disabled className="w-full">Plano atual</Button>
+                <Button variant="outline" disabled className="w-full">
+                  Plano atual
+                </Button>
               ) : p.id === "enterprise" ? (
                 <a href="mailto:contato@rsconsultoria.pro" className="w-full">
-                  <Button variant="outline" className="w-full">Falar com vendas</Button>
+                  <Button variant="outline" className="w-full">
+                    Falar com vendas
+                  </Button>
                 </a>
               ) : isFree ? (
-                <Button variant="outline" disabled className="w-full">Incluído</Button>
+                <Button variant="outline" disabled className="w-full">
+                  Incluído
+                </Button>
               ) : (
-                <Button variant={p.highlight ? "hero" : "outline"} className="w-full" onClick={() => openCheckout(p.id)}>
+                <Button
+                  variant={p.highlight ? "hero" : "outline"}
+                  className="w-full"
+                  onClick={() => openCheckout(p.id)}
+                >
                   <CreditCard className="size-4" /> {p.cta ?? "Assinar"}
                 </Button>
               )}
@@ -188,23 +243,42 @@ function BillingPage() {
                 {invoices.map((i) => (
                   <tr key={i.id} className="border-b border-border/40">
                     <td className="py-3 pr-4 text-muted-foreground">
-                      {i.paidAt ? new Date(i.paidAt).toLocaleDateString("pt-BR") : i.updatedAt ? new Date(i.updatedAt).toLocaleDateString("pt-BR") : "—"}
+                      {i.paidAt
+                        ? new Date(i.paidAt).toLocaleDateString("pt-BR")
+                        : i.updatedAt
+                          ? new Date(i.updatedAt).toLocaleDateString("pt-BR")
+                          : "—"}
                     </td>
                     <td className="py-3 pr-4 capitalize">{i.planId ?? "—"}</td>
                     <td className="py-3 pr-4 capitalize">{i.provider}</td>
-                    <td className="py-3 pr-4 uppercase text-xs text-muted-foreground">{i.billingType ?? "—"}</td>
-                    <td className="py-3 pr-4 text-right font-mono">R$ {(i.amount || 0).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}</td>
+                    <td className="py-3 pr-4 uppercase text-xs text-muted-foreground">
+                      {i.billingType ?? "—"}
+                    </td>
+                    <td className="py-3 pr-4 text-right font-mono">
+                      R$ {(i.amount || 0).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
+                    </td>
                     <td className="py-3 pr-4">
-                      <span className={cn(
-                        "px-2 py-0.5 rounded text-[11px] font-semibold uppercase",
-                        i.status === "paid" ? "bg-success/20 text-success" :
-                        i.status === "pending" ? "bg-accent/20 text-accent" :
-                        "bg-muted text-muted-foreground",
-                      )}>{i.status}</span>
+                      <span
+                        className={cn(
+                          "px-2 py-0.5 rounded text-[11px] font-semibold uppercase",
+                          i.status === "paid"
+                            ? "bg-success/20 text-success"
+                            : i.status === "pending"
+                              ? "bg-accent/20 text-accent"
+                              : "bg-muted text-muted-foreground",
+                        )}
+                      >
+                        {i.status}
+                      </span>
                     </td>
                     <td className="py-3 pr-4 text-right">
                       {i.invoiceUrl && (
-                        <a href={i.invoiceUrl} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-accent hover:underline text-xs">
+                        <a
+                          href={i.invoiceUrl}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="inline-flex items-center gap-1 text-accent hover:underline text-xs"
+                        >
                           Abrir <ExternalLink className="size-3" />
                         </a>
                       )}
@@ -220,7 +294,9 @@ function BillingPage() {
       <Dialog open={open} onOpenChange={setOpen}>
         <DialogContent className="max-w-md">
           <DialogHeader>
-            <DialogTitle>Assinar plano {PLANS.find((p) => p.id === selectedPlan)?.name}</DialogTitle>
+            <DialogTitle>
+              Assinar plano {PLANS.find((p) => p.id === selectedPlan)?.name}
+            </DialogTitle>
             <DialogDescription>
               Escolha o provedor e confirme seus dados. Você será redirecionado para o checkout.
             </DialogDescription>
@@ -251,19 +327,42 @@ function BillingPage() {
             <div className="grid grid-cols-2 gap-3">
               <div className="col-span-2">
                 <Label htmlFor="bk-name">Nome completo</Label>
-                <Input id="bk-name" value={name} onChange={(e) => setName(e.target.value)} className="mt-1" />
+                <Input
+                  id="bk-name"
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                  className="mt-1"
+                />
               </div>
               <div className="col-span-2">
                 <Label htmlFor="bk-email">E-mail</Label>
-                <Input id="bk-email" type="email" value={email} onChange={(e) => setEmail(e.target.value)} className="mt-1" />
+                <Input
+                  id="bk-email"
+                  type="email"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  className="mt-1"
+                />
               </div>
               <div>
                 <Label htmlFor="bk-phone">Celular</Label>
-                <Input id="bk-phone" value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="(11) 99999-9999" className="mt-1" />
+                <Input
+                  id="bk-phone"
+                  value={phone}
+                  onChange={(e) => setPhone(e.target.value)}
+                  placeholder="(11) 99999-9999"
+                  className="mt-1"
+                />
               </div>
               <div>
                 <Label htmlFor="bk-doc">CPF/CNPJ</Label>
-                <Input id="bk-doc" value={cpfCnpj} onChange={(e) => setCpfCnpj(e.target.value)} placeholder="opcional" className="mt-1" />
+                <Input
+                  id="bk-doc"
+                  value={cpfCnpj}
+                  onChange={(e) => setCpfCnpj(e.target.value)}
+                  placeholder="opcional"
+                  className="mt-1"
+                />
               </div>
             </div>
 
@@ -271,7 +370,9 @@ function BillingPage() {
           </div>
 
           <DialogFooter>
-            <Button variant="outline" onClick={() => setOpen(false)} disabled={busy}>Cancelar</Button>
+            <Button variant="outline" onClick={() => setOpen(false)} disabled={busy}>
+              Cancelar
+            </Button>
             <Button variant="hero" onClick={submit} disabled={busy || !name || !email}>
               {busy && <Loader2 className="animate-spin size-4" />} Ir para checkout
             </Button>

@@ -1,17 +1,20 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { useAuth } from "@/lib/auth";
-import { db } from "@/integrations/firebase/client";
-import {
-  addDoc, collection, deleteDoc, doc, onSnapshot, orderBy, query, serverTimestamp, updateDoc,
-} from "firebase/firestore";
+import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Switch } from "@/components/ui/switch";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Trash2, Plus, Zap, Tag, PauseCircle, MessageCircle, ArrowRightCircle } from "lucide-react";
 import { toast } from "sonner";
 
@@ -52,10 +55,40 @@ function Automations() {
 
   useEffect(() => {
     if (!tenant) return;
-    return onSnapshot(
-      query(collection(db, "tenants", tenant.id, "automations"), orderBy("order", "asc")),
-      (s) => setItems(s.docs.map((d) => ({ id: d.id, ...(d.data() as object) })) as Automation[]),
-    );
+
+    const fetchAutomations = async () => {
+      const { data, error } = await supabase
+        .from("automations")
+        .select("*")
+        .eq("tenantId", tenant.id)
+        .order("order", { ascending: true });
+
+      if (error) {
+        console.warn("[automations]", error);
+      } else if (data) {
+        setItems(data as Automation[]);
+      }
+    };
+
+    fetchAutomations();
+
+    const channel = supabase
+      .channel("public:automations")
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "automations",
+          filter: `tenantId=eq.${tenant.id}`,
+        },
+        fetchAutomations,
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
   }, [tenant]);
 
   const updateAction = (i: number, patch: Partial<{ type: ActionType; value: string }>) => {
@@ -67,6 +100,7 @@ function Automations() {
 
   const addAction = () =>
     setDraft((d) => ({ ...d, actions: [...d.actions, { type: "addTag", value: "" }] }));
+
   const removeAction = (i: number) =>
     setDraft((d) => ({ ...d, actions: d.actions.filter((_, idx) => idx !== i) }));
 
@@ -79,37 +113,64 @@ function Automations() {
 
     setSaving(true);
     try {
-      await addDoc(collection(db, "tenants", tenant.id, "automations"), {
-        ...draft,
+      const { error } = await supabase.from("automations").insert({
+        id: crypto.randomUUID(),
+        tenantId: tenant.id,
+        name: draft.name,
+        enabled: draft.enabled,
+        matchType: draft.matchType,
+        pattern: draft.pattern,
+        caseSensitive: draft.caseSensitive,
         actions: cleanActions,
         order: items.length,
-        createdAt: serverTimestamp(),
       });
+
+      if (error) throw error;
+
       toast.success("Automação criada!");
       setDraft(emptyDraft());
     } catch (e: any) {
       toast.error(e?.message ?? "Falha ao salvar");
-    } finally { setSaving(false); }
+    } finally {
+      setSaving(false);
+    }
   };
 
   const toggle = async (a: Automation) => {
     if (!tenant) return;
-    await updateDoc(doc(db, "tenants", tenant.id, "automations", a.id), { enabled: !a.enabled });
+    const { error } = await supabase
+      .from("automations")
+      .update({ enabled: !a.enabled })
+      .eq("id", a.id);
+
+    if (error) toast.error(error.message);
   };
 
   const remove = async (id: string) => {
     if (!tenant) return;
     if (!confirm("Excluir automação?")) return;
-    await deleteDoc(doc(db, "tenants", tenant.id, "automations", id));
+    const { error } = await supabase.from("automations").delete().eq("id", id);
+    if (error) toast.error(error.message);
   };
 
   const actionIcon = (t: ActionType) =>
-    t === "addTag" ? <Tag className="size-3" /> :
-    t === "pauseBot" ? <PauseCircle className="size-3" /> :
-    t === "reply" ? <MessageCircle className="size-3" /> :
-    <ArrowRightCircle className="size-3" />;
+    t === "addTag" ? (
+      <Tag className="size-3" />
+    ) : t === "pauseBot" ? (
+      <PauseCircle className="size-3" />
+    ) : t === "reply" ? (
+      <MessageCircle className="size-3" />
+    ) : (
+      <ArrowRightCircle className="size-3" />
+    );
+
   const actionLabel = (t: ActionType) =>
-    ({ addTag: "Adicionar tag", pauseBot: "Pausar bot", reply: "Responder", setStatus: "Mudar status" }[t]);
+    ({
+      addTag: "Adicionar tag",
+      pauseBot: "Pausar bot",
+      reply: "Responder",
+      setStatus: "Mudar status",
+    })[t];
 
   return (
     <div className="space-y-6">
@@ -118,7 +179,8 @@ function Automations() {
           <Zap className="size-7 text-primary" /> Automações
         </h1>
         <p className="text-muted-foreground mt-1">
-          Regras que rodam quando uma mensagem do contato chega. São avaliadas em ordem, e cada ação se aplica antes da resposta da IA.
+          Regras que rodam quando uma mensagem do contato chega. São avaliadas em ordem, e cada ação
+          se aplica antes da resposta da IA.
         </p>
       </div>
 
@@ -129,14 +191,23 @@ function Automations() {
 
           <div>
             <Label className="text-xs">Nome</Label>
-            <Input value={draft.name} onChange={(e) => setDraft({ ...draft, name: e.target.value })} placeholder="Ex: Triagem financeiro" />
+            <Input
+              value={draft.name}
+              onChange={(e) => setDraft({ ...draft, name: e.target.value })}
+              placeholder="Ex: Triagem financeiro"
+            />
           </div>
 
           <div className="grid sm:grid-cols-2 gap-3">
             <div>
               <Label className="text-xs">Tipo de match</Label>
-              <Select value={draft.matchType} onValueChange={(v) => setDraft({ ...draft, matchType: v as MatchType })}>
-                <SelectTrigger><SelectValue /></SelectTrigger>
+              <Select
+                value={draft.matchType}
+                onValueChange={(v) => setDraft({ ...draft, matchType: v as MatchType })}
+              >
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="contains">Contém</SelectItem>
                   <SelectItem value="equals">Igual a</SelectItem>
@@ -145,14 +216,21 @@ function Automations() {
               </Select>
             </div>
             <div className="flex items-end gap-2">
-              <Switch checked={!!draft.caseSensitive} onCheckedChange={(v) => setDraft({ ...draft, caseSensitive: v })} />
+              <Switch
+                checked={!!draft.caseSensitive}
+                onCheckedChange={(v) => setDraft({ ...draft, caseSensitive: v })}
+              />
               <span className="text-xs text-muted-foreground pb-1">Diferenciar maiúsculas</span>
             </div>
           </div>
 
           <div>
             <Label className="text-xs">Padrão</Label>
-            <Input value={draft.pattern} onChange={(e) => setDraft({ ...draft, pattern: e.target.value })} placeholder="financeiro, boleto, 2ª via" />
+            <Input
+              value={draft.pattern}
+              onChange={(e) => setDraft({ ...draft, pattern: e.target.value })}
+              placeholder="financeiro, boleto, 2ª via"
+            />
             <p className="text-[11px] text-muted-foreground mt-1">
               "Contém" aceita lista separada por vírgula (qualquer item dispara).
             </p>
@@ -162,8 +240,13 @@ function Automations() {
             <Label className="text-xs">Ações</Label>
             {draft.actions.map((a, i) => (
               <div key={i} className="flex gap-2">
-                <Select value={a.type} onValueChange={(v) => updateAction(i, { type: v as ActionType, value: "" })}>
-                  <SelectTrigger className="w-40"><SelectValue /></SelectTrigger>
+                <Select
+                  value={a.type}
+                  onValueChange={(v) => updateAction(i, { type: v as ActionType, value: "" })}
+                >
+                  <SelectTrigger className="w-40">
+                    <SelectValue />
+                  </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="addTag">Adicionar tag</SelectItem>
                     <SelectItem value="pauseBot">Pausar bot</SelectItem>
@@ -174,10 +257,18 @@ function Automations() {
                 {a.type === "pauseBot" ? (
                   <Input disabled value="(sem valor)" />
                 ) : a.type === "reply" ? (
-                  <Textarea rows={1} className="min-h-10" value={a.value} onChange={(e) => updateAction(i, { value: e.target.value })} placeholder="Resposta automática" />
+                  <Textarea
+                    rows={1}
+                    className="min-h-10"
+                    value={a.value}
+                    onChange={(e) => updateAction(i, { value: e.target.value })}
+                    placeholder="Resposta automática"
+                  />
                 ) : a.type === "setStatus" ? (
                   <Select value={a.value} onValueChange={(v) => updateAction(i, { value: v })}>
-                    <SelectTrigger><SelectValue placeholder="status" /></SelectTrigger>
+                    <SelectTrigger>
+                      <SelectValue placeholder="status" />
+                    </SelectTrigger>
                     <SelectContent>
                       <SelectItem value="aberta">aberta</SelectItem>
                       <SelectItem value="handoff">handoff</SelectItem>
@@ -185,7 +276,11 @@ function Automations() {
                     </SelectContent>
                   </Select>
                 ) : (
-                  <Input value={a.value} onChange={(e) => updateAction(i, { value: e.target.value })} placeholder="nome-da-tag" />
+                  <Input
+                    value={a.value}
+                    onChange={(e) => updateAction(i, { value: e.target.value })}
+                    placeholder="nome-da-tag"
+                  />
                 )}
                 <Button size="icon" variant="ghost" onClick={() => removeAction(i)}>
                   <Trash2 className="size-4 text-destructive" />
@@ -215,15 +310,25 @@ function Automations() {
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2 flex-wrap">
                       <span className="font-medium text-sm">{a.name}</span>
-                      <Badge variant="outline" className="text-[10px]">{a.matchType}</Badge>
-                      {a.caseSensitive && <Badge variant="secondary" className="text-[10px]">Aa</Badge>}
+                      <Badge variant="outline" className="text-[10px]">
+                        {a.matchType}
+                      </Badge>
+                      {a.caseSensitive && (
+                        <Badge variant="secondary" className="text-[10px]">
+                          Aa
+                        </Badge>
+                      )}
                     </div>
-                    <div className="text-xs text-muted-foreground mt-1 font-mono break-all">{a.pattern}</div>
+                    <div className="text-xs text-muted-foreground mt-1 font-mono break-all">
+                      {a.pattern}
+                    </div>
                     <div className="flex gap-1 flex-wrap mt-2">
                       {a.actions.map((act, i) => (
                         <Badge key={i} variant="secondary" className="text-[10px] gap-1">
                           {actionIcon(act.type)} {actionLabel(act.type)}
-                          {act.value && <span className="opacity-70">: {act.value.slice(0, 30)}</span>}
+                          {act.value && (
+                            <span className="opacity-70">: {act.value.slice(0, 30)}</span>
+                          )}
                         </Badge>
                       ))}
                     </div>

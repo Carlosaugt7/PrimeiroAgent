@@ -48,7 +48,7 @@ const empty = {
   name: "", description: "", segment: "Vendas", category: "Comercial", department: "Atendimento",
   systemPrompt: "Você é um assistente prestativo.", providerId: "", model: "",
   temperature: 0.5, topP: 1, maxTokens: 1024, memory: "vetorial" as const,
-  persona: { name: "", role: "", specialty: "", tone: "Profissional, cordial", writingStyle: "Direto e claro", rules: "", goals: "" } as Persona,
+  persona: { name: "", role: "", specialty: "", tone: "Profissional, cordial", writingStyle: "Direto e claro", rules: "", goals: "" } satisfies Persona,
 };
 
 function AgentsList() {
@@ -119,9 +119,12 @@ function AgentsList() {
                 <h3 className="font-display font-semibold">{a.name}</h3>
                 <p className="text-xs text-muted-foreground mt-1 line-clamp-2">{a.description || "Sem descrição"}</p>
                 <div className="flex items-center gap-2 mt-4">
-                  <span className={`text-[10px] px-2 py-1 rounded-full ${a.status === "online" ? "bg-success/15 text-success" : a.status === "treinando" ? "bg-accent/15 text-accent" : "bg-muted text-muted-foreground"}`}>
-                    {a.status}
-                  </span>
+                  {(() => {
+                    let cls = "bg-muted text-muted-foreground";
+                    if (a.status === "online") cls = "bg-success/15 text-success";
+                    else if (a.status === "treinando") cls = "bg-accent/15 text-accent";
+                    return <span className={`text-[10px] px-2 py-1 rounded-full ${cls}`}>{a.status}</span>;
+                  })()}
                   <span className="text-[10px] px-2 py-1 rounded-full bg-secondary text-muted-foreground">{a.segment}</span>
                   <span className="text-[10px] px-2 py-1 rounded-full bg-secondary text-muted-foreground">v{a.promptVersion}</span>
                 </div>
@@ -243,9 +246,9 @@ function AgentsList() {
                     </Select>
                   </div>
                   <div className="grid grid-cols-3 gap-3">
-                    <div><Label>Temperatura ({form.temperature})</Label><input type="range" min={0} max={1} step={0.1} value={form.temperature} onChange={(e) => setForm({ ...form, temperature: parseFloat(e.target.value) })} className="w-full accent-primary mt-3" /></div>
-                    <div><Label>Top P ({form.topP})</Label><input type="range" min={0} max={1} step={0.05} value={form.topP} onChange={(e) => setForm({ ...form, topP: parseFloat(e.target.value) })} className="w-full accent-primary mt-3" /></div>
-                    <div><Label>Max tokens</Label><Input type="number" value={form.maxTokens} onChange={(e) => setForm({ ...form, maxTokens: parseInt(e.target.value) || 1024 })} className="mt-1" /></div>
+                    <div><Label>Temperatura ({form.temperature})</Label><input type="range" min={0} max={1} step={0.1} value={form.temperature} onChange={(e) => setForm({ ...form, temperature: Number.parseFloat(e.target.value) })} className="w-full accent-primary mt-3" /></div>
+                    <div><Label>Top P ({form.topP})</Label><input type="range" min={0} max={1} step={0.05} value={form.topP} onChange={(e) => setForm({ ...form, topP: Number.parseFloat(e.target.value) })} className="w-full accent-primary mt-3" /></div>
+                    <div><Label>Max tokens</Label><Input type="number" value={form.maxTokens} onChange={(e) => setForm({ ...form, maxTokens: Number.parseInt(e.target.value, 10) || 1024 })} className="mt-1" /></div>
                   </div>
                 </>
               )}
@@ -254,14 +257,14 @@ function AgentsList() {
 
           <DialogFooter className="gap-2">
             <Button variant="outline" onClick={() => setOpen(false)}>Cancelar</Button>
-            {step !== "model" ? (
+            {step === "model" ? (
+              <Button variant="hero" onClick={submit} disabled={busy}>{busy ? "Criando..." : "Criar agente"}</Button>
+            ) : (
               <Button variant="hero" onClick={() => {
                 const order = ["basic", "persona", "prompt", "model"] as const;
                 const i = order.indexOf(step);
                 setStep(order[i + 1]);
               }}>Próximo</Button>
-            ) : (
-              <Button variant="hero" onClick={submit} disabled={busy}>{busy ? "Criando..." : "Criar agente"}</Button>
             )}
           </DialogFooter>
         </DialogContent>

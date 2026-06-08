@@ -1,17 +1,5 @@
 import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
-import { db } from "@/integrations/firebase/client";
-import {
-  collection,
-  onSnapshot,
-  addDoc as fsAddDoc,
-  updateDoc,
-  deleteDoc,
-  doc,
-  serverTimestamp,
-  query,
-  orderBy,
-  limit,
-} from "firebase/firestore";
+import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/lib/auth";
 import { logAudit, notify } from "@/lib/notifications";
 import { ensureLimit } from "@/lib/limits";
@@ -30,6 +18,7 @@ export interface Persona {
 
 export interface Agent {
   id: string;
+  tenantId: string;
   name: string;
   photoUrl?: string;
   category: string;
@@ -50,10 +39,12 @@ export interface Agent {
   conversions30d: number;
   createdAt: string;
   whatsappInstanceId?: string;
+  autoReply?: boolean;
 }
 
 export interface LLMProvider {
   id: string;
+  tenantId: string;
   name: string;
   kind: "openai" | "anthropic" | "google" | "groq" | "deepseek" | "openrouter" | "custom";
   baseUrl: string;
@@ -64,6 +55,7 @@ export interface LLMProvider {
 
 export interface Conversation {
   id: string;
+  tenantId: string;
   agentId?: string;
   instanceName?: string;
   contactName: string;
@@ -78,6 +70,7 @@ export interface Conversation {
 
 export interface KnowledgeDoc {
   id: string;
+  tenantId: string;
   name: string;
   type: "pdf" | "docx" | "xlsx" | "txt" | "csv" | "json" | "site" | "faq";
   sizeKb: number;
@@ -88,6 +81,7 @@ export interface KnowledgeDoc {
 
 export interface Instance {
   id: string;
+  tenantId: string;
   name: string;
   status: "online" | "offline" | "conectando";
   number?: string;
@@ -114,7 +108,7 @@ interface AppState {
   createAgent: (a: Partial<Agent> & { name: string }) => Promise<string>;
   updateAgent: (id: string, patch: Partial<Agent>) => Promise<void>;
   deleteAgent: (id: string) => Promise<void>;
-  createProvider: (p: Omit<LLMProvider, "id" | "createdAt" | "models"> & { models?: LLMProvider["models"] }) => Promise<string>;
+  createProvider: (p: Omit<LLMProvider, "id" | "createdAt" | "models" | "tenantId"> & { models?: LLMProvider["models"] }) => Promise<string>;
   updateProvider: (id: string, patch: Partial<LLMProvider>) => Promise<void>;
   deleteProvider: (id: string) => Promise<void>;
 }
@@ -128,14 +122,7 @@ const defaultPlan: AppPlan = { name: "Trial", messagesUsed: 0, messagesLimit: 10
 
 const Ctx = createContext<AppState | null>(null);
 
-function tcol(tenantId: string, name: string) {
-  return collection(db, "tenants", tenantId, name);
-}
-function tdoc(tenantId: string, name: string, id: string) {
-  return doc(db, "tenants", tenantId, name, id);
-}
-
-export function AppStoreProvider({ children }: { children: ReactNode }) {
+export function AppStoreProvider({ children }: { readonly children: ReactNode }) {
   const { tenant, profile, isMaster, loading: authLoading } = useAuth();
   const tenantId = tenant?.id ?? null;
 
@@ -150,49 +137,86 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     if (!tenantId) { setLoading(authLoading); return; }
     setLoading(true);
-    const subs: Array<() => void> = [];
 
-    subs.push(onSnapshot(tcol(tenantId, "agents"), (s) => {
-      setAgents(s.docs.map((d) => ({ id: d.id, ...(d.data() as object) })) as Agent[]);
-      setLoading(false);
-    }, (e) => { console.error("[fs] agents:", e); setLoading(false); }));
+    const fetchInitial = async () => {
+      try {
+        const [
+          { data: agentsData },
+          { data: providersData },
+          { data: convsData },
+          { data: knowData },
+          { data: instData }
+        ] = await Promise.all([
+          supabase.from("agents").select("*").eq("tenantId", tenantId),
+          supabase.from("llm_providers").select("*").eq("tenantId", tenantId),
+          supabase.from("conversations").select("*").eq("tenantId", tenantId).order("updatedAt", { ascending: false }).limit(50),
+          supabase.from("knowledge").select("*").eq("tenantId", tenantId),
+          supabase.from("instances").select("*").eq("tenantId", tenantId)
+        ]);
 
-    subs.push(onSnapshot(tcol(tenantId, "llm_providers"), (s) => {
-      setProviders(s.docs.map((d) => ({ id: d.id, ...(d.data() as object) })) as LLMProvider[]);
-    }));
-
-    subs.push(onSnapshot(query(tcol(tenantId, "conversations"), orderBy("updatedAt", "desc"), limit(50)), (s) => {
-      setConversations(s.docs.map((d) => ({ id: d.id, ...(d.data() as object) })) as Conversation[]);
-    }));
-
-    subs.push(onSnapshot(tcol(tenantId, "knowledge"), (s) => {
-      setKnowledge(s.docs.map((d) => ({ id: d.id, ...(d.data() as object) })) as KnowledgeDoc[]);
-    }));
-
-    const prevInstanceStatus = new Map<string, string>();
-    subs.push(onSnapshot(tcol(tenantId, "instances"), (s) => {
-      const next = s.docs.map((d) => ({ id: d.id, ...(d.data() as object) })) as Instance[];
-      // Alerta quando uma instância sai de open/connected
-      for (const inst of next) {
-        const prev = prevInstanceStatus.get(inst.id);
-        const cur = String((inst as any).status ?? "").toLowerCase();
-        const wasOk = prev === "open" || prev === "connected";
-        const isDown = cur && cur !== "open" && cur !== "connected" && cur !== "connecting";
-        if (prev && wasOk && isDown) {
-          notify(tenantId, {
-            type: "instance_down", severity: "error",
-            title: "Instância WhatsApp caiu",
-            body: `${(inst as any).instanceName ?? inst.id} agora está "${cur}".`,
-            link: "/app/whatsapp",
-          });
-          logAudit(tenantId, { action: "instance.down", target: inst.id, targetLabel: (inst as any).instanceName, meta: { from: prev, to: cur } });
-        }
-        prevInstanceStatus.set(inst.id, cur);
+        if (agentsData) setAgents(agentsData as Agent[]);
+        if (providersData) setProviders(providersData as LLMProvider[]);
+        if (convsData) setConversations(convsData as Conversation[]);
+        if (knowData) setKnowledge(knowData as KnowledgeDoc[]);
+        if (instData) setInstances(instData as Instance[]);
+      } catch (err) {
+        console.error("Failed to fetch initial data", err);
+      } finally {
+        setLoading(false);
       }
-      setInstances(next);
-    }));
+    };
 
-    return () => subs.forEach((u) => u());
+    fetchInitial();
+
+    const channel = supabase.channel(`tenant_${tenantId}_changes`)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'agents', filter: `tenantId=eq.${tenantId}` }, async () => {
+        const { data } = await supabase.from("agents").select("*").eq("tenantId", tenantId);
+        if (data) setAgents(data as Agent[]);
+      })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'llm_providers', filter: `tenantId=eq.${tenantId}` }, async () => {
+        const { data } = await supabase.from("llm_providers").select("*").eq("tenantId", tenantId);
+        if (data) setProviders(data as LLMProvider[]);
+      })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'conversations', filter: `tenantId=eq.${tenantId}` }, async () => {
+        const { data } = await supabase.from("conversations").select("*").eq("tenantId", tenantId).order("updatedAt", { ascending: false }).limit(50);
+        if (data) setConversations(data as Conversation[]);
+      })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'knowledge', filter: `tenantId=eq.${tenantId}` }, async () => {
+        const { data } = await supabase.from("knowledge").select("*").eq("tenantId", tenantId);
+        if (data) setKnowledge(data as KnowledgeDoc[]);
+      })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'instances', filter: `tenantId=eq.${tenantId}` }, async () => {
+        const { data } = await supabase.from("instances").select("*").eq("tenantId", tenantId);
+        if (data) {
+          const next = data as Instance[];
+          setInstances(prev => {
+            // Check for instance down logic
+            const prevMap = new Map(prev.map(i => [i.id, i.status]));
+            next.forEach(inst => {
+              const prevStatus = prevMap.get(inst.id);
+              const curStatus = inst.status?.toLowerCase();
+              const wasOk = prevStatus === "open" || prevStatus === "connected" || prevStatus === "online";
+              const isDown = curStatus && curStatus !== "open" && curStatus !== "connected" && curStatus !== "connecting" && curStatus !== "online";
+              
+              if (prevStatus && wasOk && isDown) {
+                notify(tenantId, {
+                  type: "instance_down", severity: "error",
+                  title: "Instância WhatsApp caiu",
+                  body: `${(inst as any).instanceName ?? inst.id} agora está "${curStatus}".`,
+                  link: "/app/whatsapp",
+                });
+                logAudit(tenantId, { action: "instance.down", target: inst.id, targetLabel: (inst as any).instanceName, meta: { from: prevStatus, to: curStatus } });
+              }
+            });
+            return next;
+          });
+        }
+      })
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
   }, [tenantId, authLoading]);
 
   const value = useMemo<AppState>(() => ({
@@ -201,7 +225,9 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
       if (!tenantId) throw new Error("Sem tenant");
       const lim = ensureLimit(tenantId, tenant?.plan, "agents", agents.length, isMaster);
       if (!lim.ok) throw new Error(lim.message ?? "Limite de agentes atingido");
-      const ref = await fsAddDoc(tcol(tenantId, "agents"), {
+      
+      const newAgent = {
+        tenantId,
         name: a.name,
         photoUrl: a.photoUrl ?? "",
         category: a.category ?? "Geral",
@@ -221,40 +247,48 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
         messages30d: 0,
         conversions30d: 0,
         createdAt: new Date().toISOString(),
-        _ts: serverTimestamp(),
         _createdBy: profile?.uid ?? "",
-      });
+      };
+
+      const { data, error } = await supabase.from("agents").insert(newAgent).select("id").single();
+      if (error || !data) throw new Error("Erro ao criar agente: " + error?.message);
+
       const actor = { actorId: profile?.uid, actorEmail: profile?.email, actorName: profile?.displayName };
-      logAudit(tenantId, { action: "agent.create", target: ref.id, targetLabel: a.name, ...actor });
+      logAudit(tenantId, { action: "agent.create", target: data.id, targetLabel: a.name, ...actor });
       notify(tenantId, { type: "system", severity: "success", title: "Agente criado", body: `${a.name} foi adicionado.`, link: "/app/agents" });
-      return ref.id;
+      return data.id;
     },
     updateAgent: async (id, patch) => {
       if (!tenantId) return;
-      await updateDoc(tdoc(tenantId, "agents", id), patch as Record<string, unknown>);
-      logAudit(tenantId, { action: "agent.update", target: id, targetLabel: (patch as any)?.name, actorId: profile?.uid, actorEmail: profile?.email, actorName: profile?.displayName, meta: { fields: Object.keys(patch as object) } });
+      await supabase.from("agents").update(patch).eq("id", id).eq("tenantId", tenantId);
+      logAudit(tenantId, { action: "agent.update", target: id, targetLabel: (patch as Partial<Agent>).name, actorId: profile?.uid, actorEmail: profile?.email, actorName: profile?.displayName, meta: { fields: Object.keys(patch) } });
     },
     deleteAgent: async (id) => {
       if (!tenantId) return;
       const name = agents.find((x) => x.id === id)?.name;
-      await deleteDoc(tdoc(tenantId, "agents", id));
+      await supabase.from("agents").delete().eq("id", id).eq("tenantId", tenantId);
       logAudit(tenantId, { action: "agent.delete", target: id, targetLabel: name, actorId: profile?.uid, actorEmail: profile?.email, actorName: profile?.displayName });
       notify(tenantId, { type: "system", severity: "warning", title: "Agente removido", body: name ?? id });
     },
     createProvider: async (p) => {
       if (!tenantId) throw new Error("Sem tenant");
-      const ref = await fsAddDoc(tcol(tenantId, "llm_providers"), {
-        ...p, models: p.models ?? [], createdAt: new Date().toISOString(), _ts: serverTimestamp(),
-      });
-      return ref.id;
+      const newProvider = {
+        ...p,
+        tenantId,
+        models: p.models ?? [],
+        createdAt: new Date().toISOString(),
+      };
+      const { data, error } = await supabase.from("llm_providers").insert(newProvider).select("id").single();
+      if (error || !data) throw new Error("Erro ao criar provider: " + error?.message);
+      return data.id;
     },
     updateProvider: async (id, patch) => {
       if (!tenantId) return;
-      await updateDoc(tdoc(tenantId, "llm_providers", id), patch as Record<string, unknown>);
+      await supabase.from("llm_providers").update(patch).eq("id", id).eq("tenantId", tenantId);
     },
     deleteProvider: async (id) => {
       if (!tenantId) return;
-      await deleteDoc(tdoc(tenantId, "llm_providers", id));
+      await supabase.from("llm_providers").delete().eq("id", id).eq("tenantId", tenantId);
     },
   }), [loading, tenantId, profile, tenant?.plan, isMaster, agents, providers, conversations, knowledge, instances, plan]);
 

@@ -1,6 +1,6 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
-import { collection, getDocs } from "firebase/firestore";
+import { supabase } from "@/integrations/supabase/client";
 import {
   ArrowRightCircle,
   Building2,
@@ -14,7 +14,6 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { db } from "@/integrations/firebase/client";
 import { useAuth } from "@/lib/auth";
 import { toast } from "sonner";
 
@@ -47,8 +46,9 @@ function Master() {
     if (!isMaster) return;
     (async () => {
       try {
-        const snap = await getDocs(collection(db, "tenants"));
-        setRows(snap.docs.map((d) => ({ id: d.id, ...(d.data() as object) })) as TenantRow[]);
+        const { data, error } = await supabase.from("tenants").select("*");
+        if (error) throw error;
+        setRows((data as TenantRow[]) || []);
       } catch (error) {
         toast.error(`Erro ao listar tenants: ${messageFromError(error, "falha desconhecida")}`);
       } finally {
@@ -99,6 +99,13 @@ function Master() {
     toast.success("Voltou ao seu workspace");
   };
 
+  const getSupabaseToken = async () => {
+    const {
+      data: { session },
+    } = await supabase.auth.getSession();
+    return session?.access_token;
+  };
+
   return (
     <div className="space-y-6">
       <div className="flex items-start justify-between gap-3 flex-wrap">
@@ -120,7 +127,7 @@ function Master() {
               const name = window.prompt("Nome do cliente (workspace):");
               if (!name) return;
               try {
-                const idToken = await user?.getIdToken(true);
+                const idToken = await getSupabaseToken();
                 if (!idToken) throw new Error("Sem sessão");
                 const { createTenantAsMaster } = await import("@/lib/master.functions");
                 const res = await createTenantAsMaster({ data: { idToken, name } });
@@ -137,7 +144,7 @@ function Master() {
             variant="outline"
             onClick={async () => {
               try {
-                const idToken = await user?.getIdToken(true);
+                const idToken = await getSupabaseToken();
                 if (!idToken) throw new Error("Sem sessão");
                 const { promoteSelfToMaster } = await import("@/lib/master.functions");
                 const res = await promoteSelfToMaster({ data: { idToken } });

@@ -35,6 +35,7 @@ import { Route as AppAutomationsRouteImport } from './routes/app.automations'
 import { Route as AppAuditRouteImport } from './routes/app.audit'
 import { Route as AppAgentsRouteImport } from './routes/app.agents'
 import { Route as AppAdminRouteImport } from './routes/app.admin'
+import { Route as AppAgentsIdRouteImport } from './routes/app.agents.$id'
 import { Route as ApiPublicMpWebhookRouteImport } from './routes/api/public/mp-webhook'
 import { Route as ApiPublicEvolutionWebhookRouteImport } from './routes/api/public/evolution-webhook'
 import { Route as ApiPublicCronSendRouteImport } from './routes/api/public/cron-send'
@@ -170,6 +171,11 @@ const AppAdminRoute = AppAdminRouteImport.update({
   path: '/admin',
   getParentRoute: () => AppRoute,
 } as any)
+const AppAgentsIdRoute = AppAgentsIdRouteImport.update({
+  id: '/$id',
+  path: '/$id',
+  getParentRoute: () => AppAgentsRoute,
+} as any)
 const ApiPublicMpWebhookRoute = ApiPublicMpWebhookRouteImport.update({
   id: '/api/public/mp-webhook',
   path: '/api/public/mp-webhook',
@@ -197,7 +203,7 @@ export interface FileRoutesByFullPath {
   '/app': typeof AppRouteWithChildren
   '/auth': typeof AuthRoute
   '/app/admin': typeof AppAdminRoute
-  '/app/agents': typeof AppAgentsRoute
+  '/app/agents': typeof AppAgentsRouteWithChildren
   '/app/audit': typeof AppAuditRoute
   '/app/automations': typeof AppAutomationsRoute
   '/app/billing': typeof AppBillingRoute
@@ -223,12 +229,13 @@ export interface FileRoutesByFullPath {
   '/api/public/cron-send': typeof ApiPublicCronSendRoute
   '/api/public/evolution-webhook': typeof ApiPublicEvolutionWebhookRoute
   '/api/public/mp-webhook': typeof ApiPublicMpWebhookRoute
+  '/app/agents/$id': typeof AppAgentsIdRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/auth': typeof AuthRoute
   '/app/admin': typeof AppAdminRoute
-  '/app/agents': typeof AppAgentsRoute
+  '/app/agents': typeof AppAgentsRouteWithChildren
   '/app/audit': typeof AppAuditRoute
   '/app/automations': typeof AppAutomationsRoute
   '/app/billing': typeof AppBillingRoute
@@ -254,6 +261,7 @@ export interface FileRoutesByTo {
   '/api/public/cron-send': typeof ApiPublicCronSendRoute
   '/api/public/evolution-webhook': typeof ApiPublicEvolutionWebhookRoute
   '/api/public/mp-webhook': typeof ApiPublicMpWebhookRoute
+  '/app/agents/$id': typeof AppAgentsIdRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -261,7 +269,7 @@ export interface FileRoutesById {
   '/app': typeof AppRouteWithChildren
   '/auth': typeof AuthRoute
   '/app/admin': typeof AppAdminRoute
-  '/app/agents': typeof AppAgentsRoute
+  '/app/agents': typeof AppAgentsRouteWithChildren
   '/app/audit': typeof AppAuditRoute
   '/app/automations': typeof AppAutomationsRoute
   '/app/billing': typeof AppBillingRoute
@@ -287,6 +295,7 @@ export interface FileRoutesById {
   '/api/public/cron-send': typeof ApiPublicCronSendRoute
   '/api/public/evolution-webhook': typeof ApiPublicEvolutionWebhookRoute
   '/api/public/mp-webhook': typeof ApiPublicMpWebhookRoute
+  '/app/agents/$id': typeof AppAgentsIdRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -321,6 +330,7 @@ export interface FileRouteTypes {
     | '/api/public/cron-send'
     | '/api/public/evolution-webhook'
     | '/api/public/mp-webhook'
+    | '/app/agents/$id'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -352,6 +362,7 @@ export interface FileRouteTypes {
     | '/api/public/cron-send'
     | '/api/public/evolution-webhook'
     | '/api/public/mp-webhook'
+    | '/app/agents/$id'
   id:
     | '__root__'
     | '/'
@@ -384,6 +395,7 @@ export interface FileRouteTypes {
     | '/api/public/cron-send'
     | '/api/public/evolution-webhook'
     | '/api/public/mp-webhook'
+    | '/app/agents/$id'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -580,6 +592,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppAdminRouteImport
       parentRoute: typeof AppRoute
     }
+    '/app/agents/$id': {
+      id: '/app/agents/$id'
+      path: '/$id'
+      fullPath: '/app/agents/$id'
+      preLoaderRoute: typeof AppAgentsIdRouteImport
+      parentRoute: typeof AppAgentsRoute
+    }
     '/api/public/mp-webhook': {
       id: '/api/public/mp-webhook'
       path: '/api/public/mp-webhook'
@@ -611,9 +630,21 @@ declare module '@tanstack/react-router' {
   }
 }
 
+interface AppAgentsRouteChildren {
+  AppAgentsIdRoute: typeof AppAgentsIdRoute
+}
+
+const AppAgentsRouteChildren: AppAgentsRouteChildren = {
+  AppAgentsIdRoute: AppAgentsIdRoute,
+}
+
+const AppAgentsRouteWithChildren = AppAgentsRoute._addFileChildren(
+  AppAgentsRouteChildren,
+)
+
 interface AppRouteChildren {
   AppAdminRoute: typeof AppAdminRoute
-  AppAgentsRoute: typeof AppAgentsRoute
+  AppAgentsRoute: typeof AppAgentsRouteWithChildren
   AppAuditRoute: typeof AppAuditRoute
   AppAutomationsRoute: typeof AppAutomationsRoute
   AppBillingRoute: typeof AppBillingRoute
@@ -639,7 +670,7 @@ interface AppRouteChildren {
 
 const AppRouteChildren: AppRouteChildren = {
   AppAdminRoute: AppAdminRoute,
-  AppAgentsRoute: AppAgentsRoute,
+  AppAgentsRoute: AppAgentsRouteWithChildren,
   AppAuditRoute: AppAuditRoute,
   AppAutomationsRoute: AppAutomationsRoute,
   AppBillingRoute: AppBillingRoute,
@@ -677,3 +708,13 @@ const rootRouteChildren: RootRouteChildren = {
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
   ._addFileTypes<FileRouteTypes>()
+
+import type { getRouter } from './router.tsx'
+import type { startInstance } from './start.ts'
+declare module '@tanstack/react-start' {
+  interface Register {
+    ssr: true
+    router: Awaited<ReturnType<typeof getRouter>>
+    config: Awaited<ReturnType<typeof startInstance.getOptions>>
+  }
+}

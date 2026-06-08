@@ -4,10 +4,15 @@ import { useServerFn } from "@tanstack/react-start";
 import { useAuth } from "@/lib/auth";
 import { useAppStore } from "@/lib/app-store";
 import { chatCompletion, embedTexts } from "@/lib/llm.functions";
-import { db } from "@/integrations/firebase/client";
-import { collection, getDocs, onSnapshot } from "firebase/firestore";
+import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
@@ -16,9 +21,24 @@ import { toast } from "sonner";
 
 export const Route = createFileRoute("/app/playground")({ component: PlaygroundPage });
 
-interface Msg { role: "user" | "assistant"; content: string }
-interface KnowMeta { id: string; name: string; embedProviderId: string; embedModel: string; vectorDim: number }
-interface Chunk { docId: string; docName: string; id: string; text: string; embedding: number[] }
+interface Msg {
+  role: "user" | "assistant";
+  content: string;
+}
+interface KnowMeta {
+  id: string;
+  name: string;
+  embedProviderId: string;
+  embedModel: string;
+  vectorDim: number;
+}
+interface Chunk {
+  docId: string;
+  docName: string;
+  id: string;
+  text: string;
+  embedding: number[];
+}
 
 const scenarios = [
   { name: "Cliente curioso", text: "Oi, quanto custa esse serviço?" },
@@ -28,9 +48,15 @@ const scenarios = [
 ];
 
 function cosine(a: number[], b: number[]): number {
-  let dot = 0, na = 0, nb = 0;
+  let dot = 0,
+    na = 0,
+    nb = 0;
   const n = Math.min(a.length, b.length);
-  for (let i = 0; i < n; i++) { dot += a[i] * b[i]; na += a[i] * a[i]; nb += b[i] * b[i]; }
+  for (let i = 0; i < n; i++) {
+    dot += a[i] * b[i];
+    na += a[i] * a[i];
+    nb += b[i] * b[i];
+  }
   return dot / (Math.sqrt(na) * Math.sqrt(nb) + 1e-9);
 }
 
@@ -44,7 +70,12 @@ function PlaygroundPage() {
   const [msgs, setMsgs] = useState<Msg[]>([]);
   const [input, setInput] = useState("");
   const [busy, setBusy] = useState(false);
-  const [stats, setStats] = useState<{ tokensIn: number; tokensOut: number; ms: number; ragUsed: number } | null>(null);
+  const [stats, setStats] = useState<{
+    tokensIn: number;
+    tokensOut: number;
+    ms: number;
+    ragUsed: number;
+  } | null>(null);
 
   const [useRag, setUseRag] = useState(true);
   const [topK, setTopK] = useState(3);
@@ -58,32 +89,98 @@ function PlaygroundPage() {
   // Lista docs do tenant
   useEffect(() => {
     if (!tenant) return;
-    return onSnapshot(collection(db, "tenants", tenant.id, "knowledge"), (s) => {
-      setKnowDocs(s.docs.map((d) => ({ id: d.id, ...(d.data() as object) })) as KnowMeta[]);
-    });
+
+    const fetchKnowledge = async () => {
+      const { data, error } = await supabase
+        .from("knowledge")
+        .select("*")
+        .eq("tenantId", tenant.id);
+
+      if (error) console.warn("[playground] knowledge:", error);
+      else if (data) setKnowDocs(data as any[]);
+    };
+
+    fetchKnowledge();
+
+    const channel = supabase
+      .channel("public:knowledge")
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "knowledge",
+          filter: `tenantId=eq.${tenant.id}`,
+        },
+        fetchKnowledge,
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
   }, [tenant]);
 
   // Carrega chunks dos docs cujo embedProviderId === provedor do agente
   useEffect(() => {
-    if (!tenant || !provider) { setChunks([]); return; }
+    if (!tenant || !provider || knowDocs.length === 0) {
+      setChunks([]);
+      return;
+    }
     const compatible = knowDocs.filter((d) => d.embedProviderId === provider.id);
-    if (compatible.length === 0) { setChunks([]); return; }
+    if (compatible.length === 0) {
+      setChunks([]);
+      return;
+    }
     let cancelled = false;
+
     (async () => {
       setChunksLoading(true);
       try {
-        const all: Chunk[] = [];
-        for (const d of compatible) {
-          const snap = await getDocs(collection(db, "tenants", tenant.id, "knowledge", d.id, "chunks"));
-          snap.docs.forEach((c) => {
-            const data = c.data() as { text: string; embedding: number[] };
-            all.push({ docId: d.id, docName: d.name, id: c.id, text: data.text, embedding: data.embedding });
-          });
-        }
+        const compatibleIds = compatible.map((d) => d.id);
+        const { data, error } = await supabase
+          .from("knowledge_chunks")
+          .select("*, knowledge:knowledgeId(name)")
+          .in("knowledgeId", compatibleIds);
+
+        if (error) throw error;
+
+        const all: Chunk[] = (data || []).map((c: any) => {
+          // Parse string vector format '[0.1, 0.2, ...]' to array of numbers
+          let embeddingArray: number[] = [];
+          if (typeof c.embedding === "string") {
+            try {
+              embeddingArray = JSON.parse(c.embedding);
+            } catch {
+              embeddingArray = c.embedding
+                .replace(/[\[\]]/g, "")
+                .split(",")
+                .map(Number);
+            }
+          } else if (Array.isArray(c.embedding)) {
+            embeddingArray = c.embedding;
+          }
+
+          return {
+            docId: c.knowledgeId,
+            docName: c.knowledge?.name || "Documento",
+            id: c.id,
+            text: c.text,
+            embedding: embeddingArray,
+          };
+        });
+
         if (!cancelled) setChunks(all);
-      } finally { if (!cancelled) setChunksLoading(false); }
+      } catch (err) {
+        console.warn("[playground] chunks load failed:", err);
+      } finally {
+        if (!cancelled) setChunksLoading(false);
+      }
     })();
-    return () => { cancelled = true; };
+
+    return () => {
+      cancelled = true;
+    };
   }, [tenant, provider, knowDocs]);
 
   const ragInfo = useMemo(() => {
@@ -101,7 +198,9 @@ function PlaygroundPage() {
       return;
     }
     const newMsgs: Msg[] = [...msgs, { role: "user", content }];
-    setMsgs(newMsgs); setInput(""); setBusy(true);
+    setMsgs(newMsgs);
+    setInput("");
+    setBusy(true);
 
     try {
       // RAG: busca top-K chunks relevantes
@@ -109,7 +208,14 @@ function PlaygroundPage() {
       let ragUsed = 0;
       if (useRag && chunks.length > 0 && ragInfo?.model) {
         try {
-          const q = await embed({ data: { baseUrl: provider.baseUrl, apiKey: provider.apiKey, model: ragInfo.model, texts: [content] } });
+          const q = await embed({
+            data: {
+              baseUrl: provider.baseUrl,
+              apiKey: provider.apiKey,
+              model: ragInfo.model,
+              texts: [content],
+            },
+          });
           const qv = q.vectors[0];
           const scored = chunks
             .map((c) => ({ c, s: cosine(qv, c.embedding) }))
@@ -117,7 +223,9 @@ function PlaygroundPage() {
             .slice(0, topK)
             .filter((x) => x.s > 0.2);
           if (scored.length) {
-            const context = scored.map((x, i) => `[${i + 1}] (${x.c.docName})\n${x.c.text}`).join("\n\n---\n\n");
+            const context = scored
+              .map((x, i) => `[${i + 1}] (${x.c.docName})\n${x.c.text}`)
+              .join("\n\n---\n\n");
             systemPrompt = `${agent.systemPrompt}\n\n## CONTEXTO RELEVANTE DA BASE DE CONHECIMENTO\nUse APENAS estas informações quando forem pertinentes. Se a resposta não estiver no contexto, diga que vai verificar.\n\n${context}`;
             ragUsed = scored.length;
           }
@@ -128,16 +236,22 @@ function PlaygroundPage() {
 
       const r = await chat({
         data: {
-          kind: provider.kind, baseUrl: provider.baseUrl, apiKey: provider.apiKey,
-          model: agent.model, systemPrompt,
-          messages: newMsgs, temperature: agent.temperature,
+          kind: provider.kind,
+          baseUrl: provider.baseUrl,
+          apiKey: provider.apiKey,
+          model: agent.model,
+          systemPrompt,
+          messages: newMsgs,
+          temperature: agent.temperature,
         },
       });
       setMsgs([...newMsgs, { role: "assistant", content: r.text }]);
       setStats({ tokensIn: r.inputTokens, tokensOut: r.outputTokens, ms: r.durationMs, ragUsed });
     } catch (e: any) {
       toast.error(e?.message ?? "Erro na chamada LLM");
-    } finally { setBusy(false); }
+    } finally {
+      setBusy(false);
+    }
   };
 
   return (
@@ -150,13 +264,36 @@ function PlaygroundPage() {
       <div className="grid lg:grid-cols-[1fr_320px] gap-5">
         <div className="rounded-2xl bg-gradient-card border border-border flex flex-col h-[70vh]">
           <div className="p-4 border-b border-border flex items-center gap-3 flex-wrap">
-            <Select value={agentId} onValueChange={(v) => { setAgentId(v); setMsgs([]); setStats(null); }}>
-              <SelectTrigger className="w-72"><SelectValue placeholder="Selecione um agente..." /></SelectTrigger>
+            <Select
+              value={agentId}
+              onValueChange={(v) => {
+                setAgentId(v);
+                setMsgs([]);
+                setStats(null);
+              }}
+            >
+              <SelectTrigger className="w-72">
+                <SelectValue placeholder="Selecione um agente..." />
+              </SelectTrigger>
               <SelectContent>
-                {agents.map((a) => <SelectItem key={a.id} value={a.id}>{a.name} <span className="text-muted-foreground">· {a.model || "sem modelo"}</span></SelectItem>)}
+                {agents.map((a) => (
+                  <SelectItem key={a.id} value={a.id}>
+                    {a.name}{" "}
+                    <span className="text-muted-foreground">· {a.model || "sem modelo"}</span>
+                  </SelectItem>
+                ))}
               </SelectContent>
             </Select>
-            <Button variant="outline" size="sm" onClick={() => { setMsgs([]); setStats(null); }}><Trash2 className="size-4" /> Limpar</Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => {
+                setMsgs([]);
+                setStats(null);
+              }}
+            >
+              <Trash2 className="size-4" /> Limpar
+            </Button>
           </div>
 
           <div className="flex-1 overflow-y-auto p-4 space-y-3">
@@ -164,10 +301,17 @@ function PlaygroundPage() {
               <div className="h-full grid place-items-center text-center">
                 <div>
                   <Sparkles className="size-8 text-muted-foreground mx-auto mb-2" />
-                  <p className="text-sm text-muted-foreground">Selecione um agente e envie uma mensagem.</p>
+                  <p className="text-sm text-muted-foreground">
+                    Selecione um agente e envie uma mensagem.
+                  </p>
                   <div className="flex flex-wrap gap-2 justify-center mt-4">
                     {scenarios.map((s) => (
-                      <button key={s.name} onClick={() => send(s.text)} disabled={!agent} className="text-xs px-3 py-1.5 rounded-full bg-secondary hover:bg-secondary/80 disabled:opacity-50">
+                      <button
+                        key={s.name}
+                        onClick={() => send(s.text)}
+                        disabled={!agent}
+                        className="text-xs px-3 py-1.5 rounded-full bg-secondary hover:bg-secondary/80 disabled:opacity-50"
+                      >
                         {s.name}
                       </button>
                     ))}
@@ -176,38 +320,73 @@ function PlaygroundPage() {
               </div>
             )}
             {msgs.map((m, i) => (
-              <div key={i} className={`flex ${m.role === "user" ? "justify-end" : "justify-start"}`}>
-                <div className={`max-w-[75%] rounded-2xl px-4 py-2.5 text-sm whitespace-pre-wrap ${m.role === "user" ? "bg-gradient-primary text-primary-foreground" : "bg-secondary"}`}>
+              <div
+                key={i}
+                className={`flex ${m.role === "user" ? "justify-end" : "justify-start"}`}
+              >
+                <div
+                  className={`max-w-[75%] rounded-2xl px-4 py-2.5 text-sm whitespace-pre-wrap ${m.role === "user" ? "bg-gradient-primary text-primary-foreground" : "bg-secondary"}`}
+                >
                   {m.content}
                 </div>
               </div>
             ))}
-            {busy && <div className="flex justify-start"><div className="bg-secondary rounded-2xl px-4 py-2.5"><Loader2 className="animate-spin size-4" /></div></div>}
+            {busy && (
+              <div className="flex justify-start">
+                <div className="bg-secondary rounded-2xl px-4 py-2.5">
+                  <Loader2 className="animate-spin size-4" />
+                </div>
+              </div>
+            )}
           </div>
 
           <div className="p-3 border-t border-border flex gap-2">
-            <Input value={input} onChange={(e) => setInput(e.target.value)} onKeyDown={(e) => e.key === "Enter" && send()} placeholder="Digite a mensagem do cliente..." disabled={busy} />
-            <Button variant="hero" onClick={() => send()} disabled={busy || !input.trim()}><Send className="size-4" /></Button>
+            <Input
+              value={input}
+              onChange={(e) => setInput(e.target.value)}
+              onKeyDown={(e) => e.key === "Enter" && send()}
+              placeholder="Digite a mensagem do cliente..."
+              disabled={busy}
+            />
+            <Button variant="hero" onClick={() => send()} disabled={busy || !input.trim()}>
+              <Send className="size-4" />
+            </Button>
           </div>
         </div>
 
         <div className="space-y-4">
           <div className="rounded-2xl bg-gradient-card border border-border p-5">
-            <h3 className="font-semibold text-sm mb-3 flex items-center gap-2"><Database className="size-4" /> RAG</h3>
+            <h3 className="font-semibold text-sm mb-3 flex items-center gap-2">
+              <Database className="size-4" /> RAG
+            </h3>
             <div className="flex items-center justify-between mb-3">
-              <Label htmlFor="rag" className="text-xs">Ativar busca na base</Label>
+              <Label htmlFor="rag" className="text-xs">
+                Ativar busca na base
+              </Label>
               <Switch id="rag" checked={useRag} onCheckedChange={setUseRag} />
             </div>
             <div className="flex items-center justify-between mb-3">
-              <Label htmlFor="topk" className="text-xs">Top-K</Label>
-              <Input id="topk" type="number" min={1} max={10} value={topK} onChange={(e) => setTopK(Math.max(1, Math.min(10, +e.target.value || 3)))} className="w-20 h-8" />
+              <Label htmlFor="topk" className="text-xs">
+                Top-K
+              </Label>
+              <Input
+                id="topk"
+                type="number"
+                min={1}
+                max={10}
+                value={topK}
+                onChange={(e) => setTopK(Math.max(1, Math.min(10, +e.target.value || 3)))}
+                className="w-20 h-8"
+              />
             </div>
             <p className="text-[11px] text-muted-foreground">
-              {!provider ? "Selecione um agente." :
-                chunksLoading ? "Carregando chunks..." :
-                ragInfo && ragInfo.docCount > 0
-                  ? `${ragInfo.docCount} doc(s) · ${ragInfo.chunkCount} chunks · ${ragInfo.model}`
-                  : "Nenhum doc compatível com o provedor do agente."}
+              {!provider
+                ? "Selecione um agente."
+                : chunksLoading
+                  ? "Carregando chunks..."
+                  : ragInfo && ragInfo.docCount > 0
+                    ? `${ragInfo.docCount} doc(s) · ${ragInfo.chunkCount} chunks · ${ragInfo.model}`
+                    : "Nenhum doc compatível com o provedor do agente."}
             </p>
           </div>
 
@@ -221,7 +400,9 @@ function PlaygroundPage() {
                 <Row label="Persona" value={agent.persona?.name || "—"} />
                 <Row label="Versão prompt" value={`v${agent.promptVersion}`} />
               </dl>
-            ) : <p className="text-xs text-muted-foreground">Nenhum agente selecionado.</p>}
+            ) : (
+              <p className="text-xs text-muted-foreground">Nenhum agente selecionado.</p>
+            )}
           </div>
 
           {stats && (
@@ -242,5 +423,10 @@ function PlaygroundPage() {
 }
 
 function Row({ label, value }: { label: string; value: string }) {
-  return <div className="flex justify-between gap-2"><dt className="text-muted-foreground">{label}</dt><dd className="font-medium truncate">{value}</dd></div>;
+  return (
+    <div className="flex justify-between gap-2">
+      <dt className="text-muted-foreground">{label}</dt>
+      <dd className="font-medium truncate">{value}</dd>
+    </div>
+  );
 }

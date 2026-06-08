@@ -1,26 +1,6 @@
 import { createContext, useContext, useEffect, useState, type ReactNode } from "react";
-import {
-  GoogleAuthProvider,
-  createUserWithEmailAndPassword,
-  getIdTokenResult,
-  onAuthStateChanged,
-  signInWithEmailAndPassword,
-  signInWithPopup,
-  signOut as fbSignOut,
-  type User,
-} from "firebase/auth";
-import {
-  collection,
-  deleteDoc,
-  doc,
-  getDoc,
-  getDocs,
-  query,
-  serverTimestamp,
-  setDoc,
-  where,
-} from "firebase/firestore";
-import { auth, db } from "@/integrations/firebase/client";
+import { type User, type Session } from "@supabase/supabase-js";
+import { supabase } from "@/integrations/supabase/client";
 import { isMasterEmail } from "@/lib/master";
 
 const ACTIVE_TENANT_KEY = "agenthub.activeTenantId";
@@ -68,77 +48,77 @@ const Ctx = createContext<AuthCtx | null>(null);
 
 async function isMasterUser(user: User | null): Promise<boolean> {
   if (!user) return false;
-  if (isMasterEmail(user.email)) return true;
+  if (user.email && isMasterEmail(user.email)) return true;
+  
   try {
-    const token = await getIdTokenResult(user, true);
-    if (token.claims.master_admin === true || token.claims.masterAdmin === true) return true;
-  } catch (e) {
-    console.warn("[auth] falha ao ler claims master:", e);
-  }
-  try {
-    const snap = await getDoc(doc(db, "master_admins", user.uid));
-    return snap.exists();
+    const { data, error } = await supabase
+      .from("master_admins")
+      .select("id")
+      .eq("id", user.id)
+      .single();
+    
+    if (data && !error) return true;
   } catch (e) {
     console.warn("[auth] falha ao verificar master_admins:", e);
-    return false;
   }
+  return false;
 }
 
 async function ensureTenantAndProfile(
   user: User,
   companyHint?: string,
 ): Promise<{ profile: UserProfile; tenant: Tenant }> {
-  const profileRef = doc(db, "users", user.uid);
-  const profileSnap = await getDoc(profileRef);
+  const { data: profileSnap } = await supabase
+    .from("users")
+    .select("*")
+    .eq("uid", user.id)
+    .single();
 
-  if (profileSnap.exists()) {
-    const profile = { uid: user.uid, ...(profileSnap.data() as Omit<UserProfile, "uid">) };
+  if (profileSnap) {
+    const profile = profileSnap as UserProfile;
     if (profile.tenantId) {
-      try {
-        const tenantSnap = await getDoc(doc(db, "tenants", profile.tenantId));
-        if (tenantSnap.exists()) {
-          return {
-            profile,
-            tenant: { id: tenantSnap.id, ...(tenantSnap.data() as Omit<Tenant, "id">) },
-          };
-        }
-        console.warn("[auth] perfil aponta para tenant inexistente; recriando workspace", {
-          tenantId: profile.tenantId,
-        });
-      } catch (e) {
-        console.warn("[auth] falha ao carregar tenant do perfil; tentando recuperar bootstrap", e);
+      const { data: tenantSnap } = await supabase
+        .from("tenants")
+        .select("*")
+        .eq("id", profile.tenantId)
+        .single();
+        
+      if (tenantSnap) {
+        return {
+          profile,
+          tenant: tenantSnap as Tenant,
+        };
       }
+      console.warn("[auth] perfil aponta para tenant inexistente; recriando workspace", {
+        tenantId: profile.tenantId,
+      });
     } else {
       console.warn("[auth] perfil sem tenantId; recriando workspace");
     }
   }
 
-  // Procura convite pendente pelo e-mail (top-level `invites`)
+  // Procura convite pendente pelo e-mail
   const email = (user.email || "").toLowerCase();
   let invitedTenantId: string | null = null;
   let invitedRole: Role = "agent";
   let inviteDocId: string | null = null;
+  
   if (email) {
-    let inv: { id: string; data: () => { tenantId?: string; role?: Role } } | undefined;
     try {
-      const directInvite = await getDoc(doc(db, "invites", encodeURIComponent(email)));
-      if (directInvite.exists()) inv = directInvite;
-    } catch (e) {
-      console.warn("[auth] direct invite lookup falhou:", e);
-    }
-    if (!inv) {
-      try {
-        const snap = await getDocs(query(collection(db, "invites"), where("email", "==", email)));
-        inv = snap.docs[0];
-      } catch (e) {
-        console.warn("[auth] invite lookup falhou:", e);
+      const { data: inv } = await supabase
+        .from("invites")
+        .select("*")
+        .eq("email", email)
+        .limit(1)
+        .single();
+        
+      if (inv) {
+        invitedTenantId = inv.tenantId || null;
+        invitedRole = inv.role || "agent";
+        inviteDocId = inv.id;
       }
-    }
-    if (inv) {
-      const data = inv.data();
-      invitedTenantId = data.tenantId || null;
-      invitedRole = data.role || "agent";
-      inviteDocId = inv.id;
+    } catch (e) {
+      console.warn("[auth] invite lookup falhou:", e);
     }
   }
 
@@ -147,32 +127,37 @@ async function ensureTenantAndProfile(
 
   if (invitedTenantId) {
     profile = {
-      uid: user.uid,
+      uid: user.id,
       email: user.email || "",
-      displayName: user.displayName || user.email?.split("@")[0] || "",
+      displayName: user.user_metadata?.displayName || user.email?.split("@")[0] || "",
       tenantId: invitedTenantId,
       role: invitedRole,
     };
-    // Cria o vínculo do usuário antes de ler o tenant; as regras liberam o tenant pelo vínculo.
-    await setDoc(profileRef, { ...profile, _ts: serverTimestamp() });
+    
+    await supabase.from("users").upsert({ ...profile, updated_at: new Date().toISOString() });
 
     try {
-      const tSnap = await getDoc(doc(db, "tenants", invitedTenantId));
-      if (!tSnap.exists()) throw new Error("Tenant do convite não existe");
-      tenant = { id: tSnap.id, ...(tSnap.data() as Omit<Tenant, "id">) };
-      await setDoc(doc(db, "tenants", tenant.id, "members", user.uid), {
-        uid: user.uid,
+      const { data: tSnap, error } = await supabase
+        .from("tenants")
+        .select("*")
+        .eq("id", invitedTenantId)
+        .single();
+        
+      if (error || !tSnap) throw new Error("Tenant do convite não existe");
+      
+      tenant = tSnap as Tenant;
+      
+      await supabase.from("tenant_members").upsert({
+        uid: user.id,
+        tenantId: tenant.id,
         email: profile.email,
         displayName: profile.displayName,
         role: invitedRole,
         joinedAt: new Date().toISOString(),
       });
+      
       if (inviteDocId) {
-        try {
-          await deleteDoc(doc(db, "invites", inviteDocId));
-        } catch (deleteError) {
-          console.warn("[auth] não foi possível remover convite consumido:", deleteError);
-        }
+        await supabase.from("invites").delete().eq("id", inviteDocId);
       }
       return { profile, tenant };
     } catch (e) {
@@ -181,26 +166,28 @@ async function ensureTenantAndProfile(
   }
 
   // Bootstrap: cria tenant + profile (novo owner)
-  const tenantId = user.uid;
+  const tenantId = user.id;
   tenant = {
     id: tenantId,
-    name: companyHint || user.displayName || user.email?.split("@")[0] || "Workspace",
-    ownerId: user.uid,
+    name: companyHint || user.user_metadata?.displayName || user.email?.split("@")[0] || "Workspace",
+    ownerId: user.id,
     plan: "trial",
     status: "active",
     createdAt: new Date().toISOString(),
   };
   profile = {
-    uid: user.uid,
+    uid: user.id,
     email: user.email || "",
-    displayName: user.displayName || user.email?.split("@")[0] || "",
+    displayName: user.user_metadata?.displayName || user.email?.split("@")[0] || "",
     tenantId,
     role: "owner",
   };
-  await setDoc(profileRef, { ...profile, _ts: serverTimestamp() });
-  await setDoc(doc(db, "tenants", tenantId), { ...tenant, _ts: serverTimestamp() });
-  await setDoc(doc(db, "tenants", tenantId, "members", user.uid), {
-    uid: user.uid,
+  
+  await supabase.from("users").upsert({ ...profile, updated_at: new Date().toISOString() });
+  await supabase.from("tenants").upsert({ ...tenant, updated_at: new Date().toISOString() });
+  await supabase.from("tenant_members").upsert({
+    uid: user.id,
+    tenantId: tenant.id,
     email: profile.email,
     displayName: profile.displayName,
     role: "owner",
@@ -218,63 +205,78 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [isMaster, setIsMaster] = useState(false);
 
   useEffect(() => {
-    const unsub = onAuthStateChanged(auth, async (u) => {
-      setLoading(true);
-      setUser(u);
-      if (u) {
-        try {
-          const { profile, tenant } = await ensureTenantAndProfile(u);
-          const master = await isMasterUser(u);
-          setIsMaster(master);
-          setProfile(profile);
+    // Buscar sessão atual ao carregar
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      handleAuthChange(session);
+    });
 
-          // Master admin pode persistir um tenant ativo diferente do seu
-          let activeTenant = tenant;
-          if (master) {
-            const saved =
-              typeof window !== "undefined" ? localStorage.getItem(ACTIVE_TENANT_KEY) : null;
-            if (saved && saved !== tenant.id) {
-              try {
-                const ts = await getDoc(doc(db, "tenants", saved));
-                if (ts.exists()) {
-                  activeTenant = { id: ts.id, ...(ts.data() as Omit<Tenant, "id">) };
-                }
-              } catch (e) {
-                console.warn("[auth] failed to load active tenant:", e);
+    // Escutar mudanças de autenticação
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange((_event, session) => {
+      handleAuthChange(session);
+    });
+
+    return () => subscription.unsubscribe();
+  }, []);
+  
+  const handleAuthChange = async (session: Session | null) => {
+    setLoading(true);
+    const u = session?.user || null;
+    setUser(u);
+    
+    if (u) {
+      try {
+        const { profile, tenant } = await ensureTenantAndProfile(u);
+        const master = await isMasterUser(u);
+        setIsMaster(master);
+        setProfile(profile);
+
+        let activeTenant = tenant;
+        if (master) {
+          const saved = typeof window !== "undefined" ? localStorage.getItem(ACTIVE_TENANT_KEY) : null;
+          if (saved && saved !== tenant.id) {
+            try {
+              const { data: ts } = await supabase.from("tenants").select("*").eq("id", saved).single();
+              if (ts) {
+                activeTenant = ts as Tenant;
               }
+            } catch (e) {
+              console.warn("[auth] failed to load active tenant:", e);
             }
           }
-          setTenant(activeTenant);
-        } catch (e) {
-          console.error("[auth] bootstrap failed:", e);
-          setIsMaster(false);
-          setProfile(null);
-          setTenant(null);
         }
-      } else {
+        setTenant(activeTenant);
+      } catch (e) {
+        console.error("[auth] bootstrap failed:", e);
         setIsMaster(false);
         setProfile(null);
         setTenant(null);
       }
-      setLoading(false);
-    });
-    return () => unsub();
-  }, []);
+    } else {
+      setIsMaster(false);
+      setProfile(null);
+      setTenant(null);
+    }
+    setLoading(false);
+  };
 
   const switchTenant = async (tenantId: string) => {
     if (!user) return;
     if (!isMaster) throw new Error("Apenas Master Admin pode trocar de tenant");
-    const ts = await getDoc(doc(db, "tenants", tenantId));
-    if (!ts.exists()) throw new Error("Tenant não encontrado");
+    
+    const { data: ts, error } = await supabase.from("tenants").select("*").eq("id", tenantId).single();
+    if (error || !ts) throw new Error("Tenant não encontrado");
+    
     localStorage.setItem(ACTIVE_TENANT_KEY, tenantId);
-    setTenant({ id: ts.id, ...(ts.data() as Omit<Tenant, "id">) });
+    setTenant(ts as Tenant);
   };
 
   const resetTenant = async () => {
     if (!user) return;
     localStorage.removeItem(ACTIVE_TENANT_KEY);
-    const ts = await getDoc(doc(db, "tenants", user.uid));
-    if (ts.exists()) setTenant({ id: ts.id, ...(ts.data() as Omit<Tenant, "id">) });
+    const { data: ts } = await supabase.from("tenants").select("*").eq("id", user.id).single();
+    if (ts) setTenant(ts as Tenant);
   };
 
   const value: AuthCtx = {
@@ -286,19 +288,29 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     switchTenant,
     resetTenant,
     signInEmail: async (email, password) => {
-      await signInWithEmailAndPassword(auth, email, password);
+      const { error } = await supabase.auth.signInWithPassword({ email, password });
+      if (error) throw error;
     },
     signUpEmail: async (email, password, displayName, company) => {
-      const cred = await createUserWithEmailAndPassword(auth, email, password);
-      await ensureTenantAndProfile({ ...cred.user, displayName } as User, company);
+      const { data, error } = await supabase.auth.signUp({
+        email,
+        password,
+        options: {
+          data: { displayName }
+        }
+      });
+      if (error) throw error;
+      if (data.user) {
+        await ensureTenantAndProfile(data.user, company);
+      }
     },
     signInGoogle: async () => {
-      const provider = new GoogleAuthProvider();
-      await signInWithPopup(auth, provider);
+      const { error } = await supabase.auth.signInWithOAuth({ provider: 'google' });
+      if (error) throw error;
     },
     signOut: async () => {
       localStorage.removeItem(ACTIVE_TENANT_KEY);
-      await fbSignOut(auth);
+      await supabase.auth.signOut();
     },
   };
 

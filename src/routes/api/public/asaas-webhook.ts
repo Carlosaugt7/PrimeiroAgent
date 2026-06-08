@@ -1,24 +1,9 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { setDoc as fsSetDoc, getDoc as fsGetDoc } from "@/lib/firebase-admin.server";
+import { supabase } from "@/integrations/supabase/client";
+import { planFromAmount, parseRef } from "@/lib/billing-helpers";
 
 // Asaas envia o token configurado no painel via header `asaas-access-token`.
 // Configure `ASAAS_WEBHOOK_TOKEN` igual ao token usado lá.
-
-function planFromAmount(value: number): string | null {
-  if (value >= 297) return "pro";
-  if (value >= 97) return "starter";
-  return null;
-}
-
-function parseRef(ref: string | null): { tenantId?: string; planId?: string } {
-  if (!ref) return {};
-  const out: Record<string, string> = {};
-  for (const part of ref.split("|")) {
-    const [k, v] = part.split(":");
-    if (k && v) out[k] = v;
-  }
-  return { tenantId: out.tenant, planId: out.plan };
-}
 
 export const Route = createFileRoute("/api/public/asaas-webhook")({
   server: {
@@ -54,7 +39,9 @@ export const Route = createFileRoute("/api/public/asaas-webhook")({
           const status = paid ? "paid" : p.status?.toLowerCase() ?? "pending";
 
           // Registra fatura
-          await fsSetDoc(`tenants/${tenantId}/invoices/${p.id}`, {
+          await supabase.from("invoices").upsert({
+            id: p.id,
+            tenantId,
             provider: "asaas",
             externalId: p.id,
             planId: planId ?? null,
@@ -67,23 +54,26 @@ export const Route = createFileRoute("/api/public/asaas-webhook")({
             paidAt: p.paymentDate ?? null,
             event: ev,
             updatedAt: new Date().toISOString(),
-          }, { merge: true });
+          });
 
           // Atualiza intent
-          await fsSetDoc(`tenants/${tenantId}/billing_intents/${p.id}`, {
-            status, updatedAt: new Date().toISOString(),
-          }, { merge: true }).catch(() => {});
+          await supabase.from("billing_intents").upsert({
+            id: p.id,
+            tenantId,
+            status,
+            updatedAt: new Date().toISOString(),
+          }).catch(() => {});
 
           // Promove plano do tenant se pago
           if (paid) {
             const finalPlan = planId ?? planFromAmount(p.value);
             if (finalPlan) {
-              await fsSetDoc(`tenants/${tenantId}`, {
+              await supabase.from("tenants").update({
                 plan: finalPlan,
                 status: "active",
                 lastPaymentAt: new Date().toISOString(),
                 billingProvider: "asaas",
-              }, { merge: true });
+              }).eq("id", tenantId);
             }
           }
 

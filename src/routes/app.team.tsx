@@ -2,15 +2,18 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { useAuth, type Role } from "@/lib/auth";
 import { logAudit, notify } from "@/lib/notifications";
-import { db } from "@/integrations/firebase/client";
-import {
-  collection, deleteDoc, doc, onSnapshot, orderBy, query, setDoc, updateDoc, where,
-} from "firebase/firestore";
+import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Crown, Mail, Trash2, UserPlus, Users } from "lucide-react";
 import { toast } from "sonner";
 
@@ -55,15 +58,60 @@ function Team() {
 
   useEffect(() => {
     if (!tenant) return;
-    const u1 = onSnapshot(
-      query(collection(db, "tenants", tenant.id, "members"), orderBy("joinedAt", "asc")),
-      (s) => setMembers(s.docs.map((d) => ({ uid: d.id, ...(d.data() as object) })) as Member[]),
-    );
-    const u2 = onSnapshot(
-      query(collection(db, "invites"), where("tenantId", "==", tenant.id)),
-      (s) => setInvites(s.docs.map((d) => ({ id: d.id, ...(d.data() as object) })) as Invite[]),
-    );
-    return () => { u1(); u2(); };
+
+    const fetchMembers = async () => {
+      const { data, error } = await supabase
+        .from("tenant_members")
+        .select("*")
+        .eq("tenantId", tenant.id)
+        .order("joinedAt", { ascending: true });
+
+      if (error) console.warn("[team] members:", error);
+      else if (data) setMembers(data as Member[]);
+    };
+
+    const fetchInvites = async () => {
+      const { data, error } = await supabase.from("invites").select("*").eq("tenantId", tenant.id);
+
+      if (error) console.warn("[team] invites:", error);
+      else if (data) setInvites(data as Invite[]);
+    };
+
+    fetchMembers();
+    fetchInvites();
+
+    const mChannel = supabase
+      .channel("public:tenant_members")
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "tenant_members",
+          filter: `tenantId=eq.${tenant.id}`,
+        },
+        fetchMembers,
+      )
+      .subscribe();
+
+    const iChannel = supabase
+      .channel("public:invites")
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "invites",
+          filter: `tenantId=eq.${tenant.id}`,
+        },
+        fetchInvites,
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(mChannel);
+      supabase.removeChannel(iChannel);
+    };
   }, [tenant]);
 
   const invite = async () => {
@@ -72,45 +120,103 @@ function Team() {
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e)) return toast.error("E-mail inválido");
     if (members.some((m) => m.email.toLowerCase() === e)) return toast.error("Já é membro");
     if (invites.some((i) => i.email === e)) return toast.error("Convite já enviado");
-    const { ensureLimit } = await import("@/lib/limits");
-    const lim = ensureLimit(tenant.id, tenant.plan, "members", members.length + invites.length, isMaster);
-    if (!lim.ok) return toast.error(lim.message!);
 
+    const { ensureLimit } = await import("@/lib/limits");
+    const lim = ensureLimit(
+      tenant.id,
+      tenant.plan,
+      "members",
+      members.length + invites.length,
+      isMaster,
+    );
+    if (!lim.ok) return toast.error(lim.message!);
 
     setBusy(true);
     try {
       const id = encodeURIComponent(e);
-      await setDoc(doc(db, "invites", id), {
+      const { error } = await supabase.from("invites").insert({
+        id,
         email: e,
         tenantId: tenant.id,
         tenantName: tenant.name,
         role,
         invitedBy: profile?.email ?? null,
-        invitedAt: new Date().toISOString(),
       });
+
+      if (error) throw error;
+
       toast.success(`Convite criado para ${e}. Peça que faça login com esse e-mail.`);
-      const actor = { actorId: profile?.uid, actorEmail: profile?.email, actorName: profile?.displayName };
-      logAudit(tenant.id, { action: "member.invite", target: id, targetLabel: e, ...actor, meta: { role } });
-      notify(tenant.id, { type: "team", severity: "info", title: "Novo convite enviado", body: `${e} foi convidado como ${role}.`, link: "/app/team" });
+      const actor = {
+        actorId: profile?.uid,
+        actorEmail: profile?.email,
+        actorName: profile?.displayName,
+      };
+      logAudit(tenant.id, {
+        action: "member.invite",
+        target: id,
+        targetLabel: e,
+        ...actor,
+        meta: { role },
+      });
+      notify(tenant.id, {
+        type: "team",
+        severity: "info",
+        title: "Novo convite enviado",
+        body: `${e} foi convidado como ${role}.`,
+        link: "/app/team",
+      });
       setEmail("");
     } catch (err: any) {
       toast.error(err?.message ?? "Falha ao convidar");
-    } finally { setBusy(false); }
+    } finally {
+      setBusy(false);
+    }
   };
 
   const cancelInvite = async (id: string) => {
-    await deleteDoc(doc(db, "invites", id));
-    if (tenant) logAudit(tenant.id, { action: "member.invite_cancel", target: id, actorId: profile?.uid, actorEmail: profile?.email, actorName: profile?.displayName });
+    const { error } = await supabase.from("invites").delete().eq("id", id);
+    if (error) return toast.error(error.message);
+
+    if (tenant) {
+      logAudit(tenant.id, {
+        action: "member.invite_cancel",
+        target: id,
+        actorId: profile?.uid,
+        actorEmail: profile?.email,
+        actorName: profile?.displayName,
+      });
+    }
   };
 
   const changeRole = async (m: Member, newRole: Role) => {
     if (!tenant || !isOwner) return;
     if (m.role === "owner") return toast.error("Owner não pode ser alterado");
-    await updateDoc(doc(db, "tenants", tenant.id, "members", m.uid), { role: newRole });
-    try { await updateDoc(doc(db, "users", m.uid), { role: newRole }); } catch {}
+
+    const { error } = await supabase
+      .from("tenant_members")
+      .update({ role: newRole })
+      .eq("tenantId", tenant.id)
+      .eq("uid", m.uid);
+
+    if (error) return toast.error(error.message);
+
     toast.success("Papel atualizado");
-    logAudit(tenant.id, { action: "member.role_change", target: m.uid, targetLabel: m.email, actorId: profile?.uid, actorEmail: profile?.email, actorName: profile?.displayName, meta: { from: m.role, to: newRole } });
-    notify(tenant.id, { type: "team", severity: "warning", title: "Papel alterado", body: `${m.email}: ${m.role} → ${newRole}`, link: "/app/team" });
+    logAudit(tenant.id, {
+      action: "member.role_change",
+      target: m.uid,
+      targetLabel: m.email,
+      actorId: profile?.uid,
+      actorEmail: profile?.email,
+      actorName: profile?.displayName,
+      meta: { from: m.role, to: newRole },
+    });
+    notify(tenant.id, {
+      type: "team",
+      severity: "warning",
+      title: "Papel alterado",
+      body: `${m.email}: ${m.role} → ${newRole}`,
+      link: "/app/team",
+    });
   };
 
   const removeMember = async (m: Member) => {
@@ -118,10 +224,31 @@ function Team() {
     if (m.uid === profile?.uid) return toast.error("Você não pode remover a si mesmo");
     if (m.role === "owner") return toast.error("Owner não pode ser removido");
     if (!confirm(`Remover ${m.displayName || m.email}?`)) return;
-    await deleteDoc(doc(db, "tenants", tenant.id, "members", m.uid));
+
+    const { error } = await supabase
+      .from("tenant_members")
+      .delete()
+      .eq("tenantId", tenant.id)
+      .eq("uid", m.uid);
+
+    if (error) return toast.error(error.message);
+
     toast.success("Membro removido. Ele perderá acesso ao reentrar.");
-    logAudit(tenant.id, { action: "member.remove", target: m.uid, targetLabel: m.email, actorId: profile?.uid, actorEmail: profile?.email, actorName: profile?.displayName });
-    notify(tenant.id, { type: "team", severity: "warning", title: "Membro removido", body: m.email, link: "/app/team" });
+    logAudit(tenant.id, {
+      action: "member.remove",
+      target: m.uid,
+      targetLabel: m.email,
+      actorId: profile?.uid,
+      actorEmail: profile?.email,
+      actorName: profile?.displayName,
+    });
+    notify(tenant.id, {
+      type: "team",
+      severity: "warning",
+      title: "Membro removido",
+      body: m.email,
+      link: "/app/team",
+    });
   };
 
   return (
@@ -130,7 +257,9 @@ function Team() {
         <h1 className="font-display text-3xl font-bold flex items-center gap-2">
           <Users className="size-7 text-primary" /> Equipe
         </h1>
-        <p className="text-muted-foreground mt-1">Convide membros e gerencie papéis no workspace.</p>
+        <p className="text-muted-foreground mt-1">
+          Convide membros e gerencie papéis no workspace.
+        </p>
       </div>
 
       {/* Convite */}
@@ -144,12 +273,19 @@ function Team() {
           <div className="grid sm:grid-cols-[1fr_180px_auto] gap-2">
             <div>
               <Label className="text-xs">E-mail</Label>
-              <Input type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="pessoa@empresa.com" />
+              <Input
+                type="email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                placeholder="pessoa@empresa.com"
+              />
             </div>
             <div>
               <Label className="text-xs">Papel</Label>
               <Select value={role} onValueChange={(v) => setRole(v as Role)}>
-                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="admin">Admin</SelectItem>
                   <SelectItem value="editor">Editor</SelectItem>
@@ -166,7 +302,8 @@ function Team() {
           </div>
         )}
         <p className="text-[11px] text-muted-foreground mt-2">
-          O convidado entra ao fazer login com esse mesmo e-mail (qualquer método). O convite é consumido automaticamente.
+          O convidado entra ao fazer login com esse mesmo e-mail (qualquer método). O convite é
+          consumido automaticamente.
         </p>
       </div>
 
@@ -180,7 +317,9 @@ function Team() {
             {invites.map((i) => (
               <li key={i.id} className="py-2 flex items-center gap-3">
                 <span className="flex-1 text-sm">{i.email}</span>
-                <Badge variant="outline" className="text-[10px]">{ROLE_LABEL[i.role]}</Badge>
+                <Badge variant="outline" className="text-[10px]">
+                  {ROLE_LABEL[i.role]}
+                </Badge>
                 {canManage && (
                   <Button size="icon" variant="ghost" onClick={() => cancelInvite(i.id)}>
                     <Trash2 className="size-4 text-destructive" />
@@ -205,13 +344,19 @@ function Team() {
                   <div className="font-medium text-sm flex items-center gap-2">
                     {m.role === "owner" && <Crown className="size-3.5 text-amber-500" />}
                     {m.displayName || m.email}
-                    {m.uid === profile?.uid && <Badge variant="secondary" className="text-[10px]">você</Badge>}
+                    {m.uid === profile?.uid && (
+                      <Badge variant="secondary" className="text-[10px]">
+                        você
+                      </Badge>
+                    )}
                   </div>
                   <div className="text-xs text-muted-foreground">{m.email}</div>
                 </div>
                 {isOwner && m.role !== "owner" ? (
                   <Select value={m.role} onValueChange={(v) => changeRole(m, v as Role)}>
-                    <SelectTrigger className="w-32 h-8 text-xs"><SelectValue /></SelectTrigger>
+                    <SelectTrigger className="w-32 h-8 text-xs">
+                      <SelectValue />
+                    </SelectTrigger>
                     <SelectContent>
                       <SelectItem value="admin">Admin</SelectItem>
                       <SelectItem value="editor">Editor</SelectItem>
@@ -220,7 +365,9 @@ function Team() {
                     </SelectContent>
                   </Select>
                 ) : (
-                  <Badge variant="outline" className="text-[10px]">{ROLE_LABEL[m.role]}</Badge>
+                  <Badge variant="outline" className="text-[10px]">
+                    {ROLE_LABEL[m.role]}
+                  </Badge>
                 )}
                 {isOwner && m.role !== "owner" && m.uid !== profile?.uid && (
                   <Button size="icon" variant="ghost" onClick={() => removeMember(m)}>

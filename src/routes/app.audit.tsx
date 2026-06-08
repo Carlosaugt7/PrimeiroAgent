@@ -1,7 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
-import { collection, onSnapshot, orderBy, query } from "firebase/firestore";
-import { db } from "@/integrations/firebase/client";
+import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/lib/auth";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -20,7 +19,7 @@ interface Entry {
   actorName?: string | null;
   actorEmail?: string | null;
   meta?: any;
-  createdAt?: { seconds: number };
+  createdAt?: string;
 }
 
 function Page() {
@@ -33,11 +32,36 @@ function Page() {
 
   useEffect(() => {
     if (!tenant?.id || !canView) return;
-    return onSnapshot(
-      query(collection(db, "tenants", tenant.id, "audit"), orderBy("createdAt", "desc")),
-      (s) => setItems(s.docs.map((d) => ({ id: d.id, ...(d.data() as object) })) as Entry[]),
-      (e) => console.warn("[audit]", e),
-    );
+
+    const fetchAudit = async () => {
+      const { data, error } = await supabase
+        .from("audit")
+        .select("*")
+        .eq("tenantId", tenant.id)
+        .order("createdAt", { ascending: false });
+      if (error) {
+        console.warn("[audit]", error);
+      } else if (data) {
+        setItems(data as Entry[]);
+      }
+    };
+
+    fetchAudit();
+
+    const channel = supabase
+      .channel("public:audit")
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "audit", filter: `tenantId=eq.${tenant.id}` },
+        () => {
+          fetchAudit();
+        },
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
   }, [tenant?.id, canView]);
 
   const actions = useMemo(() => Array.from(new Set(items.map((i) => i.action))).sort(), [items]);
@@ -46,7 +70,12 @@ function Page() {
     if (action !== "all" && i.action !== action) return false;
     if (search) {
       const s = search.toLowerCase();
-      if (!`${i.action} ${i.targetLabel ?? ""} ${i.target ?? ""} ${i.actorName ?? ""} ${i.actorEmail ?? ""}`.toLowerCase().includes(s)) return false;
+      if (
+        !`${i.action} ${i.targetLabel ?? ""} ${i.target ?? ""} ${i.actorName ?? ""} ${i.actorEmail ?? ""}`
+          .toLowerCase()
+          .includes(s)
+      )
+        return false;
     }
     return true;
   });
@@ -55,16 +84,23 @@ function Page() {
     const rows = [
       ["Data", "Ação", "Alvo", "Ator", "Email", "Meta"],
       ...filtered.map((i) => [
-        i.createdAt?.seconds ? new Date(i.createdAt.seconds * 1000).toISOString() : "",
-        i.action, i.targetLabel ?? i.target ?? "", i.actorName ?? "", i.actorEmail ?? "",
+        i.createdAt ? new Date(i.createdAt).toISOString() : "",
+        i.action,
+        i.targetLabel ?? i.target ?? "",
+        i.actorName ?? "",
+        i.actorEmail ?? "",
         i.meta ? JSON.stringify(i.meta) : "",
       ]),
     ];
-    const csv = rows.map((r) => r.map((c) => `"${String(c).replace(/"/g, '""')}"`).join(",")).join("\n");
+    const csv = rows
+      .map((r) => r.map((c) => `"${String(c).replace(/"/g, '""')}"`).join(","))
+      .join("\n");
     const blob = new Blob([csv], { type: "text/csv" });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
-    a.href = url; a.download = `audit-${Date.now()}.csv`; a.click();
+    a.href = url;
+    a.download = `audit-${Date.now()}.csv`;
+    a.click();
     URL.revokeObjectURL(url);
   };
 
@@ -73,7 +109,9 @@ function Page() {
       <div className="max-w-md mx-auto mt-20 text-center">
         <ShieldCheck className="size-12 mx-auto text-muted-foreground mb-3" />
         <h2 className="font-display text-xl font-bold">Acesso restrito</h2>
-        <p className="text-sm text-muted-foreground mt-1">Apenas administradores podem visualizar o log de auditoria.</p>
+        <p className="text-sm text-muted-foreground mt-1">
+          Apenas administradores podem visualizar o log de auditoria.
+        </p>
       </div>
     );
   }
@@ -93,11 +131,23 @@ function Page() {
       </div>
 
       <div className="flex flex-wrap gap-2">
-        <Input placeholder="Buscar..." value={search} onChange={(e) => setSearch(e.target.value)} className="max-w-xs" />
-        <select value={action} onChange={(e) => setAction(e.target.value)}
-          className="h-10 px-3 rounded-md bg-secondary/60 border border-border text-sm">
+        <Input
+          placeholder="Buscar..."
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          className="max-w-xs"
+        />
+        <select
+          value={action}
+          onChange={(e) => setAction(e.target.value)}
+          className="h-10 px-3 rounded-md bg-secondary/60 border border-border text-sm"
+        >
           <option value="all">Todas as ações</option>
-          {actions.map((a) => <option key={a} value={a}>{a}</option>)}
+          {actions.map((a) => (
+            <option key={a} value={a}>
+              {a}
+            </option>
+          ))}
         </select>
       </div>
 
@@ -113,19 +163,28 @@ function Page() {
           </thead>
           <tbody>
             {filtered.length === 0 ? (
-              <tr><td colSpan={4} className="text-center py-12 text-muted-foreground text-sm">Nenhum evento encontrado.</td></tr>
-            ) : filtered.map((i) => (
-              <tr key={i.id} className="border-t border-border/40">
-                <td className="py-2 px-4 text-muted-foreground text-xs whitespace-nowrap">
-                  {i.createdAt?.seconds ? new Date(i.createdAt.seconds * 1000).toLocaleString("pt-BR") : "—"}
-                </td>
-                <td className="py-2 px-4 font-mono text-xs">{i.action}</td>
-                <td className="py-2 px-4">{i.targetLabel ?? i.target ?? "—"}</td>
-                <td className="py-2 px-4 text-xs">
-                  {i.actorName ?? "—"}{i.actorEmail && <span className="block text-muted-foreground">{i.actorEmail}</span>}
+              <tr>
+                <td colSpan={4} className="text-center py-12 text-muted-foreground text-sm">
+                  Nenhum evento encontrado.
                 </td>
               </tr>
-            ))}
+            ) : (
+              filtered.map((i) => (
+                <tr key={i.id} className="border-t border-border/40">
+                  <td className="py-2 px-4 text-muted-foreground text-xs whitespace-nowrap">
+                    {i.createdAt ? new Date(i.createdAt).toLocaleString("pt-BR") : "—"}
+                  </td>
+                  <td className="py-2 px-4 font-mono text-xs">{i.action}</td>
+                  <td className="py-2 px-4">{i.targetLabel ?? i.target ?? "—"}</td>
+                  <td className="py-2 px-4 text-xs">
+                    {i.actorName ?? "—"}
+                    {i.actorEmail && (
+                      <span className="block text-muted-foreground">{i.actorEmail}</span>
+                    )}
+                  </td>
+                </tr>
+              ))
+            )}
           </tbody>
         </table>
       </div>

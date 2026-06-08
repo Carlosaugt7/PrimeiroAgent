@@ -1,14 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useServerFn } from "@tanstack/react-start";
 import { useCallback, useEffect, useState } from "react";
-import {
-  collection,
-  deleteDoc,
-  doc,
-  onSnapshot,
-  serverTimestamp,
-  setDoc,
-} from "firebase/firestore";
+import { supabase } from "@/integrations/supabase/client";
 import { Loader2, LogOut, Plus, QrCode, RefreshCw, Smartphone, Trash2 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -21,7 +14,6 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { db } from "@/integrations/firebase/client";
 import {
   connectInstance,
   createInstance,
@@ -112,25 +104,46 @@ function Page() {
   useEffect(() => {
     if (!tenant) return;
     setLoading(true);
-    return onSnapshot(
-      collection(db, "tenants", tenant.id, "instances"),
-      (snap) => {
-        setLocalInstances(
-          snap.docs.map((d) => {
-            const data = d.data() as Partial<LocalInst> & { name?: string };
-            return {
-              id: d.id,
-              instanceName: data.instanceName ?? data.name ?? d.id,
-              status: data.status,
-            };
-          }),
-        );
-      },
-      (error) => {
+
+    const fetchInstances = async () => {
+      const { data, error } = await supabase
+        .from("instances")
+        .select("*")
+        .eq("tenantId", tenant.id);
+
+      if (error) {
         toast.error(messageFromError(error, "Falha ao carregar instâncias do workspace"));
         setLoading(false);
-      },
-    );
+      } else if (data) {
+        setLocalInstances(
+          data.map((d: any) => ({
+            id: d.id,
+            instanceName: d.name ?? d.id,
+            status: d.status,
+          })),
+        );
+      }
+    };
+
+    fetchInstances();
+
+    const channel = supabase
+      .channel("public:instances")
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "instances",
+          filter: `tenantId=eq.${tenant.id}`,
+        },
+        fetchInstances,
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
   }, [tenant]);
 
   useEffect(() => {
@@ -186,26 +199,23 @@ function Page() {
     }
     setCreating(true);
     try {
-      const webhookUrl = `${window.location.origin}/api/public/evolution-webhook`;
+      const webhookUrl = `${globalThis.location.origin}/api/public/evolution-webhook`;
       await create({ data: { instanceName: newName, webhookUrl } });
-      await setDoc(doc(db, "instance_index", newName), {
-        tenantId: tenant.id,
+
+      const { error: idxErr } = await supabase.from("instance_index").insert({
         instanceName: newName,
-        createdAt: new Date().toISOString(),
-        _ts: serverTimestamp(),
+        tenantId: tenant.id,
       });
-      await setDoc(
-        doc(db, "tenants", tenant.id, "instances", newName),
-        {
-          id: newName,
-          name: newName,
-          instanceName: newName,
-          status: "conectando",
-          webhook: webhookUrl,
-          createdAt: new Date().toISOString(),
-        },
-        { merge: true },
-      );
+      if (idxErr) throw idxErr;
+
+      const { error: instErr } = await supabase.from("instances").insert({
+        id: newName,
+        tenantId: tenant.id,
+        name: newName,
+        status: "conectando",
+      });
+      if (instErr) throw instErr;
+
       toast.success("Instância criada");
       setOpenCreate(false);
       setNewName("");
@@ -244,8 +254,8 @@ function Page() {
     try {
       await del({ data: { instanceName: name } });
       if (tenant) {
-        await deleteDoc(doc(db, "instance_index", name)).catch(() => {});
-        await deleteDoc(doc(db, "tenants", tenant.id, "instances", name)).catch(() => {});
+        await supabase.from("instance_index").delete().eq("instanceName", name);
+        await supabase.from("instances").delete().eq("id", name).eq("tenantId", tenant.id);
       }
       toast.success("Excluída");
       refresh();

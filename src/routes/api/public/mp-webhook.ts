@@ -1,23 +1,9 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { setDoc as fsSetDoc } from "@/lib/firebase-admin.server";
+import { supabase } from "@/integrations/supabase/client";
+import { planFromAmount, parseRef } from "@/lib/billing-helpers";
 
 // Mercado Pago envia notificações (topic=payment) com o paymentId em data.id.
 // Buscamos o pagamento na API com MERCADOPAGO_ACCESS_TOKEN para validar o status real.
-
-function planFromAmount(value: number): string | null {
-  if (value >= 297) return "pro";
-  if (value >= 97) return "starter";
-  return null;
-}
-function parseRef(ref: string | null): { tenantId?: string; planId?: string } {
-  if (!ref) return {};
-  const out: Record<string, string> = {};
-  for (const part of ref.split("|")) {
-    const [k, v] = part.split(":");
-    if (k && v) out[k] = v;
-  }
-  return { tenantId: out.tenant, planId: out.plan };
-}
 
 export const Route = createFileRoute("/api/public/mp-webhook")({
   server: {
@@ -68,7 +54,9 @@ export const Route = createFileRoute("/api/public/mp-webhook")({
           const paid = pay.status === "approved";
           const status = paid ? "paid" : pay.status;
 
-          await fsSetDoc(`tenants/${tenantId}/invoices/${pay.id}`, {
+          await supabase.from("invoices").upsert({
+            id: String(pay.id),
+            tenantId,
             provider: "mercadopago",
             externalId: String(pay.id),
             planId: planId ?? null,
@@ -77,17 +65,17 @@ export const Route = createFileRoute("/api/public/mp-webhook")({
             billingType: pay.payment_method_id ?? null,
             paidAt: pay.date_approved ?? null,
             updatedAt: new Date().toISOString(),
-          }, { merge: true });
+          });
 
           if (paid) {
             const finalPlan = planId ?? planFromAmount(pay.transaction_amount);
             if (finalPlan) {
-              await fsSetDoc(`tenants/${tenantId}`, {
+              await supabase.from("tenants").update({
                 plan: finalPlan,
                 status: "active",
                 lastPaymentAt: new Date().toISOString(),
                 billingProvider: "mercadopago",
-              }, { merge: true });
+              }).eq("id", tenantId);
             }
           }
 

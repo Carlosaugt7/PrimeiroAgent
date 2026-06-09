@@ -21,7 +21,6 @@ import { Route as AppScheduledRouteImport } from './routes/app.scheduled'
 import { Route as AppReportsRouteImport } from './routes/app.reports'
 import { Route as AppPlaygroundRouteImport } from './routes/app.playground'
 import { Route as AppOnboardingRouteImport } from './routes/app.onboarding'
-import { Route as AppNotificationsRouteImport } from './routes/app.notifications'
 import { Route as AppMasterRouteImport } from './routes/app.master'
 import { Route as AppLogsRouteImport } from './routes/app.logs'
 import { Route as AppLlmProvidersRouteImport } from './routes/app.llm-providers'
@@ -30,6 +29,7 @@ import { Route as AppIntegrationsRouteImport } from './routes/app.integrations'
 import { Route as AppInboxRouteImport } from './routes/app.inbox'
 import { Route as AppDeployRouteImport } from './routes/app.deploy'
 import { Route as AppCrmRouteImport } from './routes/app.crm'
+import { Route as AppCampaignsRouteImport } from './routes/app.campaigns'
 import { Route as AppBillingRouteImport } from './routes/app.billing'
 import { Route as AppAutomationsRouteImport } from './routes/app.automations'
 import { Route as AppAuditRouteImport } from './routes/app.audit'
@@ -101,11 +101,6 @@ const AppOnboardingRoute = AppOnboardingRouteImport.update({
   path: '/onboarding',
   getParentRoute: () => AppRoute,
 } as any)
-const AppNotificationsRoute = AppNotificationsRouteImport.update({
-  id: '/notifications',
-  path: '/notifications',
-  getParentRoute: () => AppRoute,
-} as any)
 const AppMasterRoute = AppMasterRouteImport.update({
   id: '/master',
   path: '/master',
@@ -144,6 +139,11 @@ const AppDeployRoute = AppDeployRouteImport.update({
 const AppCrmRoute = AppCrmRouteImport.update({
   id: '/crm',
   path: '/crm',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppCampaignsRoute = AppCampaignsRouteImport.update({
+  id: '/campaigns',
+  path: '/campaigns',
   getParentRoute: () => AppRoute,
 } as any)
 const AppBillingRoute = AppBillingRouteImport.update({
@@ -207,6 +207,7 @@ export interface FileRoutesByFullPath {
   '/app/audit': typeof AppAuditRoute
   '/app/automations': typeof AppAutomationsRoute
   '/app/billing': typeof AppBillingRoute
+  '/app/campaigns': typeof AppCampaignsRoute
   '/app/crm': typeof AppCrmRoute
   '/app/deploy': typeof AppDeployRoute
   '/app/inbox': typeof AppInboxRoute
@@ -215,7 +216,6 @@ export interface FileRoutesByFullPath {
   '/app/llm-providers': typeof AppLlmProvidersRoute
   '/app/logs': typeof AppLogsRoute
   '/app/master': typeof AppMasterRoute
-  '/app/notifications': typeof AppNotificationsRoute
   '/app/onboarding': typeof AppOnboardingRoute
   '/app/playground': typeof AppPlaygroundRoute
   '/app/reports': typeof AppReportsRoute
@@ -239,6 +239,7 @@ export interface FileRoutesByTo {
   '/app/audit': typeof AppAuditRoute
   '/app/automations': typeof AppAutomationsRoute
   '/app/billing': typeof AppBillingRoute
+  '/app/campaigns': typeof AppCampaignsRoute
   '/app/crm': typeof AppCrmRoute
   '/app/deploy': typeof AppDeployRoute
   '/app/inbox': typeof AppInboxRoute
@@ -247,7 +248,6 @@ export interface FileRoutesByTo {
   '/app/llm-providers': typeof AppLlmProvidersRoute
   '/app/logs': typeof AppLogsRoute
   '/app/master': typeof AppMasterRoute
-  '/app/notifications': typeof AppNotificationsRoute
   '/app/onboarding': typeof AppOnboardingRoute
   '/app/playground': typeof AppPlaygroundRoute
   '/app/reports': typeof AppReportsRoute
@@ -273,6 +273,7 @@ export interface FileRoutesById {
   '/app/audit': typeof AppAuditRoute
   '/app/automations': typeof AppAutomationsRoute
   '/app/billing': typeof AppBillingRoute
+  '/app/campaigns': typeof AppCampaignsRoute
   '/app/crm': typeof AppCrmRoute
   '/app/deploy': typeof AppDeployRoute
   '/app/inbox': typeof AppInboxRoute
@@ -281,7 +282,6 @@ export interface FileRoutesById {
   '/app/llm-providers': typeof AppLlmProvidersRoute
   '/app/logs': typeof AppLogsRoute
   '/app/master': typeof AppMasterRoute
-  '/app/notifications': typeof AppNotificationsRoute
   '/app/onboarding': typeof AppOnboardingRoute
   '/app/playground': typeof AppPlaygroundRoute
   '/app/reports': typeof AppReportsRoute
@@ -308,6 +308,7 @@ export interface FileRouteTypes {
     | '/app/audit'
     | '/app/automations'
     | '/app/billing'
+    | '/app/campaigns'
     | '/app/crm'
     | '/app/deploy'
     | '/app/inbox'
@@ -316,7 +317,6 @@ export interface FileRouteTypes {
     | '/app/llm-providers'
     | '/app/logs'
     | '/app/master'
-    | '/app/notifications'
     | '/app/onboarding'
     | '/app/playground'
     | '/app/reports'
@@ -340,6 +340,7 @@ export interface FileRouteTypes {
     | '/app/audit'
     | '/app/automations'
     | '/app/billing'
+    | '/app/campaigns'
     | '/app/crm'
     | '/app/deploy'
     | '/app/inbox'
@@ -348,7 +349,6 @@ export interface FileRouteTypes {
     | '/app/llm-providers'
     | '/app/logs'
     | '/app/master'
-    | '/app/notifications'
     | '/app/onboarding'
     | '/app/playground'
     | '/app/reports'
@@ -373,6 +373,7 @@ export interface FileRouteTypes {
     | '/app/audit'
     | '/app/automations'
     | '/app/billing'
+    | '/app/campaigns'
     | '/app/crm'
     | '/app/deploy'
     | '/app/inbox'
@@ -381,7 +382,6 @@ export interface FileRouteTypes {
     | '/app/llm-providers'
     | '/app/logs'
     | '/app/master'
-    | '/app/notifications'
     | '/app/onboarding'
     | '/app/playground'
     | '/app/reports'
@@ -494,13 +494,6 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppOnboardingRouteImport
       parentRoute: typeof AppRoute
     }
-    '/app/notifications': {
-      id: '/app/notifications'
-      path: '/notifications'
-      fullPath: '/app/notifications'
-      preLoaderRoute: typeof AppNotificationsRouteImport
-      parentRoute: typeof AppRoute
-    }
     '/app/master': {
       id: '/app/master'
       path: '/master'
@@ -555,6 +548,13 @@ declare module '@tanstack/react-router' {
       path: '/crm'
       fullPath: '/app/crm'
       preLoaderRoute: typeof AppCrmRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/app/campaigns': {
+      id: '/app/campaigns'
+      path: '/campaigns'
+      fullPath: '/app/campaigns'
+      preLoaderRoute: typeof AppCampaignsRouteImport
       parentRoute: typeof AppRoute
     }
     '/app/billing': {
@@ -648,6 +648,7 @@ interface AppRouteChildren {
   AppAuditRoute: typeof AppAuditRoute
   AppAutomationsRoute: typeof AppAutomationsRoute
   AppBillingRoute: typeof AppBillingRoute
+  AppCampaignsRoute: typeof AppCampaignsRoute
   AppCrmRoute: typeof AppCrmRoute
   AppDeployRoute: typeof AppDeployRoute
   AppInboxRoute: typeof AppInboxRoute
@@ -656,7 +657,6 @@ interface AppRouteChildren {
   AppLlmProvidersRoute: typeof AppLlmProvidersRoute
   AppLogsRoute: typeof AppLogsRoute
   AppMasterRoute: typeof AppMasterRoute
-  AppNotificationsRoute: typeof AppNotificationsRoute
   AppOnboardingRoute: typeof AppOnboardingRoute
   AppPlaygroundRoute: typeof AppPlaygroundRoute
   AppReportsRoute: typeof AppReportsRoute
@@ -674,6 +674,7 @@ const AppRouteChildren: AppRouteChildren = {
   AppAuditRoute: AppAuditRoute,
   AppAutomationsRoute: AppAutomationsRoute,
   AppBillingRoute: AppBillingRoute,
+  AppCampaignsRoute: AppCampaignsRoute,
   AppCrmRoute: AppCrmRoute,
   AppDeployRoute: AppDeployRoute,
   AppInboxRoute: AppInboxRoute,
@@ -682,7 +683,6 @@ const AppRouteChildren: AppRouteChildren = {
   AppLlmProvidersRoute: AppLlmProvidersRoute,
   AppLogsRoute: AppLogsRoute,
   AppMasterRoute: AppMasterRoute,
-  AppNotificationsRoute: AppNotificationsRoute,
   AppOnboardingRoute: AppOnboardingRoute,
   AppPlaygroundRoute: AppPlaygroundRoute,
   AppReportsRoute: AppReportsRoute,

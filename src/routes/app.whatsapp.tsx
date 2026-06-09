@@ -78,7 +78,7 @@ function Page() {
     if (!tenant) return;
     setLoading(true);
     try {
-      const remote = await list();
+      const remote = await list({ data: { tenantId: tenant.id } });
       const remoteByName = new Map(
         remote.filter((i) => i.instanceName).map((i) => [i.instanceName, i]),
       );
@@ -151,10 +151,10 @@ function Page() {
   }, [refresh]);
 
   useEffect(() => {
-    if (!qrFor) return;
+    if (!tenant?.id || !qrFor) return;
     const iv = setInterval(async () => {
       try {
-        const r = await state({ data: { instanceName: qrFor } });
+        const r = await state({ data: { tenantId: tenant.id, instanceName: qrFor } });
         if (r.state.toLowerCase() === "open") {
           toast.success("WhatsApp conectado!");
           setQrFor(null);
@@ -173,7 +173,7 @@ function Page() {
     setQrBase64(null);
     setQrLoading(true);
     try {
-      const r = await connect({ data: { instanceName: name } });
+      const r = await connect({ data: { tenantId: tenant?.id || "", instanceName: name } });
       setQrBase64(r.base64);
     } catch (error) {
       toast.error(messageFromError(error, "Falha no QR"));
@@ -200,7 +200,7 @@ function Page() {
     setCreating(true);
     try {
       const webhookUrl = `${globalThis.location.origin}/api/public/evolution-webhook`;
-      await create({ data: { instanceName: newName, webhookUrl } });
+      await create({ data: { tenantId: tenant.id, instanceName: newName, webhookUrl } });
 
       const { error: idxErr } = await supabase.from("instance_index").insert({
         instanceName: newName,
@@ -230,7 +230,7 @@ function Page() {
 
   const handleRestart = async (name: string) => {
     try {
-      await restart({ data: { instanceName: name } });
+      await restart({ data: { tenantId: tenant?.id || "", instanceName: name } });
       toast.success("Reiniciada");
       refresh();
     } catch (error) {
@@ -241,7 +241,7 @@ function Page() {
   const handleLogout = async (name: string) => {
     if (!confirm(`Desconectar ${name}?`)) return;
     try {
-      await logout({ data: { instanceName: name } });
+      await logout({ data: { tenantId: tenant?.id || "", instanceName: name } });
       toast.success("Desconectada");
       refresh();
     } catch (error) {
@@ -252,7 +252,7 @@ function Page() {
   const handleDelete = async (name: string) => {
     if (!confirm(`Excluir definitivamente ${name}?`)) return;
     try {
-      await del({ data: { instanceName: name } });
+      await del({ data: { tenantId: tenant?.id || "", instanceName: name } });
       if (tenant) {
         await supabase.from("instance_index").delete().eq("instanceName", name);
         await supabase.from("instances").delete().eq("id", name).eq("tenantId", tenant.id);

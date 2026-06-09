@@ -13,6 +13,7 @@ import {
   FlaskConical,
   History,
   LayoutDashboard,
+  Megaphone,
   MessageSquareText,
   MessagesSquare,
   Plug,
@@ -40,9 +41,11 @@ const groups: { title: string; items: NavItem[] }[] = [
       { to: "/app/crm", label: "Contatos (CRM)", icon: Contact },
       { to: "/app/templates", label: "Templates", icon: MessageSquareText },
       { to: "/app/scheduled", label: "Agendamentos", icon: CalendarClock },
+      { to: "/app/campaigns", label: "Campanhas", icon: Megaphone },
       { to: "/app/automations", label: "Automações", icon: Zap },
     ],
   },
+
   {
     title: "Configuração",
     items: [
@@ -57,7 +60,6 @@ const groups: { title: string; items: NavItem[] }[] = [
     items: [
       { to: "/app/reports", label: "Relatórios", icon: BarChart3 },
       { to: "/app/logs", label: "Logs & Traces", icon: ScrollText },
-      { to: "/app/notifications", label: "Notificações", icon: Bell },
       { to: "/app/audit", label: "Auditoria", icon: History },
       { to: "/app/deploy", label: "Deploy", icon: Rocket },
       { to: "/app/billing", label: "Planos & uso", icon: CreditCard },

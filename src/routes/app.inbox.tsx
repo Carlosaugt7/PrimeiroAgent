@@ -229,11 +229,11 @@ function Inbox() {
   const active = useMemo(() => convs.find((c) => c.id === activeId) ?? null, [convs, activeId]);
 
   const handleSend = async () => {
-    if (!draft.trim() || !active?.instanceName || !active.remoteJid) return;
+    if (!draft.trim() || !active?.instanceName || !active.remoteJid || !tenant?.id) return;
     setSending(true);
     try {
       const number = active.remoteJid.split("@")[0];
-      await sendFn({ data: { instanceName: active.instanceName, number, text: draft.trim() } });
+      await sendFn({ data: { tenantId: tenant.id, instanceName: active.instanceName, number, text: draft.trim() } });
       setDraft("");
     } catch (e: any) {
       toast.error(e?.message ?? "Falha ao enviar");

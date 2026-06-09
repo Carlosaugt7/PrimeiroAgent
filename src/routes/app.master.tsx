@@ -113,13 +113,13 @@ function Master() {
           <h1 className="font-display text-3xl font-bold flex items-center gap-2">
             <Crown className="size-7 text-amber-500" /> Master Admin
           </h1>
-          <p className="text-muted-foreground mt-1">
+          <div className="text-muted-foreground mt-1 flex items-center gap-1 flex-wrap text-sm">
             Logado como <span className="font-medium text-foreground">{user?.email}</span>.
             Workspace ativo:{" "}
             <Badge variant="outline" className="ml-1">
               {tenant?.name ?? "—"}
             </Badge>
-          </p>
+          </div>
         </div>
         <div className="flex gap-2 flex-wrap">
           <Button
@@ -139,23 +139,6 @@ function Master() {
             }}
           >
             <Plus className="size-4" /> Novo cliente
-          </Button>
-          <Button
-            variant="outline"
-            onClick={async () => {
-              try {
-                const idToken = await getSupabaseToken();
-                if (!idToken) throw new Error("Sem sessão");
-                const { promoteSelfToMaster } = await import("@/lib/master.functions");
-                const res = await promoteSelfToMaster({ data: { idToken } });
-                toast.success(`Promovido: ${res.email}. Recarregando...`);
-                setTimeout(() => window.location.reload(), 800);
-              } catch (e) {
-                toast.error(messageFromError(e, "Falha ao promover"));
-              }
-            }}
-          >
-            <Crown className="size-4" /> Promover-me a Master
           </Button>
           {tenant?.id !== profile?.tenantId && (
             <Button variant="outline" onClick={back}>

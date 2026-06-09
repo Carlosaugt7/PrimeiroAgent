@@ -194,9 +194,9 @@ export function AppStoreProvider({ children }: { readonly children: ReactNode })
             const prevMap = new Map(prev.map(i => [i.id, i.status]));
             next.forEach(inst => {
               const prevStatus = prevMap.get(inst.id);
-              const curStatus = inst.status?.toLowerCase();
-              const wasOk = prevStatus === "open" || prevStatus === "connected" || prevStatus === "online";
-              const isDown = curStatus && curStatus !== "open" && curStatus !== "connected" && curStatus !== "connecting" && curStatus !== "online";
+              const curStatus = inst.status;
+              const wasOk = prevStatus === "online";
+              const isDown = curStatus && curStatus !== "online" && curStatus !== "conectando";
               
               if (prevStatus && wasOk && isDown) {
                 notify(tenantId, {

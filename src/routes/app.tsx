@@ -1,7 +1,6 @@
 import { createFileRoute, Outlet, useNavigate } from "@tanstack/react-router";
 import { useEffect } from "react";
 import { AppSidebar } from "@/components/app/AppSidebar";
-import { NotificationsBell } from "@/components/app/NotificationsBell";
 import { AppStoreProvider } from "@/lib/app-store";
 import { useAuth } from "@/lib/auth";
 import { Loader2, LogOut, Search } from "lucide-react";
@@ -9,6 +8,7 @@ import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem,
   DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+
 
 export const Route = createFileRoute("/app")({
   head: () => ({ meta: [{ title: "Console — AgentHub AI" }] }),
@@ -67,7 +67,6 @@ function AppLayout() {
                 />
               </div>
             </div>
-            <NotificationsBell />
 
             <DropdownMenu>
               <DropdownMenuTrigger asChild>

@@ -1,6 +1,25 @@
 import { createServerFn } from "@tanstack/react-start";
 import { MASTER_ADMINS } from "@/lib/master";
 import { supabase } from "@/integrations/supabase/client";
+import { createClient } from "@supabase/supabase-js";
+
+function getAuthSupabase(accessToken: string) {
+  const url = process.env.SUPABASE_URL || import.meta.env.VITE_SUPABASE_URL;
+  const key = process.env.SUPABASE_PUBLISHABLE_KEY || import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
+  if (!url || !key) {
+    throw new Error("Missing Supabase environment variables on server-side");
+  }
+  return createClient(url, key, {
+    global: {
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+      },
+    },
+    auth: {
+      persistSession: false,
+    },
+  });
+}
 
 async function lookupUser(accessToken: string) {
   const { data: { user }, error } = await supabase.auth.getUser(accessToken);
@@ -17,16 +36,17 @@ async function requireMaster(accessToken: string) {
 }
 
 export const promoteSelfToMaster = createServerFn({ method: "POST" })
-  .inputValidator((d: { idToken: string }) => d) // idToken is actually the access_token in Supabase
+  .inputValidator((d: { idToken: string }) => d)
   .handler(async ({ data }) => {
     const u = await lookupUser(data.idToken);
     const allowed = MASTER_ADMINS.map((e) => e.toLowerCase()).includes(u.email);
     if (!allowed) throw new Error(`E-mail ${u.email} não está em MASTER_ADMINS`);
-    await supabase.from("master_admins").upsert({
+    
+    const authClient = getAuthSupabase(data.idToken);
+    const { error } = await authClient.from("master_admins").upsert({
       id: u.uid,
-      email: u.email,
-      promotedAt: new Date().toISOString(),
     });
+    if (error) throw new Error(error.message);
     return { ok: true, uid: u.uid, email: u.email };
   });
 
@@ -39,17 +59,19 @@ export const createTenantAsMaster = createServerFn({ method: "POST" })
     const tenantId = `cli_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
     const now = new Date().toISOString();
     
-    await supabase.from("tenants").upsert({
+    const authClient = getAuthSupabase(data.idToken);
+    
+    const { error: tenantErr } = await authClient.from("tenants").upsert({
       id: tenantId,
       name,
       ownerId: master.uid,
       plan: data.plan || "starter",
       status: "active",
-      managedBy: master.uid,
       createdAt: now,
     });
+    if (tenantErr) throw new Error(`Erro ao criar tenant: ${tenantErr.message}`);
     
-    await supabase.from("tenant_members").upsert({
+    const { error: memberErr } = await authClient.from("tenant_members").upsert({
       uid: master.uid,
       tenantId: tenantId,
       email: master.email,
@@ -57,6 +79,7 @@ export const createTenantAsMaster = createServerFn({ method: "POST" })
       role: "owner",
       joinedAt: now,
     });
+    if (memberErr) throw new Error(`Erro ao vincular membro: ${memberErr.message}`);
     
     return { ok: true, tenantId, name };
   });

@@ -57,12 +57,14 @@ export const Route = createFileRoute("/api/public/asaas-webhook")({
           });
 
           // Atualiza intent
-          await supabase.from("billing_intents").upsert({
-            id: p.id,
-            tenantId,
-            status,
-            updatedAt: new Date().toISOString(),
-          }).catch(() => {});
+          try {
+            await supabase.from("billing_intents").upsert({
+              id: p.id,
+              tenantId,
+              status,
+              updatedAt: new Date().toISOString(),
+            });
+          } catch (e) {}
 
           // Promove plano do tenant se pago
           if (paid) {

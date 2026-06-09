@@ -1,12 +1,22 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { supabase } from "@/integrations/supabase/client";
 
-const EVO_BASE = "https://evolution-api.rsconsultoria.pro";
+const EVO_BASE_FALLBACK = "https://evolution-api.rsconsultoria.pro";
 
-async function evoSendText(instanceName: string, number: string, text: string) {
-  const key = process.env.EVOLUTION_API_KEY;
-  if (!key) throw new Error("EVOLUTION_API_KEY ausente");
-  const r = await fetch(`${EVO_BASE}/message/sendText/${encodeURIComponent(instanceName)}`, {
+async function evoSendText(tenantId: string, instanceName: string, number: string, text: string) {
+  let url = EVO_BASE_FALLBACK;
+  let key = process.env.EVOLUTION_API_KEY;
+
+  if (tenantId) {
+    const { data: tenant } = await supabase.from("tenants").select("evolutionApiUrl, evolutionApiKey").eq("id", tenantId).single();
+    if (tenant?.evolutionApiUrl && tenant?.evolutionApiKey) {
+      url = tenant.evolutionApiUrl.replace(/\/$/, "");
+      key = tenant.evolutionApiKey;
+    }
+  }
+
+  if (!key) throw new Error("EVOLUTION_API_KEY ausente ou não configurada");
+  const r = await fetch(`${url}/message/sendText/${encodeURIComponent(instanceName)}`, {
     method: "POST",
     headers: { apikey: key, "Content-Type": "application/json" },
     body: JSON.stringify({ number, text }),
@@ -66,7 +76,7 @@ async function applyAction(
     ctx.updates.status = act.value;
   } else if (act.type === "reply" && act.value) {
     try {
-      await evoSendText(ctx.instanceName, ctx.number, act.value);
+      await evoSendText(ctx.tenantId, ctx.instanceName, ctx.number, act.value);
       const rid = `auto_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
       await supabase.from("messages").upsert({
         id: rid,
@@ -312,7 +322,7 @@ async function runBridge(
 
   // 6) Enviar via WhatsApp
   const number = remoteJid.split("@")[0];
-  await evoSendText(instanceName, number, reply);
+  await evoSendText(tenantId, instanceName, number, reply);
 
   // 7) Registrar resposta do bot no Supabase
   const replyId = `bot_${Date.now()}`;
@@ -412,7 +422,7 @@ export const Route = createFileRoute("/api/public/evolution-webhook")({
   server: {
     handlers: {
       POST: async ({ request }) => {
-        let body: Record<string, unknown>;
+        let body: any;
         try { body = await request.json(); } catch { return new Response("invalid json", { status: 400 }); }
 
         const instanceName: string | undefined =

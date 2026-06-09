@@ -84,9 +84,14 @@ async function ensureTenantAndProfile(
         .single();
         
       if (tenantSnap) {
+        let tenant = tenantSnap as Tenant;
+        if (isMasterEmail(user.email) && tenant.plan !== "enterprise") {
+          tenant.plan = "enterprise";
+          await supabase.from("tenants").update({ plan: "enterprise" }).eq("id", tenant.id);
+        }
         return {
           profile,
-          tenant: tenantSnap as Tenant,
+          tenant,
         };
       }
       console.warn("[auth] perfil aponta para tenant inexistente; recriando workspace", {
@@ -134,7 +139,10 @@ async function ensureTenantAndProfile(
       role: invitedRole,
     };
     
-    await supabase.from("users").upsert({ ...profile, updated_at: new Date().toISOString() });
+    await supabase.from("users").upsert(
+      { ...profile, updated_at: new Date().toISOString() },
+      { onConflict: "uid" }
+    );
 
     try {
       const { data: tSnap, error } = await supabase
@@ -147,14 +155,17 @@ async function ensureTenantAndProfile(
       
       tenant = tSnap as Tenant;
       
-      await supabase.from("tenant_members").upsert({
-        uid: user.id,
-        tenantId: tenant.id,
-        email: profile.email,
-        displayName: profile.displayName,
-        role: invitedRole,
-        joinedAt: new Date().toISOString(),
-      });
+      await supabase.from("tenant_members").upsert(
+        {
+          uid: user.id,
+          tenantId: tenant.id,
+          email: profile.email,
+          displayName: profile.displayName,
+          role: invitedRole,
+          joinedAt: new Date().toISOString(),
+        },
+        { onConflict: "uid,tenantId" }
+      );
       
       if (inviteDocId) {
         await supabase.from("invites").delete().eq("id", inviteDocId);
@@ -171,7 +182,7 @@ async function ensureTenantAndProfile(
     id: tenantId,
     name: companyHint || user.user_metadata?.displayName || user.email?.split("@")[0] || "Workspace",
     ownerId: user.id,
-    plan: "trial",
+    plan: isMasterEmail(user.email) ? "enterprise" : "trial",
     status: "active",
     createdAt: new Date().toISOString(),
   };
@@ -183,16 +194,25 @@ async function ensureTenantAndProfile(
     role: "owner",
   };
   
-  await supabase.from("users").upsert({ ...profile, updated_at: new Date().toISOString() });
-  await supabase.from("tenants").upsert({ ...tenant, updated_at: new Date().toISOString() });
-  await supabase.from("tenant_members").upsert({
-    uid: user.id,
-    tenantId: tenant.id,
-    email: profile.email,
-    displayName: profile.displayName,
-    role: "owner",
-    joinedAt: new Date().toISOString(),
-  });
+  await supabase.from("users").upsert(
+    { ...profile, updated_at: new Date().toISOString() },
+    { onConflict: "uid" }
+  );
+  await supabase.from("tenants").upsert(
+    { ...tenant, updated_at: new Date().toISOString() },
+    { onConflict: "id" }
+  );
+  await supabase.from("tenant_members").upsert(
+    {
+      uid: user.id,
+      tenantId: tenant.id,
+      email: profile.email,
+      displayName: profile.displayName,
+      role: "owner",
+      joinedAt: new Date().toISOString(),
+    },
+    { onConflict: "uid,tenantId" }
+  );
 
   return { profile, tenant };
 }

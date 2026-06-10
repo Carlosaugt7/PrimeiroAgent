@@ -1,14 +1,19 @@
 import { createFileRoute, Outlet, useNavigate } from "@tanstack/react-router";
 import { useEffect } from "react";
 import { AppSidebar } from "@/components/app/AppSidebar";
-import { AppStoreProvider } from "@/lib/app-store";
+import { AppStoreProvider, useAppStore } from "@/lib/app-store";
 import { useAuth } from "@/lib/auth";
-import { Loader2, LogOut, Search } from "lucide-react";
+import { Loader2, LogOut, Search, RefreshCw } from "lucide-react";
 import {
-  DropdownMenu, DropdownMenuContent, DropdownMenuItem,
-  DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger,
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Button } from "@/components/ui/button";
 
 export const Route = createFileRoute("/app")({
   head: () => ({ meta: [{ title: "Console — AgentHub AI" }] }),
@@ -36,21 +41,40 @@ function AppLayout() {
     return (
       <div className="min-h-screen grid place-items-center p-6">
         <div className="max-w-md text-center space-y-4">
-          <p className="font-display text-xl font-semibold">Não foi possível carregar seu workspace</p>
+          <p className="font-display text-xl font-semibold">
+            Não foi possível carregar seu workspace
+          </p>
           <p className="text-sm text-muted-foreground">
             Verifique sua conexão ou as permissões do banco. Se persistir, saia e entre novamente.
           </p>
           <div className="flex gap-2 justify-center">
-            <button onClick={() => location.reload()} className="px-4 py-2 rounded-lg bg-secondary text-sm">Recarregar</button>
-            <button onClick={async () => { await signOut(); navigate({ to: "/auth" }); }} className="px-4 py-2 rounded-lg bg-destructive text-destructive-foreground text-sm">Sair</button>
+            <button
+              onClick={() => location.reload()}
+              className="px-4 py-2 rounded-lg bg-secondary text-sm"
+            >
+              Recarregar
+            </button>
+            <button
+              onClick={async () => {
+                await signOut();
+                navigate({ to: "/auth" });
+              }}
+              className="px-4 py-2 rounded-lg bg-destructive text-destructive-foreground text-sm"
+            >
+              Sair
+            </button>
           </div>
         </div>
       </div>
     );
   }
 
-
-  const initials = (profile.displayName || profile.email).split(/[\s@]/).filter(Boolean).slice(0, 2).map((s) => s[0]?.toUpperCase()).join("");
+  const initials = (profile.displayName || profile.email)
+    .split(/[\s@]/)
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((s) => s[0]?.toUpperCase())
+    .join("");
 
   return (
     <AppStoreProvider>
@@ -80,10 +104,15 @@ function AppLayout() {
                   <p className="text-xs text-muted-foreground truncate">{profile.email}</p>
                 </DropdownMenuLabel>
                 <DropdownMenuSeparator />
-                <DropdownMenuItem onClick={() => navigate({ to: "/app/settings" })}>Configurações</DropdownMenuItem>
+                <DropdownMenuItem onClick={() => navigate({ to: "/app/settings" })}>
+                  Configurações
+                </DropdownMenuItem>
                 <DropdownMenuSeparator />
                 <DropdownMenuItem
-                  onClick={async () => { await signOut(); navigate({ to: "/auth" }); }}
+                  onClick={async () => {
+                    await signOut();
+                    navigate({ to: "/auth" });
+                  }}
                   className="text-destructive"
                 >
                   <LogOut className="size-4 mr-2" /> Sair
@@ -96,6 +125,51 @@ function AppLayout() {
           </main>
         </div>
       </div>
+      <GlobalQrCodeDialog />
     </AppStoreProvider>
+  );
+}
+
+function GlobalQrCodeDialog() {
+  const { activeQrFor, activeQrBase64, activeQrLoading, openQr, closeQr } = useAppStore();
+
+  return (
+    <Dialog
+      open={!!activeQrFor}
+      onOpenChange={(o) => {
+        if (!o) closeQr();
+      }}
+    >
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>Conectar WhatsApp: {activeQrFor}</DialogTitle>
+        </DialogHeader>
+        <div className="py-3 text-center space-y-3">
+          {activeQrLoading || !activeQrBase64 ? (
+            <div className="h-64 grid place-items-center">
+              <Loader2 className="size-8 animate-spin text-muted-foreground" />
+            </div>
+          ) : (
+            <img
+              src={activeQrBase64}
+              alt="QR Code WhatsApp"
+              className="mx-auto rounded-lg bg-white p-2 max-w-[280px]"
+            />
+          )}
+          <p className="text-xs text-muted-foreground">
+            Abra o WhatsApp → Aparelhos conectados → Escaneie o QR Code.
+          </p>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => activeQrFor && openQr(activeQrFor)}
+            disabled={activeQrLoading}
+          >
+            <RefreshCw className={`size-3.5 ${activeQrLoading ? "animate-spin" : ""}`} /> Gerar novo
+            QR
+          </Button>
+        </div>
+      </DialogContent>
+    </Dialog>
   );
 }

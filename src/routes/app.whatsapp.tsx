@@ -24,6 +24,7 @@ import {
   restartInstance,
 } from "@/lib/evolution.functions";
 import { useAuth } from "@/lib/auth";
+import { useAppStore } from "@/lib/app-store";
 import { toast } from "sonner";
 
 export const Route = createFileRoute("/app/whatsapp")({ component: Page });
@@ -56,6 +57,7 @@ function statusBadge(state: string) {
 
 function Page() {
   const { tenant, isMaster } = useAuth();
+  const { openQr } = useAppStore();
   const list = useServerFn(listInstances);
   const create = useServerFn(createInstance);
   const connect = useServerFn(connectInstance);
@@ -70,9 +72,6 @@ function Page() {
   const [creating, setCreating] = useState(false);
   const [newName, setNewName] = useState("");
   const [openCreate, setOpenCreate] = useState(false);
-  const [qrFor, setQrFor] = useState<string | null>(null);
-  const [qrBase64, setQrBase64] = useState<string | null>(null);
-  const [qrLoading, setQrLoading] = useState(false);
 
   const refresh = useCallback(async () => {
     if (!tenant) return;
@@ -150,37 +149,7 @@ function Page() {
     refresh();
   }, [refresh]);
 
-  useEffect(() => {
-    if (!tenant?.id || !qrFor) return;
-    const iv = setInterval(async () => {
-      try {
-        const r = await state({ data: { tenantId: tenant.id, instanceName: qrFor } });
-        if (r.state.toLowerCase() === "open") {
-          toast.success("WhatsApp conectado!");
-          setQrFor(null);
-          setQrBase64(null);
-          refresh();
-        }
-      } catch {
-        /* ignore */
-      }
-    }, 3000);
-    return () => clearInterval(iv);
-  }, [qrFor, refresh, state]);
-
-  const openQr = async (name: string) => {
-    setQrFor(name);
-    setQrBase64(null);
-    setQrLoading(true);
-    try {
-      const r = await connect({ data: { tenantId: tenant?.id || "", instanceName: name } });
-      setQrBase64(r.base64);
-    } catch (error) {
-      toast.error(messageFromError(error, "Falha no QR"));
-    } finally {
-      setQrLoading(false);
-    }
-  };
+  // A verificação periódica de conexão e a geração de QR Code agora são tratadas globalmente na app-store
 
   const handleCreate = async () => {
     if (!/^[a-zA-Z0-9_-]{3,40}$/.test(newName)) {
@@ -360,46 +329,6 @@ function Page() {
           ))}
         </div>
       )}
-
-      <Dialog
-        open={!!qrFor}
-        onOpenChange={(o) => {
-          if (!o) {
-            setQrFor(null);
-            setQrBase64(null);
-          }
-        }}
-      >
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Conectar: {qrFor}</DialogTitle>
-          </DialogHeader>
-          <div className="py-3 text-center space-y-3">
-            {qrLoading || !qrBase64 ? (
-              <div className="h-64 grid place-items-center">
-                <Loader2 className="size-8 animate-spin text-muted-foreground" />
-              </div>
-            ) : (
-              <img
-                src={qrBase64}
-                alt="QR Code WhatsApp"
-                className="mx-auto rounded-lg bg-white p-2 max-w-[280px]"
-              />
-            )}
-            <p className="text-xs text-muted-foreground">
-              Abra o WhatsApp → Aparelhos conectados → Escaneie o QR Code.
-            </p>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => qrFor && openQr(qrFor)}
-              disabled={qrLoading}
-            >
-              <RefreshCw className="size-3.5" /> Gerar novo QR
-            </Button>
-          </div>
-        </DialogContent>
-      </Dialog>
     </div>
   );
 }

@@ -141,9 +141,10 @@ create table public.llm_providers (
   id text primary key,
   "tenantId" text not null references public.tenants(id) on delete cascade,
   kind text not null,
-  label text,
+  name text not null,
   "apiKey" text,
   "baseUrl" text,
+  models jsonb default '[]'::jsonb,
   "createdAt" timestamptz default now()
 );
 

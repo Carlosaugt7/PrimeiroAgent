@@ -1,5 +1,11 @@
 import "./lib/error-capture";
 
+// Polyfill WebSocket for Node.js < 22 (required by Supabase)
+if (typeof globalThis.WebSocket === "undefined") {
+  const ws = await import("ws");
+  globalThis.WebSocket = (ws.default ?? ws) as any;
+}
+
 import { consumeLastCapturedError } from "./lib/error-capture";
 import { renderErrorPage } from "./lib/error-page";
 

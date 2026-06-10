@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Sparkles, Loader2 } from "lucide-react";
+import { Sparkles, Loader2, Eye, EyeOff } from "lucide-react";
 
 export const Route = createFileRoute("/auth")({
   head: () => ({ meta: [{ title: "Entrar — AgentHub AI" }] }),
@@ -28,28 +28,42 @@ function AuthPage() {
   const [company, setCompany] = useState("");
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
+  const [showPassword, setShowPassword] = useState(false);
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setErr(null); setBusy(true);
+    setErr(null);
+    setBusy(true);
     try {
       if (mode === "login") await signInEmail(email, password);
       else await signUpEmail(email, password, name, company);
       navigate({ to: "/app" });
     } catch (e: any) {
       setErr(e?.message ?? "Falha na autenticação");
-    } finally { setBusy(false); }
+    } finally {
+      setBusy(false);
+    }
   };
 
   const google = async () => {
-    setErr(null); setBusy(true);
-    try { await signInGoogle(); navigate({ to: "/app" }); }
-    catch (e: any) { setErr(e?.message ?? "Falha no Google"); }
-    finally { setBusy(false); }
+    setErr(null);
+    setBusy(true);
+    try {
+      await signInGoogle();
+      navigate({ to: "/app" });
+    } catch (e: any) {
+      setErr(e?.message ?? "Falha no Google");
+    } finally {
+      setBusy(false);
+    }
   };
 
   if (loading) {
-    return <div className="min-h-screen grid place-items-center"><Loader2 className="animate-spin size-6 text-muted-foreground" /></div>;
+    return (
+      <div className="min-h-screen grid place-items-center">
+        <Loader2 className="animate-spin size-6 text-muted-foreground" />
+      </div>
+    );
   }
 
   return (
@@ -59,11 +73,15 @@ function AuthPage() {
           <div className="size-9 rounded-lg bg-gradient-primary grid place-items-center shadow-glow">
             <Sparkles className="size-4 text-primary-foreground" />
           </div>
-          <span className="font-display font-bold text-xl">AgentHub<span className="text-gradient"> AI</span></span>
+          <span className="font-display font-bold text-xl">
+            AgentHub<span className="text-gradient"> AI</span>
+          </span>
         </Link>
         <div>
           <h1 className="font-display text-4xl font-bold leading-tight">
-            Agentes de IA<br />para WhatsApp em minutos.
+            Agentes de IA
+            <br />
+            para WhatsApp em minutos.
           </h1>
           <p className="text-muted-foreground mt-4 max-w-md">
             Multi-tenant, multi-LLM, integração nativa com Evolution API. Sem código, sem terminal.
@@ -86,7 +104,9 @@ function AuthPage() {
             </TabsContent>
             <TabsContent value="signup">
               <h2 className="font-display text-2xl font-bold mb-1">Crie sua workspace</h2>
-              <p className="text-sm text-muted-foreground mb-6">Você terá 14 dias grátis no plano Trial.</p>
+              <p className="text-sm text-muted-foreground mb-6">
+                Você terá 14 dias grátis no plano Trial.
+              </p>
             </TabsContent>
 
             <form onSubmit={submit} className="space-y-4">
@@ -94,21 +114,63 @@ function AuthPage() {
                 <>
                   <div>
                     <Label htmlFor="name">Seu nome</Label>
-                    <Input id="name" value={name} onChange={(e) => setName(e.target.value)} required className="mt-1" />
+                    <Input
+                      id="name"
+                      value={name}
+                      onChange={(e) => setName(e.target.value)}
+                      required
+                      className="mt-1"
+                    />
                   </div>
                   <div>
                     <Label htmlFor="company">Empresa</Label>
-                    <Input id="company" value={company} onChange={(e) => setCompany(e.target.value)} required className="mt-1" />
+                    <Input
+                      id="company"
+                      value={company}
+                      onChange={(e) => setCompany(e.target.value)}
+                      required
+                      className="mt-1"
+                      autoComplete="off"
+                    />
                   </div>
                 </>
               )}
               <div>
                 <Label htmlFor="email">E-mail</Label>
-                <Input id="email" type="email" value={email} onChange={(e) => setEmail(e.target.value)} required className="mt-1" />
+                <Input
+                  id="email"
+                  type="email"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  required
+                  className="mt-1"
+                  autoComplete="off"
+                  data-1p-ignore
+                />
               </div>
               <div>
                 <Label htmlFor="password">Senha</Label>
-                <Input id="password" type="password" value={password} onChange={(e) => setPassword(e.target.value)} required minLength={6} className="mt-1" />
+                <div className="relative mt-1">
+                  <Input
+                    id="password"
+                    type={showPassword ? "text" : "password"}
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    required
+                    minLength={6}
+                    className="pr-10"
+                    autoComplete="new-password"
+                    data-1p-ignore
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowPassword(!showPassword)}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground focus:outline-none"
+                    aria-label={showPassword ? "Ocultar senha" : "Mostrar senha"}
+                  >
+                    {showPassword ? <EyeOff className="size-4" /> : <Eye className="size-4" />}
+                  </button>
+                </div>
               </div>
 
               {err && <p className="text-xs text-destructive">{err}</p>}
@@ -120,11 +182,21 @@ function AuthPage() {
             </form>
 
             <div className="relative my-6">
-              <div className="absolute inset-0 flex items-center"><span className="w-full border-t border-border" /></div>
-              <div className="relative flex justify-center text-xs"><span className="bg-background px-2 text-muted-foreground">ou</span></div>
+              <div className="absolute inset-0 flex items-center">
+                <span className="w-full border-t border-border" />
+              </div>
+              <div className="relative flex justify-center text-xs">
+                <span className="bg-background px-2 text-muted-foreground">ou</span>
+              </div>
             </div>
 
-            <Button type="button" variant="outline" className="w-full" onClick={google} disabled={busy}>
+            <Button
+              type="button"
+              variant="outline"
+              className="w-full"
+              onClick={google}
+              disabled={busy}
+            >
               Continuar com Google
             </Button>
           </Tabs>

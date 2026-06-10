@@ -35,6 +35,8 @@ drop table if exists public.scheduled_messages cascade;
 drop table if exists public.invoices cascade;
 drop table if exists public.billing_intents cascade;
 drop table if exists public.audit cascade;
+drop table if exists public.campaign_recipients cascade;
+drop table if exists public.campaigns cascade;
 
 -- =====================================================
 -- PASSO 2: RECRIAR TABELAS COM ESTRUTURA CORRETA
@@ -42,7 +44,7 @@ drop table if exists public.audit cascade;
 
 -- 1. Tenants (Workspaces)
 create table public.tenants (
-  id text primary key,
+  id text primary key default gen_random_uuid()::text,
   name text not null,
   "ownerId" text not null,
   plan text default 'trial',
@@ -94,7 +96,7 @@ create table public.invites (
 
 -- 6. Instances (WhatsApp)
 create table public.instances (
-  id text primary key,
+  id text primary key default gen_random_uuid()::text,
   "tenantId" text not null references public.tenants(id) on delete cascade,
   name text not null,
   status text default 'offline',
@@ -109,7 +111,7 @@ create table public.instance_index (
 
 -- 8. Conversations
 create table public.conversations (
-  id text primary key,
+  id text primary key default gen_random_uuid()::text,
   "tenantId" text not null references public.tenants(id) on delete cascade,
   "instanceName" text not null,
   "contactName" text,
@@ -125,7 +127,7 @@ create table public.conversations (
 
 -- 9. Messages
 create table public.messages (
-  id text primary key,
+  id text primary key default gen_random_uuid()::text,
   "tenantId" text not null references public.tenants(id) on delete cascade,
   "conversationId" text not null references public.conversations(id) on delete cascade,
   text text,
@@ -138,7 +140,7 @@ create table public.messages (
 
 -- 10. LLM Providers
 create table public.llm_providers (
-  id text primary key,
+  id text primary key default gen_random_uuid()::text,
   "tenantId" text not null references public.tenants(id) on delete cascade,
   kind text not null,
   name text not null,
@@ -150,7 +152,7 @@ create table public.llm_providers (
 
 -- 11. Agents
 create table public.agents (
-  id text primary key,
+  id text primary key default gen_random_uuid()::text,
   "tenantId" text not null references public.tenants(id) on delete cascade,
   name text not null,
   "whatsappInstanceId" text,
@@ -164,7 +166,7 @@ create table public.agents (
 
 -- 12. Knowledge (Bases RAG)
 create table public.knowledge (
-  id text primary key,
+  id text primary key default gen_random_uuid()::text,
   "tenantId" text not null references public.tenants(id) on delete cascade,
   "embedProviderId" text,
   "embedModel" text,
@@ -174,7 +176,7 @@ create table public.knowledge (
 
 -- 13. Knowledge Chunks
 create table public.knowledge_chunks (
-  id text primary key,
+  id text primary key default gen_random_uuid()::text,
   "knowledgeId" text not null references public.knowledge(id) on delete cascade,
   text text not null,
   embedding jsonb
@@ -182,7 +184,7 @@ create table public.knowledge_chunks (
 
 -- 14. Automations
 create table public.automations (
-  id text primary key,
+  id text primary key default gen_random_uuid()::text,
   "tenantId" text not null references public.tenants(id) on delete cascade,
   name text not null,
   enabled boolean default true,
@@ -195,7 +197,7 @@ create table public.automations (
 
 -- 15. AI Logs
 create table public.ai_logs (
-  id text primary key,
+  id text primary key default gen_random_uuid()::text,
   "tenantId" text not null references public.tenants(id) on delete cascade,
   "createdAt" timestamptz default now(),
   "agentId" text,
@@ -254,7 +256,7 @@ create table public.scheduled_messages (
 
 -- 19. Invoices
 create table public.invoices (
-  id text primary key,
+  id text primary key default gen_random_uuid()::text,
   "tenantId" text not null references public.tenants(id) on delete cascade,
   provider text,
   "externalId" text,
@@ -272,7 +274,7 @@ create table public.invoices (
 
 -- 20. Billing Intents
 create table public.billing_intents (
-  id text primary key,
+  id text primary key default gen_random_uuid()::text,
   "tenantId" text not null references public.tenants(id) on delete cascade,
   provider text,
   "planId" text,
@@ -440,6 +442,10 @@ create policy "camp_rec_all" on public.campaign_recipients for all to authentica
 insert into storage.buckets (id, name, public) values ('campaigns', 'campaigns', true) on conflict (id) do nothing;
 
 -- Criar políticas para o storage do bucket campaigns
+drop policy if exists "storage_campaigns_insert" on storage.objects;
+drop policy if exists "storage_campaigns_select" on storage.objects;
+drop policy if exists "storage_campaigns_delete" on storage.objects;
+
 create policy "storage_campaigns_insert" on storage.objects for insert to authenticated with check (bucket_id = 'campaigns');
 create policy "storage_campaigns_select" on storage.objects for select to public using (bucket_id = 'campaigns');
 create policy "storage_campaigns_delete" on storage.objects for delete to authenticated using (bucket_id = 'campaigns');
@@ -448,4 +454,21 @@ create policy "storage_campaigns_delete" on storage.objects for delete to authen
 -- PASSO 5: RECARREGAR CACHE DO SCHEMA
 -- =====================================================
 notify pgrst, 'reload schema';
+
+
+
+-- =====================================================
+-- PASSO 6: HABILITAR REALTIME NAS TABELAS
+-- =====================================================
+-- Drop publication to avoid errors if it already exists, or just alter it.
+begin;
+drop publication if exists supabase_realtime;
+create publication supabase_realtime;
+commit;
+
+alter publication supabase_realtime add table public.agents;
+alter publication supabase_realtime add table public.llm_providers;
+alter publication supabase_realtime add table public.conversations;
+alter publication supabase_realtime add table public.instances;
+alter publication supabase_realtime add table public.knowledge;
 

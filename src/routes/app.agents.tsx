@@ -1,5 +1,5 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useAppStore, type Persona } from "@/lib/app-store";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -53,16 +53,34 @@ const empty = {
 
 function AgentsList() {
   const { agents, providers, createAgent, deleteAgent } = useAppStore();
-  const [open, setOpen] = useState(false);
+  const [open, setOpen] = useState(() => localStorage.getItem("agentflow_draft_open") === "true");
   const [q, setQ] = useState("");
-  const [step, setStep] = useState<"basic" | "persona" | "prompt" | "model">("basic");
-  const [form, setForm] = useState(empty);
+  const [step, setStep] = useState<"basic" | "persona" | "prompt" | "model">(() => {
+    const s = localStorage.getItem("agentflow_draft_step");
+    return (s as any) || "basic";
+  });
+  const [form, setForm] = useState(() => {
+    const s = localStorage.getItem("agentflow_draft_form");
+    try { return s ? JSON.parse(s) : empty; } catch { return empty; }
+  });
   const [busy, setBusy] = useState(false);
+
+  // Auto-save draft
+  useEffect(() => {
+    localStorage.setItem("agentflow_draft_open", String(open));
+    localStorage.setItem("agentflow_draft_step", step);
+    localStorage.setItem("agentflow_draft_form", JSON.stringify(form));
+  }, [open, step, form]);
 
   const filtered = agents.filter((a) => a.name.toLowerCase().includes(q.toLowerCase()));
   const provider = providers.find((p) => p.id === form.providerId);
 
-  const reset = () => { setForm(empty); setStep("basic"); };
+  const reset = () => { 
+    setForm(empty); 
+    setStep("basic"); 
+    localStorage.removeItem("agentflow_draft_form");
+    localStorage.removeItem("agentflow_draft_step");
+  };
 
   const submit = async () => {
     if (!form.name.trim()) { toast.error("Informe o nome do agente"); setStep("basic"); return; }

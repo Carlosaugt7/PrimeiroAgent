@@ -1,5 +1,5 @@
 # --- ESTÁGIO 1: BUILD ---
-FROM node:20-alpine AS builder
+FROM node:22-alpine AS builder
 
 # Instala dependências nativas necessárias para compilação (se houver)
 RUN apk add --no-cache libc6-compat
@@ -28,7 +28,7 @@ ENV NODE_ENV=production
 RUN npm run build
 
 # --- ESTÁGIO 2: RUNNER ---
-FROM node:20-alpine AS runner
+FROM node:22-alpine AS runner
 
 WORKDIR /app
 

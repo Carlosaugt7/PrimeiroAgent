@@ -10,7 +10,7 @@ WORKDIR /app
 COPY package*.json bun.lock* ./
 
 # Instala todas as dependências (incluindo devDependencies necessárias para o build)
-RUN npm ci
+RUN npm ci --legacy-peer-deps
 
 # Copia todo o código-fonte do projeto
 COPY . .

@@ -35,6 +35,7 @@ import { Route as AppAutomationsRouteImport } from './routes/app.automations'
 import { Route as AppAuditRouteImport } from './routes/app.audit'
 import { Route as AppAgentsRouteImport } from './routes/app.agents'
 import { Route as AppAdminRouteImport } from './routes/app.admin'
+import { Route as AppAgentsIndexRouteImport } from './routes/app.agents.index'
 import { Route as AppAgentsIdRouteImport } from './routes/app.agents.$id'
 import { Route as ApiPublicMpWebhookRouteImport } from './routes/api/public/mp-webhook'
 import { Route as ApiPublicEvolutionWebhookRouteImport } from './routes/api/public/evolution-webhook'
@@ -171,6 +172,11 @@ const AppAdminRoute = AppAdminRouteImport.update({
   path: '/admin',
   getParentRoute: () => AppRoute,
 } as any)
+const AppAgentsIndexRoute = AppAgentsIndexRouteImport.update({
+  id: '/',
+  path: '/',
+  getParentRoute: () => AppAgentsRoute,
+} as any)
 const AppAgentsIdRoute = AppAgentsIdRouteImport.update({
   id: '/$id',
   path: '/$id',
@@ -230,12 +236,12 @@ export interface FileRoutesByFullPath {
   '/api/public/evolution-webhook': typeof ApiPublicEvolutionWebhookRoute
   '/api/public/mp-webhook': typeof ApiPublicMpWebhookRoute
   '/app/agents/$id': typeof AppAgentsIdRoute
+  '/app/agents/': typeof AppAgentsIndexRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/auth': typeof AuthRoute
   '/app/admin': typeof AppAdminRoute
-  '/app/agents': typeof AppAgentsRouteWithChildren
   '/app/audit': typeof AppAuditRoute
   '/app/automations': typeof AppAutomationsRoute
   '/app/billing': typeof AppBillingRoute
@@ -262,6 +268,7 @@ export interface FileRoutesByTo {
   '/api/public/evolution-webhook': typeof ApiPublicEvolutionWebhookRoute
   '/api/public/mp-webhook': typeof ApiPublicMpWebhookRoute
   '/app/agents/$id': typeof AppAgentsIdRoute
+  '/app/agents': typeof AppAgentsIndexRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -296,6 +303,7 @@ export interface FileRoutesById {
   '/api/public/evolution-webhook': typeof ApiPublicEvolutionWebhookRoute
   '/api/public/mp-webhook': typeof ApiPublicMpWebhookRoute
   '/app/agents/$id': typeof AppAgentsIdRoute
+  '/app/agents/': typeof AppAgentsIndexRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -331,12 +339,12 @@ export interface FileRouteTypes {
     | '/api/public/evolution-webhook'
     | '/api/public/mp-webhook'
     | '/app/agents/$id'
+    | '/app/agents/'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
     | '/auth'
     | '/app/admin'
-    | '/app/agents'
     | '/app/audit'
     | '/app/automations'
     | '/app/billing'
@@ -363,6 +371,7 @@ export interface FileRouteTypes {
     | '/api/public/evolution-webhook'
     | '/api/public/mp-webhook'
     | '/app/agents/$id'
+    | '/app/agents'
   id:
     | '__root__'
     | '/'
@@ -396,6 +405,7 @@ export interface FileRouteTypes {
     | '/api/public/evolution-webhook'
     | '/api/public/mp-webhook'
     | '/app/agents/$id'
+    | '/app/agents/'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -592,6 +602,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppAdminRouteImport
       parentRoute: typeof AppRoute
     }
+    '/app/agents/': {
+      id: '/app/agents/'
+      path: '/'
+      fullPath: '/app/agents/'
+      preLoaderRoute: typeof AppAgentsIndexRouteImport
+      parentRoute: typeof AppAgentsRoute
+    }
     '/app/agents/$id': {
       id: '/app/agents/$id'
       path: '/$id'
@@ -632,10 +649,12 @@ declare module '@tanstack/react-router' {
 
 interface AppAgentsRouteChildren {
   AppAgentsIdRoute: typeof AppAgentsIdRoute
+  AppAgentsIndexRoute: typeof AppAgentsIndexRoute
 }
 
 const AppAgentsRouteChildren: AppAgentsRouteChildren = {
   AppAgentsIdRoute: AppAgentsIdRoute,
+  AppAgentsIndexRoute: AppAgentsIndexRoute,
 }
 
 const AppAgentsRouteWithChildren = AppAgentsRoute._addFileChildren(

@@ -10,6 +10,8 @@ import {
   Search,
   ShieldAlert,
   Smartphone,
+  Edit,
+  Trash,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -106,6 +108,31 @@ function Master() {
     return session?.access_token;
   };
 
+  const editTenant = async (id: string, currentName?: string) => {
+    const newName = window.prompt("Novo nome do cliente (workspace):", currentName || "");
+    if (!newName || newName === currentName) return;
+    try {
+      const { error } = await supabase.from("tenants").update({ name: newName }).eq("id", id);
+      if (error) throw error;
+      setRows((prev) => prev.map((r) => (r.id === id ? { ...r, name: newName } : r)));
+      toast.success("Workspace atualizada com sucesso");
+    } catch (e) {
+      toast.error(messageFromError(e, "Falha ao atualizar"));
+    }
+  };
+
+  const deleteTenant = async (id: string, name?: string) => {
+    if (!window.confirm(`Tem certeza que deseja excluir a workspace ${name || id}?\nEsta ação não pode ser desfeita e excluirá todos os dados atrelados.`)) return;
+    try {
+      const { error } = await supabase.from("tenants").delete().eq("id", id);
+      if (error) throw error;
+      setRows((prev) => prev.filter((r) => r.id !== id));
+      toast.success("Workspace excluída com sucesso");
+    } catch (e) {
+      toast.error(messageFromError(e, "Falha ao excluir"));
+    }
+  };
+
   return (
     <div className="space-y-6">
       <div className="flex items-start justify-between gap-3 flex-wrap">
@@ -165,7 +192,7 @@ function Master() {
           <p className="p-6 text-sm text-muted-foreground">Nenhum tenant encontrado.</p>
         ) : (
           filtered.map((t) => (
-            <div key={t.id} className="p-4 flex items-center gap-3">
+            <div key={t.id} className="p-4 flex items-center gap-3 hover:bg-muted/50 transition-colors">
               <div className="size-10 rounded-xl bg-secondary flex items-center justify-center">
                 <Building2 className="size-5 text-muted-foreground" />
               </div>
@@ -193,6 +220,13 @@ function Master() {
                 </div>
               </div>
               <div className="flex items-center gap-2">
+                <Button size="icon" variant="ghost" className="text-muted-foreground hover:text-foreground" onClick={() => editTenant(t.id, t.name)} title="Editar workspace">
+                  <Edit className="size-4" />
+                </Button>
+                <Button size="icon" variant="ghost" className="text-muted-foreground hover:text-destructive" onClick={() => deleteTenant(t.id, t.name)} title="Excluir workspace">
+                  <Trash className="size-4" />
+                </Button>
+                <div className="w-[1px] h-6 bg-border mx-1" />
                 <Button size="sm" variant="outline" onClick={() => openInstances(t.id)}>
                   <Smartphone className="size-4" /> Instâncias
                 </Button>

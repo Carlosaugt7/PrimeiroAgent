@@ -42,6 +42,17 @@ interface KnowDoc {
   createdAt: string;
 }
 
+// Gera UUID compatível inclusive em contextos HTTP (localhost sem HTTPS)
+function generateId(): string {
+  if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
+    return crypto.randomUUID();
+  }
+  return "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(/[xy]/g, (c) => {
+    const r = (Math.random() * 16) | 0;
+    return (c === "x" ? r : (r & 0x3) | 0x8).toString(16);
+  });
+}
+
 // Divide texto em chunks de ~chunkSize chars com overlap
 function chunkText(text: string, chunkSize = 800, overlap = 120): string[] {
   const clean = text
@@ -65,6 +76,7 @@ function chunkText(text: string, chunkSize = 800, overlap = 120): string[] {
       if (cut > chunkSize * 0.5) end = i + cut + 1;
     }
     out.push(clean.slice(i, end).trim());
+    if (end >= clean.length) break;
     i = end - overlap;
     if (i <= 0) break;
   }
@@ -88,9 +100,16 @@ function Page() {
   const [ingesting, setIngesting] = useState(false);
   const [progress, setProgress] = useState("");
 
-  // Apenas provedores OpenAI-compatíveis suportam /embeddings facilmente
+  // Apenas provedores que REALMENTE possuem endpoint de embeddings
+  // DeepSeek e Groq NÃO suportam embeddings via API direta
+  const EMBED_CAPABLE_KINDS = ["openai", "openrouter", "google", "custom"];
   const embedProviders = providers.filter((p) =>
-    ["openai", "openrouter", "deepseek", "groq", "custom"].includes(p.kind),
+    EMBED_CAPABLE_KINDS.includes(p.kind),
+  );
+
+  // Provedores sem suporte a embeddings (para exibir aviso)
+  const nonEmbedProviders = providers.filter(
+    (p) => !EMBED_CAPABLE_KINDS.includes(p.kind),
   );
 
   useEffect(() => {
@@ -163,7 +182,7 @@ function Page() {
     }
 
     setIngesting(true);
-    const docId = crypto.randomUUID();
+    const docId = generateId();
     try {
       let finalDocText = text;
 
@@ -183,6 +202,7 @@ function Page() {
         const slice = chunks.slice(i, i + BATCH);
         const r = await embed({
           data: {
+            kind: provider.kind,
             baseUrl: provider.baseUrl,
             apiKey: provider.apiKey,
             model: embedModel,
@@ -231,7 +251,16 @@ function Page() {
       setProgress("");
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : "Falha na ingestão";
-      toast.error(msg);
+      // Mensagens mais claras para erros comuns
+      if (msg.includes("404") || msg.includes("not found")) {
+        toast.error("Modelo de embedding não encontrado neste provedor. Verifique o nome do modelo.");
+      } else if (msg.includes("401") || msg.includes("403") || msg.includes("Unauthorized")) {
+        toast.error("API Key inválida ou sem permissão para embeddings. Verifique nas configurações do provedor.");
+      } else if (msg.includes("fetch") || msg.includes("network") || msg.includes("ECONNREFUSED")) {
+        toast.error("Falha de rede ao conectar com o provedor. Verifique sua conexão com a internet.");
+      } else {
+        toast.error(msg);
+      }
     } finally {
       setIngesting(false);
     }
@@ -265,7 +294,7 @@ function Page() {
               <Upload className="size-4" /> Adicionar documento
             </Button>
           </DialogTrigger>
-          <DialogContent className="max-w-2xl">
+          <DialogContent className="max-w-2xl" aria-describedby={undefined}>
             <DialogHeader>
               <DialogTitle>Adicionar documento à base</DialogTitle>
             </DialogHeader>
@@ -280,10 +309,20 @@ function Page() {
                   />
                 </div>
                 <div className="space-y-1.5">
-                  <Label>Provedor (embeddings)</Label>
-                  <Select value={providerId} onValueChange={setProviderId}>
+                  <Label>Provedor de embeddings</Label>
+                  <Select value={providerId} onValueChange={(val) => {
+                    setProviderId(val);
+                    const p = providers.find((x) => x.id === val);
+                    if (p?.kind === "google") {
+                      setEmbedModel("text-embedding-004");
+                    } else if (p?.kind === "openrouter") {
+                      setEmbedModel("openai/text-embedding-3-small");
+                    } else {
+                      setEmbedModel("text-embedding-3-small");
+                    }
+                  }}>
                     <SelectTrigger>
-                      <SelectValue placeholder="Selecione..." />
+                      <SelectValue placeholder="Selecione provedor..." />
                     </SelectTrigger>
                     <SelectContent>
                       {embedProviders.map((p) => (
@@ -293,6 +332,11 @@ function Page() {
                       ))}
                     </SelectContent>
                   </Select>
+                  {nonEmbedProviders.length > 0 && (
+                    <p className="text-[10px] text-amber-500">
+                      {nonEmbedProviders.map((p) => p.name).join(", ")} não aparecem aqui pois não suportam embeddings via API.
+                    </p>
+                  )}
                 </div>
               </div>
               <div className="space-y-1.5">
@@ -303,7 +347,19 @@ function Page() {
                   placeholder="text-embedding-3-small"
                 />
                 <p className="text-xs text-muted-foreground">
-                  OpenAI: text-embedding-3-small (1536) ou text-embedding-3-large (3072).
+                  {(() => {
+                    const p = providers.find((x) => x.id === providerId);
+                    if (p?.kind === "google") {
+                      return "Google Gemini: recomendado text-embedding-004 (768 dimensões).";
+                    }
+                    if (p?.kind === "openrouter") {
+                      return "OpenRouter: ex: openai/text-embedding-3-small.";
+                    }
+                    if (p?.kind === "custom") {
+                      return "Custom: informe o modelo de embedding do seu provedor.";
+                    }
+                    return "OpenAI: text-embedding-3-small (1536) ou text-embedding-3-large (3072).";
+                  })()}
                 </p>
               </div>
               <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
@@ -372,9 +428,19 @@ function Page() {
       </div>
 
       {embedProviders.length === 0 && (
-        <div className="rounded-xl border border-amber-500/30 bg-amber-500/10 p-3 text-sm">
-          Configure um provedor OpenAI-compatível em <strong>LLM Providers</strong> para habilitar
-          embeddings.
+        <div className="rounded-xl border border-amber-500/30 bg-amber-500/10 p-4 text-sm space-y-2">
+          <p className="font-semibold text-amber-600">Nenhum provedor com suporte a embeddings encontrado</p>
+          <p>
+            Para indexar documentos, cadastre um provedor compatível em <strong>LLM Providers</strong>:
+          </p>
+          <ul className="list-disc ml-5 text-xs text-muted-foreground space-y-1">
+            <li><strong>Google Gemini</strong> — modelo <code>text-embedding-004</code></li>
+            <li><strong>OpenAI</strong> — modelo <code>text-embedding-3-small</code></li>
+            <li><strong>OpenRouter</strong> — modelo <code>openai/text-embedding-3-small</code></li>
+          </ul>
+          <p className="text-xs text-amber-500">
+            Nota: DeepSeek e Groq <strong>não suportam</strong> embeddings via API.
+          </p>
         </div>
       )}
 

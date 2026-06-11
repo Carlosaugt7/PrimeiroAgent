@@ -193,6 +193,7 @@ export const chatCompletion = createServerFn({ method: "POST" })
 // ============== Embeddings (OpenAI-compatível) ==============
 
 interface EmbedInput {
+  kind?: Kind;
   baseUrl: string;
   apiKey: string;
   model: string; // ex: "text-embedding-3-small"
@@ -208,11 +209,53 @@ export const embedTexts = createServerFn({ method: "POST" })
     return d;
   })
   .handler(async ({ data }) => {
-    const base = (data.baseUrl?.trim() || "https://api.openai.com/v1").replace(/\/$/, "");
+    // Validação: provedores sem suporte a embeddings
+    const NO_EMBED_KINDS = ["deepseek", "groq", "anthropic"];
+    if (data.kind && NO_EMBED_KINDS.includes(data.kind)) {
+      throw new Error(
+        `O provedor "${data.kind}" não possui endpoint de embeddings. ` +
+        `Use Google Gemini (text-embedding-004), OpenAI (text-embedding-3-small) ou OpenRouter.`
+      );
+    }
+
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 15000); // 15s timeout
+    const timeoutId = setTimeout(() => controller.abort(), 30000); // 30s timeout
 
     try {
+      if (data.kind === "google") {
+        const modelName = data.model.startsWith("models/") ? data.model : `models/${data.model}`;
+        const url = `https://generativelanguage.googleapis.com/v1beta/${modelName}:batchEmbedContents?key=${encodeURIComponent(data.apiKey)}`;
+        
+        const requests = data.texts.map((t) => ({
+          model: modelName,
+          content: { parts: [{ text: t }] }
+        }));
+
+        const r = await fetch(url, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ requests }),
+          signal: controller.signal,
+        });
+        clearTimeout(timeoutId);
+
+        if (!r.ok) {
+          const body = (await r.text()).slice(0, 400);
+          if (r.status === 404) {
+            throw new Error(
+              `Modelo "${data.model}" não encontrado no Google. Use "text-embedding-004".`
+            );
+          }
+          throw new Error(
+            `Google Embeddings respondeu com HTTP ${r.status}: ${body}`,
+          );
+        }
+        const j = (await r.json()) as { embeddings: { values: number[] }[] };
+        return { vectors: j.embeddings.map((x) => x.values) };
+      }
+
+      // OpenAI-compatível
+      const base = (data.baseUrl?.trim() || "https://api.openai.com/v1").replace(/\/$/, "");
       const r = await fetch(`${base}/embeddings`, {
         method: "POST",
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${data.apiKey}` },
@@ -222,16 +265,31 @@ export const embedTexts = createServerFn({ method: "POST" })
       clearTimeout(timeoutId);
 
       if (!r.ok) {
+        const body = (await r.text()).slice(0, 400);
+        if (r.status === 404) {
+          throw new Error(
+            `Endpoint /embeddings não encontrado em ${base}. ` +
+            `Este provedor pode não suportar embeddings.`
+          );
+        }
         throw new Error(
-          `Embeddings respondeu com HTTP ${r.status}: ${(await r.text()).slice(0, 400)}`,
+          `Embeddings respondeu com HTTP ${r.status}: ${body}`,
         );
       }
       const j = (await r.json()) as { data: { embedding: number[] }[] };
       return { vectors: j.data.map((x) => x.embedding) };
     } catch (e: unknown) {
       clearTimeout(timeoutId);
-      const msg = e instanceof Error ? e.message : "Falha ao gerar embeddings";
-      throw new Error(msg);
+      if (e instanceof Error && e.name === "AbortError") {
+        throw new Error("Timeout: o provedor demorou mais de 30 segundos para responder.");
+      }
+      const msg = e instanceof Error ? e.message : "Erro desconhecido";
+      // Se o erro já tem uma mensagem clara (das validações acima), repassa direto
+      if (msg.includes("não possui endpoint") || msg.includes("não encontrado") || msg.includes("Timeout")) {
+        throw new Error(msg);
+      }
+      const targetUrl = data.kind === "google" ? "Google API" : (data.baseUrl || "https://api.openai.com/v1");
+      throw new Error(`Falha ao gerar embeddings em ${targetUrl}: ${msg}`);
     }
   });
 
@@ -296,7 +354,7 @@ export const fetchWebpageText = createServerFn({ method: "POST" })
 
       return { text };
     } catch (e: unknown) {
-      const msg = e instanceof Error ? e.message : "Falha ao buscar conteúdo da página.";
-      throw new Error(msg);
+      const msg = e instanceof Error ? e.message : "Erro desconhecido";
+      throw new Error(`Falha de rede ao acessar a página (${data.url}): ${msg}`);
     }
   });

@@ -14,7 +14,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
-import { ArrowLeft, Bot, Save, Trash2 } from "lucide-react";
+import { ArrowLeft, Bot, Save, Trash2, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 
 export const Route = createFileRoute("/app/agents/$id")({
@@ -23,13 +23,18 @@ export const Route = createFileRoute("/app/agents/$id")({
 
 function AgentDetail() {
   const { id } = Route.useParams();
-  const { agents, providers, updateAgent, deleteAgent } = useAppStore();
+  const { agents, providers, updateAgent, deleteAgent, loading } = useAppStore();
   const navigate = useNavigate();
 
-  const agent = agents.find((a) => a.id === id);
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center p-12 min-h-[50vh]">
+        <Loader2 className="size-8 animate-spin text-muted-foreground" />
+      </div>
+    );
+  }
 
-  const [form, setForm] = useState<Partial<Agent>>(agent ?? {});
-  const [busy, setBusy] = useState(false);
+  const agent = agents.find((a) => a.id === id);
 
   if (!agent) {
     return (
@@ -50,6 +55,30 @@ function AgentDetail() {
     );
   }
 
+  return (
+    <AgentDetailForm
+      agent={agent}
+      providers={providers}
+      updateAgent={updateAgent}
+      deleteAgent={deleteAgent}
+      navigate={navigate}
+    />
+  );
+}
+
+interface AgentFormProps {
+  agent: Agent;
+  providers: any[];
+  updateAgent: (id: string, patch: Partial<Agent>) => Promise<void>;
+  deleteAgent: (id: string) => Promise<void>;
+  navigate: ReturnType<typeof useNavigate>;
+}
+
+function AgentDetailForm({ agent, providers, updateAgent, deleteAgent, navigate }: AgentFormProps) {
+  const id = agent.id;
+  const [form, setForm] = useState<Partial<Agent>>(agent);
+  const [busy, setBusy] = useState(false);
+
   const provider = providers.find((p) => p.id === form.providerId);
 
   const handleSave = async () => {
@@ -59,7 +88,9 @@ function AgentDetail() {
     }
     setBusy(true);
     try {
-      await updateAgent(id, form);
+      // Cria uma cópia limpa do patch sem id e sem tenantId para evitar erros de restrição no Supabase
+      const { id: _, tenantId: __, createdAt: ___, messages30d: ____, conversions30d: _____, ...cleanPatch } = form;
+      await updateAgent(id, cleanPatch);
       toast.success("Agente atualizado");
     } catch (e: unknown) {
       toast.error(e instanceof Error ? e.message : "Erro ao salvar");
@@ -336,7 +367,7 @@ function AgentDetail() {
                     <SelectValue placeholder={provider ? "Selecione..." : "Escolha um provedor"} />
                   </SelectTrigger>
                   <SelectContent>
-                    {provider?.models.map((m) => (
+                    {provider?.models.map((m: { id: string; contextWindow?: number }) => (
                       <SelectItem key={m.id} value={m.id}>
                         {m.id}
                         {m.contextWindow ? ` · ${m.contextWindow.toLocaleString()} tokens` : ""}

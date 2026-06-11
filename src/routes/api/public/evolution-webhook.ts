@@ -172,6 +172,24 @@ async function embedQuery(
   text: string,
 ): Promise<number[] | null> {
   try {
+    const kind = provider.kind;
+    if (kind === "google") {
+      const modelName = model.startsWith("models/") ? model : `models/${model}`;
+      const url = `https://generativelanguage.googleapis.com/v1beta/${modelName}:embedContent?key=${encodeURIComponent(provider.apiKey as string)}`;
+      const r = await fetch(url, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          model: modelName,
+          content: { parts: [{ text }] }
+        }),
+      });
+      if (!r.ok) return null;
+      const j = (await r.json()) as { embedding: { values: number[] } };
+      return j.embedding?.values ?? null;
+    }
+
+    // OpenAI-compatível
     const base = ((provider.baseUrl as string)?.trim() || "https://api.openai.com/v1").replace(
       /\/$/,
       "",
@@ -191,34 +209,69 @@ async function embedQuery(
 
 async function buildRagContext(
   tenantId: string,
-  providerId: string,
-  provider: Record<string, unknown>,
   userText: string,
 ): Promise<string | null> {
   const { data: docs } = await supabase.from("knowledge").select("*").eq("tenantId", tenantId);
-  if (!docs) return null;
+  if (!docs || docs.length === 0) return null;
 
-  const compatible = docs.filter((d: any) => d.embedProviderId === providerId && d.embedModel);
-  if (compatible.length === 0) return null;
+  const docsWithEmbed = docs.filter((d: any) => d.embedProviderId && d.embedModel);
+  if (docsWithEmbed.length === 0) return null;
 
-  const embedModel = compatible[0].embedModel as string;
-  const qvec = await embedQuery(provider, embedModel, userText);
-  if (!qvec) return null;
+  const groups: Record<string, { providerId: string; model: string; docs: any[] }> = {};
+  for (const d of docsWithEmbed) {
+    const key = `${d.embedProviderId}:::${d.embedModel}`;
+    if (!groups[key]) {
+      groups[key] = { providerId: d.embedProviderId, model: d.embedModel, docs: [] };
+    }
+    groups[key].docs.push(d);
+  }
 
   const scored: Array<{ text: string; score: number }> = [];
-  for (const d of compatible.slice(0, 10)) {
-    const { data: chunks } = await supabase
-      .from("knowledge_chunks")
+
+  for (const key of Object.keys(groups)) {
+    const group = groups[key];
+    const { data: embedProv } = await supabase
+      .from("llm_providers")
       .select("*")
-      .eq("knowledgeId", d.id)
-      .limit(200);
-    if (!chunks) continue;
-    for (const c of chunks) {
-      if (Array.isArray(c.embedding) && typeof c.text === "string") {
-        scored.push({ text: c.text, score: cosine(qvec, c.embedding as number[]) });
+      .eq("id", group.providerId)
+      .eq("tenantId", tenantId)
+      .single();
+    if (!embedProv || !embedProv.apiKey) continue;
+
+    const qvec = await embedQuery(embedProv, group.model, userText);
+    if (!qvec) continue;
+
+    for (const d of group.docs) {
+      const { data: chunks } = await supabase
+        .from("knowledge_chunks")
+        .select("*")
+        .eq("knowledgeId", d.id)
+        .limit(200);
+      if (!chunks) continue;
+      for (const c of chunks) {
+        let embeddingArray: number[] = [];
+        if (typeof c.embedding === "string") {
+          try {
+            embeddingArray = JSON.parse(c.embedding);
+          } catch {
+            embeddingArray = c.embedding
+              .replace(/[\[\]]/g, "")
+              .split(",")
+              .map(Number);
+          }
+        } else if (Array.isArray(c.embedding)) {
+          embeddingArray = c.embedding;
+        }
+
+        if (embeddingArray.length > 0 && typeof c.text === "string") {
+          scored.push({ text: c.text, score: cosine(qvec, embeddingArray) });
+        }
       }
     }
   }
+
+  if (scored.length === 0) return null;
+
   scored.sort((a, b) => b.score - a.score);
   const top = scored.slice(0, 4).filter((s) => s.score > 0.2);
   if (top.length === 0) return null;
@@ -418,7 +471,7 @@ async function runBridge(
   // 3) RAG opcional
   let systemPrompt: string = (agent.systemPrompt as string) ?? "Você é um assistente útil.";
   try {
-    const ragCtx = await buildRagContext(tenantId, agent.providerId, provider, userText);
+    const ragCtx = await buildRagContext(tenantId, userText);
     if (ragCtx) {
       systemPrompt = `${systemPrompt}\n\n## CONTEXTO RELEVANTE DA BASE DE CONHECIMENTO\nUse APENAS estas informações quando forem pertinentes. Se a resposta não estiver no contexto, diga que vai verificar.\n\n${ragCtx}`;
     }

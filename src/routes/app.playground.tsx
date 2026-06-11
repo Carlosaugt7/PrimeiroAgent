@@ -35,6 +35,8 @@ interface KnowMeta {
 interface Chunk {
   docId: string;
   docName: string;
+  embedProviderId?: string;
+  embedModel?: string;
   id: string;
   text: string;
   embedding: number[];
@@ -121,14 +123,9 @@ function PlaygroundPage() {
     };
   }, [tenant]);
 
-  // Carrega chunks dos docs cujo embedProviderId === provedor do agente
+  // Carrega todos os chunks dos docs do tenant
   useEffect(() => {
-    if (!tenant || !provider || knowDocs.length === 0) {
-      setChunks([]);
-      return;
-    }
-    const compatible = knowDocs.filter((d) => d.embedProviderId === provider.id);
-    if (compatible.length === 0) {
+    if (!tenant || knowDocs.length === 0) {
       setChunks([]);
       return;
     }
@@ -137,11 +134,11 @@ function PlaygroundPage() {
     (async () => {
       setChunksLoading(true);
       try {
-        const compatibleIds = compatible.map((d) => d.id);
+        const docIds = knowDocs.map((d) => d.id);
         const { data, error } = await supabase
           .from("knowledge_chunks")
-          .select("*, knowledge:knowledgeId(name)")
-          .in("knowledgeId", compatibleIds);
+          .select("*, knowledge:knowledgeId(name, embedProviderId, embedModel)")
+          .in("knowledgeId", docIds);
 
         if (error) throw error;
 
@@ -164,6 +161,8 @@ function PlaygroundPage() {
           return {
             docId: c.knowledgeId,
             docName: c.knowledge?.name || "Documento",
+            embedProviderId: c.knowledge?.embedProviderId,
+            embedModel: c.knowledge?.embedModel,
             id: c.id,
             text: c.text,
             embedding: embeddingArray,
@@ -181,14 +180,11 @@ function PlaygroundPage() {
     return () => {
       cancelled = true;
     };
-  }, [tenant, provider, knowDocs]);
+  }, [tenant, knowDocs]);
 
   const ragInfo = useMemo(() => {
-    if (!provider) return null;
-    const compatible = knowDocs.filter((d) => d.embedProviderId === provider.id);
-    const model = compatible[0]?.embedModel;
-    return { docCount: compatible.length, chunkCount: chunks.length, model };
-  }, [knowDocs, chunks, provider]);
+    return { docCount: knowDocs.length, chunkCount: chunks.length };
+  }, [knowDocs, chunks]);
 
   const send = async (text?: string) => {
     const content = (text ?? input).trim();
@@ -206,28 +202,54 @@ function PlaygroundPage() {
       // RAG: busca top-K chunks relevantes
       let systemPrompt = agent.systemPrompt;
       let ragUsed = 0;
-      if (useRag && chunks.length > 0 && ragInfo?.model) {
+      if (useRag && chunks.length > 0) {
         try {
-          const q = await embed({
-            data: {
-              baseUrl: provider.baseUrl,
-              apiKey: provider.apiKey,
-              model: ragInfo.model,
-              texts: [content],
-            },
-          });
-          const qv = q.vectors[0];
-          const scored = chunks
-            .map((c) => ({ c, s: cosine(qv, c.embedding) }))
-            .sort((a, b) => b.s - a.s)
-            .slice(0, topK)
-            .filter((x) => x.s > 0.2);
-          if (scored.length) {
-            const context = scored
-              .map((x, i) => `[${i + 1}] (${x.c.docName})\n${x.c.text}`)
-              .join("\n\n---\n\n");
-            systemPrompt = `${agent.systemPrompt}\n\n## CONTEXTO RELEVANTE DA BASE DE CONHECIMENTO\nUse APENAS estas informações quando forem pertinentes. Se a resposta não estiver no contexto, diga que vai verificar.\n\n${context}`;
-            ragUsed = scored.length;
+          // Agrupa chunks por embedProviderId + embedModel
+          const groups: Record<string, { providerId: string; model: string; chunks: Chunk[] }> = {};
+          for (const c of chunks) {
+            if (!c.embedProviderId || !c.embedModel) continue;
+            const key = `${c.embedProviderId}:::${c.embedModel}`;
+            if (!groups[key]) {
+              groups[key] = { providerId: c.embedProviderId, model: c.embedModel, chunks: [] };
+            }
+            groups[key].chunks.push(c);
+          }
+
+          const scored: Array<{ c: Chunk; s: number }> = [];
+
+          for (const key of Object.keys(groups)) {
+            const group = groups[key];
+            const p = providers.find((prov) => prov.id === group.providerId);
+            if (!p) continue;
+
+            const q = await embed({
+              data: {
+                kind: p.kind as any,
+                baseUrl: p.baseUrl || "",
+                apiKey: p.apiKey || "",
+                model: group.model,
+                texts: [content],
+              },
+            });
+            const qv = q.vectors[0];
+            for (const c of group.chunks) {
+              scored.push({ c, s: cosine(qv, c.embedding) });
+            }
+          }
+
+          if (scored.length > 0) {
+            const topChunks = scored
+              .sort((a, b) => b.s - a.s)
+              .slice(0, topK)
+              .filter((x) => x.s > 0.2);
+
+            if (topChunks.length) {
+              const context = topChunks
+                .map((x, i) => `[${i + 1}] (${x.c.docName})\n${x.c.text}`)
+                .join("\n\n---\n\n");
+              systemPrompt = `${agent.systemPrompt}\n\n## CONTEXTO RELEVANTE DA BASE DE CONHECIMENTO\nUse APENAS estas informações quando forem pertinentes. Se a resposta não estiver no contexto, diga que vai verificar.\n\n${context}`;
+              ragUsed = topChunks.length;
+            }
           }
         } catch (e) {
           console.warn("[rag] embed query falhou:", e);
@@ -380,13 +402,11 @@ function PlaygroundPage() {
               />
             </div>
             <p className="text-[11px] text-muted-foreground">
-              {!provider
-                ? "Selecione um agente."
-                : chunksLoading
-                  ? "Carregando chunks..."
-                  : ragInfo && ragInfo.docCount > 0
-                    ? `${ragInfo.docCount} doc(s) · ${ragInfo.chunkCount} chunks · ${ragInfo.model}`
-                    : "Nenhum doc compatível com o provedor do agente."}
+              {chunksLoading
+                ? "Carregando chunks..."
+                : ragInfo && ragInfo.docCount > 0
+                  ? `${ragInfo.docCount} doc(s) · ${ragInfo.chunkCount} chunks carregados`
+                  : "Nenhum documento na base de conhecimento."}
             </p>
           </div>
 

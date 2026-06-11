@@ -243,7 +243,7 @@ export const embedTexts = createServerFn({ method: "POST" })
           const body = (await r.text()).slice(0, 400);
           if (r.status === 404) {
             throw new Error(
-              `Modelo "${data.model}" não encontrado no Google. Use "text-embedding-004".`
+              `Modelo "${data.model}" não encontrado no Google. Use "gemini-embedding-2".`
             );
           }
           throw new Error(

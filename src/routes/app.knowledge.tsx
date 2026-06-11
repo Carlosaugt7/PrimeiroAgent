@@ -314,7 +314,7 @@ function Page() {
                     setProviderId(val);
                     const p = providers.find((x) => x.id === val);
                     if (p?.kind === "google") {
-                      setEmbedModel("text-embedding-004");
+                      setEmbedModel("gemini-embedding-2");
                     } else if (p?.kind === "openrouter") {
                       setEmbedModel("openai/text-embedding-3-small");
                     } else {
@@ -350,7 +350,7 @@ function Page() {
                   {(() => {
                     const p = providers.find((x) => x.id === providerId);
                     if (p?.kind === "google") {
-                      return "Google Gemini: recomendado text-embedding-004 (768 dimensões).";
+                      return "Google Gemini: recomendado gemini-embedding-2 (768 dimensões).";
                     }
                     if (p?.kind === "openrouter") {
                       return "OpenRouter: ex: openai/text-embedding-3-small.";

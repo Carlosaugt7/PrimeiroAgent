@@ -16,7 +16,14 @@ import {
 import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
-import { Loader2, Send, Sparkles, Trash2, Database } from "lucide-react";
+import { Textarea } from "@/components/ui/textarea";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { Loader2, Send, Sparkles, Trash2, Database, Pencil, Check, X, Bookmark } from "lucide-react";
 import { toast } from "sonner";
 
 export const Route = createFileRoute("/app/playground")({ component: PlaygroundPage });
@@ -62,6 +69,44 @@ function cosine(a: number[], b: number[]): number {
   return dot / (Math.sqrt(na) * Math.sqrt(nb) + 1e-9);
 }
 
+function generateId(): string {
+  if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
+    return crypto.randomUUID();
+  }
+  return "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(/[xy]/g, (c) => {
+    const r = (Math.random() * 16) | 0;
+    return (c === "x" ? r : (r & 0x3) | 0x8).toString(16);
+  });
+}
+
+function chunkText(text: string, chunkSize = 800, overlap = 120): string[] {
+  const clean = text
+    .replace(/\r/g, "")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
+  if (clean.length <= chunkSize) return [clean];
+  const out: string[] = [];
+  let i = 0;
+  while (i < clean.length) {
+    let end = Math.min(i + chunkSize, clean.length);
+    if (end < clean.length) {
+      const slice = clean.slice(i, end);
+      const cut = Math.max(
+        slice.lastIndexOf("\n\n"),
+        slice.lastIndexOf(". "),
+        slice.lastIndexOf("! "),
+        slice.lastIndexOf("? "),
+      );
+      if (cut > chunkSize * 0.5) end = i + cut + 1;
+    }
+    out.push(clean.slice(i, end).trim());
+    if (end >= clean.length) break;
+    i = end - overlap;
+    if (i <= 0) break;
+  }
+  return out.filter(Boolean);
+}
+
 function PlaygroundPage() {
   const { tenant } = useAuth();
   const { agents, providers } = useAppStore();
@@ -87,6 +132,97 @@ function PlaygroundPage() {
 
   const agent = agents.find((a) => a.id === agentId);
   const provider = providers.find((p) => p.id === agent?.providerId);
+
+  // Estados para edição de resposta e modal de FAQ
+  const [editingIdx, setEditingIdx] = useState<number | null>(null);
+  const [editContent, setEditContent] = useState("");
+
+  const [faqOpen, setFaqOpen] = useState(false);
+  const [faqTitle, setFaqTitle] = useState("");
+  const [faqQuestion, setFaqQuestion] = useState("");
+  const [faqAnswer, setFaqAnswer] = useState("");
+  const [faqProviderId, setFaqProviderId] = useState("");
+  const [faqEmbedModel, setFaqEmbedModel] = useState("gemini-embedding-2");
+  const [faqIngesting, setFaqIngesting] = useState(false);
+
+  const EMBED_CAPABLE_KINDS = ["openai", "openrouter", "google", "custom"];
+  const embedProviders = useMemo(() => {
+    return providers.filter((p) => EMBED_CAPABLE_KINDS.includes(p.kind));
+  }, [providers]);
+
+  const saveFaq = async () => {
+    if (!tenant) return;
+    const prov = providers.find((p) => p.id === faqProviderId);
+    if (!prov) {
+      toast.error("Selecione um provedor de embeddings");
+      return;
+    }
+    if (!faqTitle.trim()) {
+      toast.error("Título da FAQ é obrigatório");
+      return;
+    }
+    if (!faqQuestion.trim() || !faqAnswer.trim()) {
+      toast.error("Pergunta e resposta são obrigatórias");
+      return;
+    }
+
+    setFaqIngesting(true);
+    const docId = generateId();
+    try {
+      const docText = `Pergunta: ${faqQuestion.trim()}\nResposta: ${faqAnswer.trim()}`;
+      const textChunks = chunkText(docText);
+
+      // Obter embeddings
+      const vectors: number[][] = [];
+      const BATCH = 64;
+      for (let i = 0; i < textChunks.length; i += BATCH) {
+        const slice = textChunks.slice(i, i + BATCH);
+        const r = await embed({
+          data: {
+            kind: prov.kind,
+            baseUrl: prov.baseUrl,
+            apiKey: prov.apiKey,
+            model: faqEmbedModel,
+            texts: slice,
+          },
+        });
+        vectors.push(...r.vectors);
+      }
+
+      // Salvar no banco
+      const { error: docErr } = await supabase.from("knowledge").insert({
+        id: docId,
+        tenantId: tenant.id,
+        name: faqTitle.trim(),
+        embedModel: faqEmbedModel,
+        embedProviderId: faqProviderId,
+        createdAt: new Date().toISOString(),
+      });
+      if (docErr) throw docErr;
+
+      const chunkInserts = textChunks.map((c, idx) => ({
+        id: `${docId}_${String(idx).padStart(5, "0")}`,
+        knowledgeId: docId,
+        text: c,
+        embedding: vectors[idx],
+      }));
+
+      // Ingest em lotes de 200
+      for (let i = 0; i < chunkInserts.length; i += 200) {
+        const slice = chunkInserts.slice(i, i + 200);
+        const { error: chunkErr } = await supabase.from("knowledge_chunks").insert(slice);
+        if (chunkErr) throw chunkErr;
+      }
+
+      toast.success(`"${faqTitle}" salvo como FAQ e indexado!`);
+      setFaqOpen(false);
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : "Falha na ingestão";
+      toast.error(msg);
+    } finally {
+      setFaqIngesting(false);
+    }
+  };
 
   // Lista docs do tenant
   useEffect(() => {
@@ -346,11 +482,92 @@ function PlaygroundPage() {
                 key={i}
                 className={`flex ${m.role === "user" ? "justify-end" : "justify-start"}`}
               >
-                <div
-                  className={`max-w-[75%] rounded-2xl px-4 py-2.5 text-sm whitespace-pre-wrap ${m.role === "user" ? "bg-gradient-primary text-primary-foreground" : "bg-secondary"}`}
-                >
-                  {m.content}
-                </div>
+                {m.role === "user" ? (
+                  <div
+                    className="max-w-[75%] rounded-2xl px-4 py-2.5 text-sm whitespace-pre-wrap bg-gradient-primary text-primary-foreground"
+                  >
+                    {m.content}
+                  </div>
+                ) : editingIdx === i ? (
+                  <div className="flex flex-col gap-2 w-full max-w-[75%] bg-secondary rounded-2xl p-3">
+                    <Textarea
+                      value={editContent}
+                      onChange={(e) => setEditContent(e.target.value)}
+                      className="text-xs min-h-[80px] bg-background text-foreground resize-none"
+                    />
+                    <div className="flex justify-end gap-2">
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="h-7 px-2 text-[10px]"
+                        onClick={() => setEditingIdx(null)}
+                      >
+                        <X className="size-3 mr-1" /> Cancelar
+                      </Button>
+                      <Button
+                        variant="hero"
+                        size="sm"
+                        className="h-7 px-2 text-[10px]"
+                        onClick={() => {
+                          const updated = [...msgs];
+                          updated[i] = { ...m, content: editContent };
+                          setMsgs(updated);
+                          setEditingIdx(null);
+                          toast.success("Resposta editada!");
+                        }}
+                      >
+                        <Check className="size-3 mr-1" /> Salvar
+                      </Button>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="group flex flex-col gap-1 max-w-[75%]">
+                    <div className="bg-secondary rounded-2xl px-4 py-2.5 text-sm whitespace-pre-wrap">
+                      {m.content}
+                    </div>
+                    <div className="opacity-0 group-hover:opacity-100 transition-opacity duration-200 flex items-center gap-2 px-2 mt-0.5">
+                      <button
+                        onClick={() => {
+                          setEditingIdx(i);
+                          setEditContent(m.content);
+                        }}
+                        className="text-[10px] text-muted-foreground hover:text-foreground flex items-center gap-1 transition-colors"
+                      >
+                        <Pencil className="size-3" /> Editar
+                      </button>
+                      <button
+                        onClick={() => {
+                          const prevUserMsg = i > 0 && msgs[i - 1].role === "user" ? msgs[i - 1].content : "";
+                          setFaqQuestion(prevUserMsg);
+                          setFaqAnswer(m.content);
+                          setFaqTitle(
+                            prevUserMsg
+                              ? `FAQ: ${prevUserMsg.slice(0, 35)}...`
+                              : "FAQ do Agente"
+                          );
+                          if (embedProviders.length > 0) {
+                            const first = embedProviders[0];
+                            setFaqProviderId(first.id);
+                            if (first.kind === "google") {
+                              setFaqEmbedModel("gemini-embedding-2");
+                            } else if (first.kind === "openrouter") {
+                              setFaqEmbedModel("openai/text-embedding-3-small");
+                            } else {
+                              setFaqEmbedModel("text-embedding-3-small");
+                            }
+                          } else {
+                            setFaqProviderId("");
+                            setFaqEmbedModel("text-embedding-3-small");
+                          }
+                          setFaqOpen(true);
+                        }}
+                        className="text-[10px] text-muted-foreground hover:text-foreground flex items-center gap-1 transition-colors"
+                      >
+                        <Bookmark className="size-3" /> Salvar FAQ
+                      </button>
+                    </div>
+                  </div>
+                )}
               </div>
             ))}
             {busy && (
@@ -438,6 +655,103 @@ function PlaygroundPage() {
           )}
         </div>
       </div>
+
+      <Dialog open={faqOpen} onOpenChange={setFaqOpen}>
+        <DialogContent className="max-w-xl" aria-describedby={undefined}>
+          <DialogHeader>
+            <DialogTitle>Salvar como FAQ na Base de Conhecimento</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 pt-2">
+            <div className="space-y-1.5">
+              <Label className="text-xs font-semibold">Título do Documento</Label>
+              <Input
+                value={faqTitle}
+                onChange={(e) => setFaqTitle(e.target.value)}
+                placeholder="Ex: FAQ - Horário de Funcionamento"
+              />
+            </div>
+            
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1.5">
+                <Label className="text-xs font-semibold">Provedor de Embeddings</Label>
+                <Select value={faqProviderId} onValueChange={(val) => {
+                  setFaqProviderId(val);
+                  const p = providers.find((x) => x.id === val);
+                  if (p?.kind === "google") {
+                    setFaqEmbedModel("gemini-embedding-2");
+                  } else if (p?.kind === "openrouter") {
+                    setFaqEmbedModel("openai/text-embedding-3-small");
+                  } else {
+                    setFaqEmbedModel("text-embedding-3-small");
+                  }
+                }}>
+                  <SelectTrigger className="h-9">
+                    <SelectValue placeholder="Selecione provedor..." />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {embedProviders.map((p) => (
+                      <SelectItem key={p.id} value={p.id}>
+                        {p.name} · {p.kind}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="space-y-1.5">
+                <Label className="text-xs font-semibold">Modelo de Embedding</Label>
+                <Input
+                  value={faqEmbedModel}
+                  onChange={(e) => setFaqEmbedModel(e.target.value)}
+                  className="h-9"
+                  placeholder="text-embedding-3-small"
+                />
+              </div>
+            </div>
+
+            <div className="space-y-1.5">
+              <Label className="text-xs font-semibold">Pergunta do Cliente</Label>
+              <Input
+                value={faqQuestion}
+                onChange={(e) => setFaqQuestion(e.target.value)}
+                placeholder="Como funciona..."
+              />
+            </div>
+
+            <div className="space-y-1.5">
+              <Label className="text-xs font-semibold">Resposta do Agente (Editada)</Label>
+              <Textarea
+                value={faqAnswer}
+                onChange={(e) => setFaqAnswer(e.target.value)}
+                rows={5}
+                placeholder="A nossa empresa funciona..."
+                className="text-xs"
+              />
+            </div>
+
+            <Button
+              variant="hero"
+              className="w-full"
+              onClick={saveFaq}
+              disabled={faqIngesting || embedProviders.length === 0}
+            >
+              {faqIngesting ? (
+                <>
+                  <Loader2 className="size-4 animate-spin mr-2" /> Indexando FAQ...
+                </>
+              ) : (
+                "Salvar na Base de Conhecimento"
+              )}
+            </Button>
+
+            {embedProviders.length === 0 && (
+              <p className="text-[10px] text-amber-500 text-center">
+                Você precisa cadastrar um provedor compatível com embeddings (Gemini ou OpenAI) para salvar FAQs.
+              </p>
+            )}
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

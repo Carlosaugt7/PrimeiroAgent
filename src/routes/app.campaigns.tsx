@@ -2,12 +2,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useState, useRef } from "react";
 import { useAuth } from "@/lib/auth";
 import { supabase } from "@/integrations/supabase/client";
-import {
-  listInstances,
-  listGroups,
-  sendText,
-  sendMedia,
-} from "@/lib/evolution.functions";
+import { listInstances, listGroups, sendText, sendMedia } from "@/lib/evolution.functions";
 import {
   Card,
   CardContent,
@@ -82,7 +77,7 @@ interface Campaign {
   recipients?: Recipient[];
 }
 
-export function CampaignsPage() {
+function CampaignsPage() {
   const { tenant } = useAuth();
   const tenantId = tenant?.id ?? "";
 
@@ -106,7 +101,7 @@ export function CampaignsPage() {
   const [targetType, setTargetType] = useState<"csv" | "groups">("csv");
   const [manualContactsText, setManualContactsText] = useState("");
   const [selectedGroups, setSelectedGroups] = useState<string[]>([]);
-  
+
   const [messageText, setMessageText] = useState("");
   const [minDelay, setMinDelay] = useState(15);
   const [maxDelay, setMaxDelay] = useState(45);
@@ -143,7 +138,7 @@ export function CampaignsPage() {
       // Load active instances
       const insts = await listInstances({ data: { tenantId } });
       setInstances(insts.filter((i: any) => i.status === "open" || i.status === "CONNECTED"));
-      
+
       // Load campaign history
       const { data: camps, error } = await supabase
         .from("campaigns")
@@ -229,15 +224,11 @@ export function CampaignsPage() {
       const fileExt = file.name.split(".").pop();
       const filePath = `${tenantId}/${Date.now()}_campaign.${fileExt}`;
 
-      const { data, error } = await supabase.storage
-        .from("campaigns")
-        .upload(filePath, file);
+      const { data, error } = await supabase.storage.from("campaigns").upload(filePath, file);
 
       if (error) throw error;
 
-      const { data: urlData } = supabase.storage
-        .from("campaigns")
-        .getPublicUrl(data.path);
+      const { data: urlData } = supabase.storage.from("campaigns").getPublicUrl(data.path);
 
       setMediaUrl(urlData.publicUrl);
       toast.success("Mídia enviada com sucesso!");
@@ -254,12 +245,12 @@ export function CampaignsPage() {
   // Parse inputs (manual textarea / uploaded CSV)
   const parseRecipients = (): Recipient[] => {
     const list: Recipient[] = [];
-    
+
     if (targetType === "csv") {
       const lines = manualContactsText.split("\n");
       for (const line of lines) {
         if (!line.trim()) continue;
-        
+
         // Split by comma, semicolon or tab
         const parts = line.split(/[;,]/);
         const numberRaw = parts[0]?.trim();
@@ -298,7 +289,7 @@ export function CampaignsPage() {
     if (!campName.trim()) return toast.error("Insira o nome da campanha");
     if (!selectedInstance) return toast.error("Selecione uma instância WhatsApp");
     if (!messageText.trim()) return toast.error("Escreva a mensagem da campanha");
-    
+
     const parsedRecipients = parseRecipients();
     if (parsedRecipients.length === 0) {
       return toast.error("Nenhum destinatário válido encontrado. Verifique seus contatos/grupos.");
@@ -349,7 +340,7 @@ export function CampaignsPage() {
       setActiveCampaign(updatedCampaign);
       setRecipients(savedRecs as Recipient[]);
       setView("monitor");
-      
+
       // Start sending loop
       startSendingLoop(updatedCampaign, savedRecs as Recipient[]);
     } catch (e: any) {
@@ -362,14 +353,11 @@ export function CampaignsPage() {
   const handlePause = async () => {
     if (!activeCampaign) return;
     try {
-      await supabase
-        .from("campaigns")
-        .update({ status: "paused" })
-        .eq("id", activeCampaign.id);
-      
+      await supabase.from("campaigns").update({ status: "paused" }).eq("id", activeCampaign.id);
+
       setPaused(true);
       pausedRef.current = true;
-      setActiveCampaign((prev) => prev ? { ...prev, status: "paused" } : null);
+      setActiveCampaign((prev) => (prev ? { ...prev, status: "paused" } : null));
       toast.info("Campanha pausada");
     } catch (e) {
       toast.error("Erro ao pausar campanha");
@@ -380,14 +368,11 @@ export function CampaignsPage() {
   const handleResume = async () => {
     if (!activeCampaign) return;
     try {
-      await supabase
-        .from("campaigns")
-        .update({ status: "sending" })
-        .eq("id", activeCampaign.id);
-      
+      await supabase.from("campaigns").update({ status: "sending" }).eq("id", activeCampaign.id);
+
       setPaused(false);
       pausedRef.current = false;
-      setActiveCampaign((prev) => prev ? { ...prev, status: "sending" } : null);
+      setActiveCampaign((prev) => (prev ? { ...prev, status: "sending" } : null));
       toast.success("Campanha retomada");
     } catch (e) {
       toast.error("Erro ao retomar campanha");
@@ -398,14 +383,11 @@ export function CampaignsPage() {
   const handleCancel = async () => {
     if (!activeCampaign) return;
     try {
-      await supabase
-        .from("campaigns")
-        .update({ status: "cancelled" })
-        .eq("id", activeCampaign.id);
-      
+      await supabase.from("campaigns").update({ status: "cancelled" }).eq("id", activeCampaign.id);
+
       cancelledRef.current = true;
       setIsSending(false);
-      setActiveCampaign((prev) => prev ? { ...prev, status: "cancelled" } : null);
+      setActiveCampaign((prev) => (prev ? { ...prev, status: "cancelled" } : null));
       toast.warning("Campanha cancelada pelo usuário");
     } catch (e) {
       toast.error("Erro ao cancelar campanha");
@@ -438,11 +420,7 @@ export function CampaignsPage() {
       if (recipient.status !== "pending") continue;
 
       // Update UI: processing recipient
-      setRecipients((prev) =>
-        prev.map((r, idx) =>
-          idx === i ? { ...r, status: "pending" } : r
-        )
-      );
+      setRecipients((prev) => prev.map((r, idx) => (idx === i ? { ...r, status: "pending" } : r)));
 
       // Parse spintax & variables
       const finalMsg = parseVariables(parseSpintax(camp.messageText), recipient.name);
@@ -461,7 +439,7 @@ export function CampaignsPage() {
               mediaUrl: camp.mediaUrl,
               mediaType: camp.mediaType,
               caption: finalMsg,
-            }
+            },
           });
         } else {
           // Send Text Message
@@ -471,7 +449,7 @@ export function CampaignsPage() {
               instanceName: camp.instanceName,
               number: recipient.number,
               text: finalMsg,
-            }
+            },
           });
         }
         success = true;
@@ -501,8 +479,8 @@ export function CampaignsPage() {
       // Update local recipient state
       setRecipients((prev) =>
         prev.map((r, idx) =>
-          idx === i ? { ...r, status, sentAt: nowStr, error: success ? null : errMsg } : r
-        )
+          idx === i ? { ...r, status, sentAt: nowStr, error: success ? null : errMsg } : r,
+        ),
       );
 
       // If it is the last item, skip delay
@@ -510,7 +488,7 @@ export function CampaignsPage() {
 
       // Apply random delay (anti-ban)
       const delay = Math.floor(Math.random() * (camp.maxDelay - camp.minDelay + 1)) + camp.minDelay;
-      
+
       // Visual countdown countdown
       for (let s = delay; s > 0; s--) {
         if (cancelledRef.current) break;
@@ -527,17 +505,16 @@ export function CampaignsPage() {
     // Finished
     setIsSending(false);
     isSendingRef.current = false;
-    
+
     // Final update of campaign status in DB
     const finalStatus = cancelledRef.current ? "cancelled" : "completed";
     try {
-      await supabase
-        .from("campaigns")
-        .update({ status: finalStatus })
-        .eq("id", camp.id);
-      
-      setActiveCampaign((prev) => prev ? { ...prev, status: finalStatus } : null);
-      toast.success(finalStatus === "completed" ? "Campanha concluída com sucesso!" : "Campanha encerrada.");
+      await supabase.from("campaigns").update({ status: finalStatus }).eq("id", camp.id);
+
+      setActiveCampaign((prev) => (prev ? { ...prev, status: finalStatus } : null));
+      toast.success(
+        finalStatus === "completed" ? "Campanha concluída com sucesso!" : "Campanha encerrada.",
+      );
       loadInitialData(); // Refresh history
     } catch (e) {
       console.error(e);
@@ -549,7 +526,8 @@ export function CampaignsPage() {
   const sentCount = recipients.filter((r) => r.status === "sent").length;
   const failedCount = recipients.filter((r) => r.status === "failed").length;
   const pendingCount = recipients.filter((r) => r.status === "pending").length;
-  const progressPercent = totalRecs > 0 ? Math.round(((sentCount + failedCount) / totalRecs) * 100) : 0;
+  const progressPercent =
+    totalRecs > 0 ? Math.round(((sentCount + failedCount) / totalRecs) * 100) : 0;
 
   // View specific campaign from history
   const viewCampaignMonitor = async (camp: Campaign) => {
@@ -564,7 +542,7 @@ export function CampaignsPage() {
 
       if (error) throw error;
       setRecipients(recs as Recipient[]);
-      
+
       // If campaign is still sending or paused, allow resuming/controlling it
       if (camp.status === "sending") {
         startSendingLoop(camp, recs as Recipient[]);
@@ -595,7 +573,7 @@ export function CampaignsPage() {
 
   // Filter groups search
   const filteredGroups = groups.filter((g) =>
-    g.name.toLowerCase().includes(groupSearch.toLowerCase())
+    g.name.toLowerCase().includes(groupSearch.toLowerCase()),
   );
 
   return (
@@ -684,7 +662,9 @@ export function CampaignsPage() {
                         <div className="space-y-1 min-w-0">
                           <p className="font-semibold text-sm truncate">{c.name}</p>
                           <div className="flex flex-wrap gap-2 text-xs text-muted-foreground">
-                            <span>Instância: <strong>{c.instanceName}</strong></span>
+                            <span>
+                              Instância: <strong>{c.instanceName}</strong>
+                            </span>
                             <span>·</span>
                             <span>{new Date(c.createdAt).toLocaleDateString("pt-BR")}</span>
                           </div>
@@ -738,16 +718,20 @@ export function CampaignsPage() {
                 </p>
                 <ul className="list-disc pl-4 space-y-1">
                   <li>
-                    <strong>Varie o texto:</strong> Utilize o sistema de Spintax para que cada mensagem seja sorteada com termos sinônimos (ex: {"{Olá|Oi|Bom dia}"}).
+                    <strong>Varie o texto:</strong> Utilize o sistema de Spintax para que cada
+                    mensagem seja sorteada com termos sinônimos (ex: {"{Olá|Oi|Bom dia}"}).
                   </li>
                   <li>
-                    <strong>Use o Delay recomendado:</strong> Deixe o intervalo randômico entre 15 e 45 segundos. Menos de 10 segundos pode acionar o filtro anti-spam.
+                    <strong>Use o Delay recomendado:</strong> Deixe o intervalo randômico entre 15 e
+                    45 segundos. Menos de 10 segundos pode acionar o filtro anti-spam.
                   </li>
                   <li>
-                    <strong>Mídias:</strong> Evite enviar o mesmo vídeo/imagem idêntico para milhares de contatos em poucas horas sem texto explicativo associado.
+                    <strong>Mídias:</strong> Evite enviar o mesmo vídeo/imagem idêntico para
+                    milhares de contatos em poucas horas sem texto explicativo associado.
                   </li>
                   <li>
-                    <strong>Higienize sua base:</strong> Disparar para números inativos ou que reportam sua mensagem como spam acelera o banimento.
+                    <strong>Higienize sua base:</strong> Disparar para números inativos ou que
+                    reportam sua mensagem como spam acelera o banimento.
                   </li>
                 </ul>
               </CardContent>
@@ -834,7 +818,8 @@ export function CampaignsPage() {
                     <div className="space-y-1">
                       <p className="text-sm font-medium">Importar arquivo de contatos</p>
                       <p className="text-xs text-muted-foreground">
-                        Aceita arquivos .CSV com separação por vírgula ou ponto-e-vírgula (ex: número, nome).
+                        Aceita arquivos .CSV com separação por vírgula ou ponto-e-vírgula (ex:
+                        número, nome).
                       </p>
                     </div>
                     <UIButton variant="outline" size="sm" className="relative cursor-pointer">
@@ -871,7 +856,8 @@ export function CampaignsPage() {
                     </p>
                   ) : loadingGroups ? (
                     <div className="text-sm text-muted-foreground py-8 text-center flex items-center justify-center">
-                      <RefreshCw className="animate-spin size-5 mr-2" /> Buscando grupos do celular...
+                      <RefreshCw className="animate-spin size-5 mr-2" /> Buscando grupos do
+                      celular...
                     </div>
                   ) : groups.length === 0 ? (
                     <p className="text-sm text-muted-foreground py-8 text-center">
@@ -951,7 +937,8 @@ export function CampaignsPage() {
                   onChange={(e) => setMessageText(e.target.value)}
                 />
                 <p className="text-[11px] text-muted-foreground">
-                  Use colchetes e barras para Spintax: <code>{"{Olá|Oi}"}</code>. O sistema irá sortear uma opção de saudação para cada contato.
+                  Use colchetes e barras para Spintax: <code>{"{Olá|Oi}"}</code>. O sistema irá
+                  sortear uma opção de saudação para cada contato.
                 </p>
               </div>
 
@@ -959,7 +946,12 @@ export function CampaignsPage() {
               <div className="space-y-2">
                 <Label>Anexo de Mídia (Opcional)</Label>
                 <div className="flex items-center gap-4">
-                  <UIButton variant="outline" size="sm" className="relative cursor-pointer" disabled={uploadingMedia}>
+                  <UIButton
+                    variant="outline"
+                    size="sm"
+                    className="relative cursor-pointer"
+                    disabled={uploadingMedia}
+                  >
                     {uploadingMedia ? (
                       <>
                         <RefreshCw className="animate-spin size-4 mr-2" /> Enviando...
@@ -1008,7 +1000,9 @@ export function CampaignsPage() {
               <Label>Intervalo de Delay Anti-Ban (Em Segundos)</Label>
               <div className="flex gap-4 max-w-sm">
                 <div className="flex-1 space-y-1">
-                  <Label htmlFor="min-delay" className="text-xs text-muted-foreground">Delay Mínimo</Label>
+                  <Label htmlFor="min-delay" className="text-xs text-muted-foreground">
+                    Delay Mínimo
+                  </Label>
                   <Input
                     id="min-delay"
                     type="number"
@@ -1018,7 +1012,9 @@ export function CampaignsPage() {
                   />
                 </div>
                 <div className="flex-1 space-y-1">
-                  <Label htmlFor="max-delay" className="text-xs text-muted-foreground">Delay Máximo</Label>
+                  <Label htmlFor="max-delay" className="text-xs text-muted-foreground">
+                    Delay Máximo
+                  </Label>
                   <Input
                     id="max-delay"
                     type="number"
@@ -1029,7 +1025,8 @@ export function CampaignsPage() {
                 </div>
               </div>
               <p className="text-[11px] text-muted-foreground flex items-center gap-1.5 text-amber-400">
-                <AlertTriangle className="size-3.5 shrink-0" /> Recomendamos deixar entre 15 e 45 segundos para sua segurança.
+                <AlertTriangle className="size-3.5 shrink-0" /> Recomendamos deixar entre 15 e 45
+                segundos para sua segurança.
               </p>
             </div>
           </CardContent>
@@ -1057,7 +1054,10 @@ export function CampaignsPage() {
                 <div>
                   <CardTitle>{activeCampaign.name}</CardTitle>
                   <CardDescription className="mt-1">
-                    Instância de Envio: <strong>{activeCampaign.instanceName}</strong> · Delays: <strong>{activeCampaign.minDelay}s a {activeCampaign.maxDelay}s</strong>
+                    Instância de Envio: <strong>{activeCampaign.instanceName}</strong> · Delays:{" "}
+                    <strong>
+                      {activeCampaign.minDelay}s a {activeCampaign.maxDelay}s
+                    </strong>
                   </CardDescription>
                 </div>
                 <div className="flex gap-2">
@@ -1096,7 +1096,9 @@ export function CampaignsPage() {
               <div className="space-y-2">
                 <div className="flex items-center justify-between text-sm font-medium">
                   <span>Progresso da Campanha</span>
-                  <span>{progressPercent}% ({sentCount + failedCount} / {totalRecs})</span>
+                  <span>
+                    {progressPercent}% ({sentCount + failedCount} / {totalRecs})
+                  </span>
                 </div>
                 <Progress value={progressPercent} className="h-3 bg-secondary/80 rounded-full" />
               </div>
@@ -1124,7 +1126,8 @@ export function CampaignsPage() {
               {/* Real-time anti-ban status banner */}
               {isSending && !paused && secondsLeft > 0 && (
                 <div className="flex items-center justify-center p-3 rounded-lg border border-accent/20 bg-accent/5 animate-pulse text-sm text-accent">
-                  <RefreshCw className="animate-spin size-4 mr-2" /> Anti-Ban Ativo: Aguardando {secondsLeft} segundos antes do próximo número...
+                  <RefreshCw className="animate-spin size-4 mr-2" /> Anti-Ban Ativo: Aguardando{" "}
+                  {secondsLeft} segundos antes do próximo número...
                 </div>
               )}
 
@@ -1133,7 +1136,10 @@ export function CampaignsPage() {
                 <div className="flex items-start gap-2.5 p-3 rounded-lg border border-amber-500/20 bg-amber-500/5 text-amber-200 text-xs">
                   <AlertTriangle className="size-4 shrink-0 text-amber-400 mt-0.5" />
                   <div>
-                    <strong>Atenção:</strong> Como o disparo é controlado pelo navegador (Client-side), <strong>não feche esta aba ou desligue o computador</strong> enquanto a campanha estiver ativa! Se você fechar a aba, o envio será interrompido e ficará pausado.
+                    <strong>Atenção:</strong> Como o disparo é controlado pelo navegador
+                    (Client-side), <strong>não feche esta aba ou desligue o computador</strong>{" "}
+                    enquanto a campanha estiver ativa! Se você fechar a aba, o envio será
+                    interrompido e ficará pausado.
                   </div>
                 </div>
               )}
@@ -1149,20 +1155,30 @@ export function CampaignsPage() {
                       </div>
                     ) : (
                       recipients.map((r, idx) => (
-                        <div key={idx} className="p-3 flex items-center justify-between hover:bg-secondary/20 transition-colors">
+                        <div
+                          key={idx}
+                          className="p-3 flex items-center justify-between hover:bg-secondary/20 transition-colors"
+                        >
                           <div className="flex-1 min-w-0 space-y-0.5">
                             <p className="font-semibold text-foreground">
-                              {r.number} {r.name && <span className="text-muted-foreground">({r.name})</span>}
+                              {r.number}{" "}
+                              {r.name && <span className="text-muted-foreground">({r.name})</span>}
                             </p>
                             {r.error && <p className="text-[10px] text-destructive">{r.error}</p>}
                           </div>
                           <div>
                             {r.status === "sent" ? (
-                              <Badge className="bg-success/20 text-success border-success/40">Sucesso</Badge>
+                              <Badge className="bg-success/20 text-success border-success/40">
+                                Sucesso
+                              </Badge>
                             ) : r.status === "failed" ? (
-                              <Badge className="bg-destructive/20 text-destructive border-destructive/40">Falhou</Badge>
+                              <Badge className="bg-destructive/20 text-destructive border-destructive/40">
+                                Falhou
+                              </Badge>
                             ) : (
-                              <Badge className="bg-secondary/40 text-muted-foreground border-border/40">Na Fila</Badge>
+                              <Badge className="bg-secondary/40 text-muted-foreground border-border/40">
+                                Na Fila
+                              </Badge>
                             )}
                           </div>
                         </div>

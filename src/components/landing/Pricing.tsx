@@ -6,12 +6,7 @@ const plans = [
     name: "Trial",
     price: "Grátis",
     desc: "14 dias para experimentar tudo.",
-    features: [
-      "1 agente ativo",
-      "500 mensagens",
-      "1 instância WhatsApp",
-      "Suporte por e-mail",
-    ],
+    features: ["1 agente ativo", "500 mensagens", "1 instância WhatsApp", "Suporte por e-mail"],
   },
   {
     name: "Starter",
@@ -84,14 +79,20 @@ export function Pricing() {
               <p className="text-sm text-muted-foreground mt-1">{p.desc}</p>
               <div className="mt-6 flex items-baseline gap-1">
                 <span className="font-display text-4xl font-bold">{p.price}</span>
-                {p.price.startsWith("R$") && <span className="text-muted-foreground text-sm">/mês</span>}
+                {p.price.startsWith("R$") && (
+                  <span className="text-muted-foreground text-sm">/mês</span>
+                )}
               </div>
               <Button
                 variant={p.highlighted ? "hero" : "outline"}
                 className="w-full mt-6"
                 size="lg"
               >
-                {p.name === "Enterprise" ? "Falar com vendas" : p.name === "Trial" ? "Começar grátis" : "Assinar agora"}
+                {p.name === "Enterprise"
+                  ? "Falar com vendas"
+                  : p.name === "Trial"
+                    ? "Começar grátis"
+                    : "Assinar agora"}
               </Button>
               <ul className="mt-7 space-y-3">
                 {p.features.map((f) => (

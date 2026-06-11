@@ -5,7 +5,13 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Download, BarChart3, MessageSquare, Users, CheckCircle2 } from "lucide-react";
 
 export const Route = createFileRoute("/app/reports")({
@@ -22,7 +28,9 @@ function downloadCSV(filename: string, rows: (string | number)[][]) {
   const blob = new Blob(["\ufeff" + csv], { type: "text/csv;charset=utf-8;" });
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
-  a.href = url; a.download = filename; a.click();
+  a.href = url;
+  a.download = filename;
+  a.click();
   URL.revokeObjectURL(url);
 }
 
@@ -68,10 +76,23 @@ function Reports() {
   }, [filtered]);
 
   const exportConversations = () => {
-    const header = ["id", "contato", "telefone", "instancia", "status", "tags", "atualizado_em", "ultima_mensagem"];
+    const header = [
+      "id",
+      "contato",
+      "telefone",
+      "instancia",
+      "status",
+      "tags",
+      "atualizado_em",
+      "ultima_mensagem",
+    ];
     const rows = filtered.map((c) => [
-      c.id, c.contactName ?? "", c.contactPhone ?? "", c.instanceName ?? "",
-      c.status, (c.tags ?? []).join("|"),
+      c.id,
+      c.contactName ?? "",
+      c.contactPhone ?? "",
+      c.instanceName ?? "",
+      c.status,
+      (c.tags ?? []).join("|"),
       new Date(c.updatedAt).toLocaleString("pt-BR"),
       (c.lastMessage ?? "").replace(/\n/g, " "),
     ]);
@@ -105,8 +126,12 @@ function Reports() {
           <p className="text-muted-foreground mt-1">Métricas consolidadas e exportações em CSV.</p>
         </div>
         <div className="flex gap-2">
-          <Button variant="outline" onClick={exportSummary}><Download className="size-4" /> Resumo</Button>
-          <Button onClick={exportConversations}><Download className="size-4" /> Conversas</Button>
+          <Button variant="outline" onClick={exportSummary}>
+            <Download className="size-4" /> Resumo
+          </Button>
+          <Button onClick={exportConversations}>
+            <Download className="size-4" /> Conversas
+          </Button>
         </div>
       </div>
 
@@ -123,17 +148,25 @@ function Reports() {
         <div>
           <Label className="text-xs">Instância</Label>
           <Select value={instanceName} onValueChange={setInstanceName}>
-            <SelectTrigger><SelectValue /></SelectTrigger>
+            <SelectTrigger>
+              <SelectValue />
+            </SelectTrigger>
             <SelectContent>
               <SelectItem value="all">Todas</SelectItem>
-              {instances.map((i) => <SelectItem key={i.id} value={i.name}>{i.name}</SelectItem>)}
+              {instances.map((i) => (
+                <SelectItem key={i.id} value={i.name}>
+                  {i.name}
+                </SelectItem>
+              ))}
             </SelectContent>
           </Select>
         </div>
         <div>
           <Label className="text-xs">Status</Label>
           <Select value={status} onValueChange={setStatus}>
-            <SelectTrigger><SelectValue /></SelectTrigger>
+            <SelectTrigger>
+              <SelectValue />
+            </SelectTrigger>
             <SelectContent>
               <SelectItem value="all">Todos</SelectItem>
               <SelectItem value="aberta">Aberta</SelectItem>
@@ -147,9 +180,17 @@ function Reports() {
       {/* KPIs */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
         <Kpi icon={<MessageSquare className="size-4" />} label="Conversas" value={kpis.total} />
-        <Kpi icon={<Users className="size-4" />} label="Contatos únicos" value={kpis.uniqueContacts} />
+        <Kpi
+          icon={<Users className="size-4" />}
+          label="Contatos únicos"
+          value={kpis.uniqueContacts}
+        />
         <Kpi icon={<CheckCircle2 className="size-4" />} label="Resolvidas" value={kpis.resolved} />
-        <Kpi icon={<BarChart3 className="size-4" />} label="Taxa resolução" value={`${kpis.resolutionRate}%`} />
+        <Kpi
+          icon={<BarChart3 className="size-4" />}
+          label="Taxa resolução"
+          value={`${kpis.resolutionRate}%`}
+        />
       </div>
 
       {/* Tags */}
@@ -166,7 +207,10 @@ function Reports() {
                 <li key={tag} className="flex items-center gap-3">
                   <span className="text-xs w-32 truncate">{tag}</span>
                   <div className="flex-1 h-2 rounded-full bg-secondary overflow-hidden">
-                    <div className="h-full bg-gradient-to-r from-primary to-accent" style={{ width: `${pct}%` }} />
+                    <div
+                      className="h-full bg-gradient-to-r from-primary to-accent"
+                      style={{ width: `${pct}%` }}
+                    />
                   </div>
                   <span className="text-xs text-muted-foreground w-8 text-right">{n}</span>
                 </li>
@@ -197,7 +241,11 @@ function Reports() {
                   <div className="text-xs text-muted-foreground font-mono">{c.contactPhone}</div>
                 </td>
                 <td className="text-xs">{c.instanceName ?? "—"}</td>
-                <td><Badge variant="outline" className="text-[10px]">{c.status}</Badge></td>
+                <td>
+                  <Badge variant="outline" className="text-[10px]">
+                    {c.status}
+                  </Badge>
+                </td>
                 <td className="text-xs">{(c.tags ?? []).join(", ") || "—"}</td>
                 <td className="text-xs">{new Date(c.updatedAt).toLocaleString("pt-BR")}</td>
               </tr>
@@ -214,10 +262,21 @@ function Reports() {
   );
 }
 
-function Kpi({ icon, label, value }: { icon: React.ReactNode; label: string; value: string | number }) {
+function Kpi({
+  icon,
+  label,
+  value,
+}: {
+  icon: React.ReactNode;
+  label: string;
+  value: string | number;
+}) {
   return (
     <div className="rounded-2xl border border-border bg-card/30 p-4">
-      <div className="flex items-center gap-2 text-xs text-muted-foreground">{icon}{label}</div>
+      <div className="flex items-center gap-2 text-xs text-muted-foreground">
+        {icon}
+        {label}
+      </div>
       <div className="font-display text-2xl font-bold mt-1">{value}</div>
     </div>
   );

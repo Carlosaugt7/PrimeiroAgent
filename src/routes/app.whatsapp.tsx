@@ -115,10 +115,10 @@ function Page() {
         setLoading(false);
       } else if (data) {
         setLocalInstances(
-          data.map((d: any) => ({
+          data.map((d: { id: string; name: string | null; status: string | null }) => ({
             id: d.id,
             instanceName: d.name ?? d.id,
-            status: d.status,
+            status: d.status ?? undefined,
           })),
         );
       }

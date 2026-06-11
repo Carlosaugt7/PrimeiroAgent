@@ -29,7 +29,13 @@ function Settings() {
       <div className="rounded-2xl border border-destructive/30 bg-destructive/5 p-5">
         <p className="font-semibold text-destructive">Encerrar sessão</p>
         <p className="text-xs text-muted-foreground mt-1">Você precisará entrar novamente.</p>
-        <Button variant="outline" className="mt-3 border-destructive/40 text-destructive" onClick={signOut}>Sair</Button>
+        <Button
+          variant="outline"
+          className="mt-3 border-destructive/40 text-destructive"
+          onClick={signOut}
+        >
+          Sair
+        </Button>
       </div>
     </div>
   );

@@ -1,3 +1,4 @@
+/* eslint-disable react-refresh/only-export-components */
 import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/lib/auth";
@@ -283,13 +284,13 @@ export function AppStoreProvider({ children }: { readonly children: ReactNode })
                     type: "instance_down",
                     severity: "error",
                     title: "Instância WhatsApp caiu",
-                    body: `${(inst as any).instanceName ?? inst.id} agora está "${curStatus}".`,
+                    body: `${inst.name ?? inst.id} agora está "${curStatus}".`,
                     link: "/app/whatsapp",
                   });
                   logAudit(tenantId, {
                     action: "instance.down",
                     target: inst.id,
-                    targetLabel: (inst as any).instanceName,
+                    targetLabel: inst.name,
                     meta: { from: prevStatus, to: curStatus },
                   });
                 }
@@ -440,8 +441,8 @@ export function AppStoreProvider({ children }: { readonly children: ReactNode })
           const { connectInstance } = await import("@/lib/evolution.functions");
           const r = await connectInstance({ data: { tenantId, instanceName } });
           setActiveQrBase64(r.base64);
-        } catch (error: any) {
-          toast.error(error?.message ?? "Falha ao carregar QR Code");
+        } catch (error: unknown) {
+          toast.error(error instanceof Error ? error.message : "Falha ao carregar QR Code");
           setActiveQrFor(null);
         } finally {
           setActiveQrLoading(false);

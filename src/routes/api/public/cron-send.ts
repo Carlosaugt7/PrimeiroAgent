@@ -28,26 +28,32 @@ async function run() {
 
   const results: any[] = [];
 
-  for (const m of (dueMessages || [])) {
+  for (const m of dueMessages || []) {
     try {
       if (!m.instanceName || !m.number || !m.text) throw new Error("dados incompletos");
       await evoSendText(m.instanceName, m.number, m.text);
-      
-      await supabase.from("scheduled_messages").update({ 
-        status: "sent", 
-        sentAt: new Date().toISOString() 
-      }).eq("id", m.id);
-      
+
+      await supabase
+        .from("scheduled_messages")
+        .update({
+          status: "sent",
+          sentAt: new Date().toISOString(),
+        })
+        .eq("id", m.id);
+
       results.push({ tenant: m.tenantId, id: m.id, ok: true });
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
-      
-      await supabase.from("scheduled_messages").update({ 
-        status: "failed", 
-        error: msg, 
-        sentAt: new Date().toISOString() 
-      }).eq("id", m.id);
-      
+
+      await supabase
+        .from("scheduled_messages")
+        .update({
+          status: "failed",
+          error: msg,
+          sentAt: new Date().toISOString(),
+        })
+        .eq("id", m.id);
+
       results.push({ tenant: m.tenantId, id: m.id, ok: false, error: msg });
     }
   }
@@ -66,7 +72,8 @@ export const Route = createFileRoute("/api/public/cron-send")({
 
 async function handle(request: Request) {
   const secret = process.env.CRON_SECRET;
-  const provided = new URL(request.url).searchParams.get("key") ?? request.headers.get("x-cron-secret");
+  const provided =
+    new URL(request.url).searchParams.get("key") ?? request.headers.get("x-cron-secret");
   if (!secret || provided !== secret) {
     return new Response("Unauthorized", { status: 401 });
   }

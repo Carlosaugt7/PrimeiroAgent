@@ -208,12 +208,30 @@ function Inbox() {
       .on(
         "postgres_changes",
         {
-          event: "*",
+          event: "INSERT",
           schema: "public",
           table: "messages",
           filter: `conversationId=eq.${activeId}`,
         },
-        fetchMessages,
+        (payload: { new: Record<string, unknown> }) => {
+          const newMsg = payload.new as unknown as Msg;
+          setMessages((prev) => {
+            if (prev.some((m) => m.id === newMsg.id)) return prev;
+            return [...prev, newMsg];
+          });
+        },
+      )
+      .on(
+        "postgres_changes",
+        {
+          event: "DELETE",
+          schema: "public",
+          table: "messages",
+          filter: `conversationId=eq.${activeId}`,
+        },
+        () => {
+          fetchMessages();
+        },
       )
       .subscribe();
 
@@ -233,7 +251,14 @@ function Inbox() {
     setSending(true);
     try {
       const number = active.remoteJid.split("@")[0];
-      await sendFn({ data: { tenantId: tenant.id, instanceName: active.instanceName, number, text: draft.trim() } });
+      await sendFn({
+        data: {
+          tenantId: tenant.id,
+          instanceName: active.instanceName,
+          number,
+          text: draft.trim(),
+        },
+      });
       setDraft("");
     } catch (e: any) {
       toast.error(e?.message ?? "Falha ao enviar");

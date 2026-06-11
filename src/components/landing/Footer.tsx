@@ -14,9 +14,15 @@ export function Footer() {
           © {new Date().getFullYear()} AgentHub AI. Todos os direitos reservados.
         </p>
         <div className="flex gap-6 text-xs text-muted-foreground">
-          <a href="#" className="hover:text-foreground">Privacidade</a>
-          <a href="#" className="hover:text-foreground">Termos</a>
-          <a href="#" className="hover:text-foreground">Contato</a>
+          <a href="#" className="hover:text-foreground">
+            Privacidade
+          </a>
+          <a href="#" className="hover:text-foreground">
+            Termos
+          </a>
+          <a href="#" className="hover:text-foreground">
+            Contato
+          </a>
         </div>
       </div>
     </footer>

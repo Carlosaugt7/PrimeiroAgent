@@ -33,7 +33,7 @@ function Page() {
         .select("evolutionApiUrl, evolutionApiKey")
         .eq("id", tenant.id)
         .single();
-      
+
       if (data) {
         const dbUrl = data.evolutionApiUrl || "";
         const dbKey = data.evolutionApiKey || "";
@@ -92,7 +92,7 @@ function Page() {
           evolutionApiKey: key.trim(),
         })
         .eq("id", tenant.id);
-      
+
       if (error) throw error;
       toast.success("Configurações salvas com sucesso!");
     } catch (e: any) {
@@ -114,7 +114,9 @@ function Page() {
     <div className="space-y-6 max-w-4xl">
       <div>
         <h1 className="font-display text-3xl font-bold">Integrações</h1>
-        <p className="text-muted-foreground text-sm mt-1">Configure suas integrações externas e webhooks.</p>
+        <p className="text-muted-foreground text-sm mt-1">
+          Configure suas integrações externas e webhooks.
+        </p>
       </div>
 
       <Card className="bg-gradient-card border-border">
@@ -123,7 +125,8 @@ function Page() {
             <div>
               <CardTitle>Evolution API (WhatsApp)</CardTitle>
               <CardDescription>
-                Configure as credenciais do seu servidor Evolution API para conectar o WhatsApp de forma Multi-Tenant.
+                Configure as credenciais do seu servidor Evolution API para conectar o WhatsApp de
+                forma Multi-Tenant.
               </CardDescription>
             </div>
             {status === "connected" && (
@@ -160,11 +163,19 @@ function Page() {
           </div>
           <div className="flex items-center gap-3 pt-2">
             <Button onClick={handleSave} disabled={saving}>
-              {saving ? <Loader2 className="size-4 animate-spin mr-1.5" /> : <Save className="size-4 mr-1.5" />}
+              {saving ? (
+                <Loader2 className="size-4 animate-spin mr-1.5" />
+              ) : (
+                <Save className="size-4 mr-1.5" />
+              )}
               Salvar Configuração
             </Button>
             <Button variant="outline" onClick={handleTest} disabled={testing || !url || !key}>
-              {testing ? <Loader2 className="size-4 animate-spin mr-1.5" /> : <Wifi className="size-4 mr-1.5" />}
+              {testing ? (
+                <Loader2 className="size-4 animate-spin mr-1.5" />
+              ) : (
+                <Wifi className="size-4 mr-1.5" />
+              )}
               Testar Conexão
             </Button>
           </div>

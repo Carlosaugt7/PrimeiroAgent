@@ -44,7 +44,9 @@ export function checkLimit(
     limit,
     current,
     remaining: Math.max(0, limit - current),
-    message: ok ? undefined : `Limite do plano ${planName(planId)} atingido: ${limit} ${LABELS[kind]}.`,
+    message: ok
+      ? undefined
+      : `Limite do plano ${planName(planId)} atingido: ${limit} ${LABELS[kind]}.`,
   };
 }
 

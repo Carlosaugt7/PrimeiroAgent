@@ -5,7 +5,12 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import {
-  Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
 } from "@/components/ui/table";
 import { Contact, Download, MessageCircle, Search, X } from "lucide-react";
 import { toast } from "sonner";
@@ -61,11 +66,31 @@ function aggregate(convs: Conversation[]): ContactRow[] {
 }
 
 function downloadCSV(rows: ContactRow[]) {
-  const head = ["Nome", "Telefone", "Conversas", "Status", "Tags", "Última mensagem", "Atualizado em"];
+  const head = [
+    "Nome",
+    "Telefone",
+    "Conversas",
+    "Status",
+    "Tags",
+    "Última mensagem",
+    "Atualizado em",
+  ];
   const escape = (v: string) => `"${(v ?? "").replace(/"/g, '""')}"`;
   const lines = [head.map(escape).join(",")];
   for (const r of rows) {
-    lines.push([r.name, r.phone, String(r.conversations), r.status, r.tags.join("; "), r.lastMessage, r.lastAt].map(escape).join(","));
+    lines.push(
+      [
+        r.name,
+        r.phone,
+        String(r.conversations),
+        r.status,
+        r.tags.join("; "),
+        r.lastMessage,
+        r.lastAt,
+      ]
+        .map(escape)
+        .join(","),
+    );
   }
   const blob = new Blob([lines.join("\n")], { type: "text/csv;charset=utf-8;" });
   const url = URL.createObjectURL(blob);
@@ -112,9 +137,15 @@ function CRM() {
       <div className="flex items-end justify-between flex-wrap gap-4">
         <div>
           <h1 className="font-display text-3xl font-bold">Contatos (CRM)</h1>
-          <p className="text-muted-foreground mt-1">{contacts.length} contatos únicos · {filtered.length} no filtro atual</p>
+          <p className="text-muted-foreground mt-1">
+            {contacts.length} contatos únicos · {filtered.length} no filtro atual
+          </p>
         </div>
-        <Button variant="outline" onClick={() => downloadCSV(filtered)} disabled={filtered.length === 0}>
+        <Button
+          variant="outline"
+          onClick={() => downloadCSV(filtered)}
+          disabled={filtered.length === 0}
+        >
           <Download className="size-4" /> Exportar CSV
         </Button>
       </div>
@@ -124,11 +155,21 @@ function CRM() {
         <div className="flex items-center gap-2 flex-wrap">
           <div className="relative flex-1 min-w-64">
             <Search className="size-4 absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
-            <Input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Buscar nome, telefone ou mensagem..." className="pl-9" />
+            <Input
+              value={q}
+              onChange={(e) => setQ(e.target.value)}
+              placeholder="Buscar nome, telefone ou mensagem..."
+              className="pl-9"
+            />
           </div>
           <div className="flex items-center gap-1">
             {(["all", "aberta", "handoff", "resolvida"] as const).map((s) => (
-              <Button key={s} size="sm" variant={status === s ? "default" : "outline"} onClick={() => setStatus(s)}>
+              <Button
+                key={s}
+                size="sm"
+                variant={status === s ? "default" : "outline"}
+                onClick={() => setStatus(s)}
+              >
                 {s === "all" ? "Todos" : s[0].toUpperCase() + s.slice(1)}
               </Button>
             ))}
@@ -143,13 +184,21 @@ function CRM() {
               return (
                 <button key={t} onClick={() => toggleTag(t)}>
                   <Badge variant={on ? "default" : "outline"} className="cursor-pointer gap-1">
-                    {t}{on && <X className="size-3" />}
+                    {t}
+                    {on && <X className="size-3" />}
                   </Badge>
                 </button>
               );
             })}
             {activeTags.length > 0 && (
-              <Button size="sm" variant="ghost" className="h-6 text-xs" onClick={() => setActiveTags([])}>limpar</Button>
+              <Button
+                size="sm"
+                variant="ghost"
+                className="h-6 text-xs"
+                onClick={() => setActiveTags([])}
+              >
+                limpar
+              </Button>
             )}
           </div>
         )}
@@ -185,19 +234,35 @@ function CRM() {
                 <TableRow key={c.phone}>
                   <TableCell>
                     <div className="font-medium">{c.name}</div>
-                    <div className="text-xs text-muted-foreground truncate max-w-xs">{c.lastMessage}</div>
+                    <div className="text-xs text-muted-foreground truncate max-w-xs">
+                      {c.lastMessage}
+                    </div>
                   </TableCell>
                   <TableCell className="font-mono text-xs">{c.phone}</TableCell>
                   <TableCell>{c.conversations}</TableCell>
                   <TableCell>
-                    <Badge variant={c.status === "resolvida" ? "secondary" : c.status === "handoff" ? "outline" : "default"}>
+                    <Badge
+                      variant={
+                        c.status === "resolvida"
+                          ? "secondary"
+                          : c.status === "handoff"
+                            ? "outline"
+                            : "default"
+                      }
+                    >
                       {c.status}
                     </Badge>
                   </TableCell>
                   <TableCell>
                     <div className="flex flex-wrap gap-1 max-w-xs">
-                      {c.tags.slice(0, 4).map((t) => <Badge key={t} variant="outline" className="text-[10px]">{t}</Badge>)}
-                      {c.tags.length > 4 && <span className="text-xs text-muted-foreground">+{c.tags.length - 4}</span>}
+                      {c.tags.slice(0, 4).map((t) => (
+                        <Badge key={t} variant="outline" className="text-[10px]">
+                          {t}
+                        </Badge>
+                      ))}
+                      {c.tags.length > 4 && (
+                        <span className="text-xs text-muted-foreground">+{c.tags.length - 4}</span>
+                      )}
                     </div>
                   </TableCell>
                   <TableCell className="text-xs text-muted-foreground">
@@ -205,7 +270,11 @@ function CRM() {
                   </TableCell>
                   <TableCell className="text-right">
                     <Link to="/app/inbox">
-                      <Button size="sm" variant="ghost" onClick={() => toast.info(`Abra a conversa "${c.name}" no Inbox`)}>
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        onClick={() => toast.info(`Abra a conversa "${c.name}" no Inbox`)}
+                      >
                         <MessageCircle className="size-3.5" /> Abrir
                       </Button>
                     </Link>

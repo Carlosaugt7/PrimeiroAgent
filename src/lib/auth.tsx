@@ -49,14 +49,14 @@ const Ctx = createContext<AuthCtx | null>(null);
 async function isMasterUser(user: User | null): Promise<boolean> {
   if (!user) return false;
   if (user.email && isMasterEmail(user.email)) return true;
-  
+
   try {
     const { data, error } = await supabase
       .from("master_admins")
       .select("id")
       .eq("id", user.id)
       .single();
-    
+
     if (data && !error) return true;
   } catch (e) {
     console.warn("[auth] falha ao verificar master_admins:", e);
@@ -82,7 +82,7 @@ async function ensureTenantAndProfile(
         .select("*")
         .eq("id", profile.tenantId)
         .single();
-        
+
       if (tenantSnap) {
         let tenant = tenantSnap as Tenant;
         if (isMasterEmail(user.email) && tenant.plan !== "enterprise") {
@@ -107,7 +107,7 @@ async function ensureTenantAndProfile(
   let invitedTenantId: string | null = null;
   let invitedRole: Role = "agent";
   let inviteDocId: string | null = null;
-  
+
   if (email) {
     try {
       const { data: inv } = await supabase
@@ -116,7 +116,7 @@ async function ensureTenantAndProfile(
         .eq("email", email)
         .limit(1)
         .single();
-        
+
       if (inv) {
         invitedTenantId = inv.tenantId || null;
         invitedRole = inv.role || "agent";
@@ -138,11 +138,10 @@ async function ensureTenantAndProfile(
       tenantId: invitedTenantId,
       role: invitedRole,
     };
-    
-    await supabase.from("users").upsert(
-      { ...profile, updated_at: new Date().toISOString() },
-      { onConflict: "uid" }
-    );
+
+    await supabase
+      .from("users")
+      .upsert({ ...profile, updated_at: new Date().toISOString() }, { onConflict: "uid" });
 
     try {
       const { data: tSnap, error } = await supabase
@@ -150,11 +149,11 @@ async function ensureTenantAndProfile(
         .select("*")
         .eq("id", invitedTenantId)
         .single();
-        
+
       if (error || !tSnap) throw new Error("Tenant do convite não existe");
-      
+
       tenant = tSnap as Tenant;
-      
+
       await supabase.from("tenant_members").upsert(
         {
           uid: user.id,
@@ -164,9 +163,9 @@ async function ensureTenantAndProfile(
           role: invitedRole,
           joinedAt: new Date().toISOString(),
         },
-        { onConflict: "uid,tenantId" }
+        { onConflict: "uid,tenantId" },
       );
-      
+
       if (inviteDocId) {
         await supabase.from("invites").delete().eq("id", inviteDocId);
       }
@@ -180,7 +179,8 @@ async function ensureTenantAndProfile(
   const tenantId = user.id;
   tenant = {
     id: tenantId,
-    name: companyHint || user.user_metadata?.displayName || user.email?.split("@")[0] || "Workspace",
+    name:
+      companyHint || user.user_metadata?.displayName || user.email?.split("@")[0] || "Workspace",
     ownerId: user.id,
     plan: isMasterEmail(user.email) ? "enterprise" : "trial",
     status: "active",
@@ -193,15 +193,13 @@ async function ensureTenantAndProfile(
     tenantId,
     role: "owner",
   };
-  
-  await supabase.from("users").upsert(
-    { ...profile, updated_at: new Date().toISOString() },
-    { onConflict: "uid" }
-  );
-  await supabase.from("tenants").upsert(
-    { ...tenant, updated_at: new Date().toISOString() },
-    { onConflict: "id" }
-  );
+
+  await supabase
+    .from("users")
+    .upsert({ ...profile, updated_at: new Date().toISOString() }, { onConflict: "uid" });
+  await supabase
+    .from("tenants")
+    .upsert({ ...tenant, updated_at: new Date().toISOString() }, { onConflict: "id" });
   await supabase.from("tenant_members").upsert(
     {
       uid: user.id,
@@ -211,7 +209,7 @@ async function ensureTenantAndProfile(
       role: "owner",
       joinedAt: new Date().toISOString(),
     },
-    { onConflict: "uid,tenantId" }
+    { onConflict: "uid,tenantId" },
   );
 
   return { profile, tenant };
@@ -239,12 +237,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     return () => subscription.unsubscribe();
   }, []);
-  
+
   const handleAuthChange = async (session: Session | null) => {
     setLoading(true);
     const u = session?.user || null;
     setUser(u);
-    
+
     if (u) {
       try {
         const { profile, tenant } = await ensureTenantAndProfile(u);
@@ -254,10 +252,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
         let activeTenant = tenant;
         if (master) {
-          const saved = typeof window !== "undefined" ? localStorage.getItem(ACTIVE_TENANT_KEY) : null;
+          const saved =
+            typeof window !== "undefined" ? localStorage.getItem(ACTIVE_TENANT_KEY) : null;
           if (saved && saved !== tenant.id) {
             try {
-              const { data: ts } = await supabase.from("tenants").select("*").eq("id", saved).single();
+              const { data: ts } = await supabase
+                .from("tenants")
+                .select("*")
+                .eq("id", saved)
+                .single();
               if (ts) {
                 activeTenant = ts as Tenant;
               }
@@ -284,10 +287,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const switchTenant = async (tenantId: string) => {
     if (!user) return;
     if (!isMaster) throw new Error("Apenas Master Admin pode trocar de tenant");
-    
-    const { data: ts, error } = await supabase.from("tenants").select("*").eq("id", tenantId).single();
+
+    const { data: ts, error } = await supabase
+      .from("tenants")
+      .select("*")
+      .eq("id", tenantId)
+      .single();
     if (error || !ts) throw new Error("Tenant não encontrado");
-    
+
     localStorage.setItem(ACTIVE_TENANT_KEY, tenantId);
     setTenant(ts as Tenant);
   };
@@ -316,8 +323,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         email,
         password,
         options: {
-          data: { displayName }
-        }
+          data: { displayName },
+        },
       });
       if (error) throw error;
       if (data.user) {
@@ -325,7 +332,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
     },
     signInGoogle: async () => {
-      const { error } = await supabase.auth.signInWithOAuth({ provider: 'google' });
+      const { error } = await supabase.auth.signInWithOAuth({ provider: "google" });
       if (error) throw error;
     },
     signOut: async () => {

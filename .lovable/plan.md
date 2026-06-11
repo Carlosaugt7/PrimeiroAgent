@@ -1,4 +1,3 @@
-
 # Refatoração do Dashboard AgentHub AI
 
 Mantém a landing page atual (`/`) intacta. Toda área `/app/*` será reconstruída como SaaS multi-tenant real com Firebase Auth + Firestore + Storage.
@@ -12,12 +11,14 @@ A entrega é grande — proponho dividir em **5 fases**, aprovando uma de cada v
 ## Fase 1 — Fundação Multi-Tenant + Auth (esta entrega)
 
 **Auth real (Firebase Auth):**
+
 - Login / Signup com e-mail+senha e Google
 - Rota pública `/auth` (login + cadastro em tabs)
 - Guard de rota: `/app/*` redireciona para `/auth` se deslogado
 - Logout no header
 
 **Multi-tenancy real no Firestore:**
+
 - Ao criar conta → cria `tenants/{tenantId}` com dono e plano "trial"
 - Todo dado vive em `tenants/{tenantId}/...` (isolamento total)
 - Coleções por tenant: `agents`, `conversations`, `contacts`, `knowledge`, `audios`, `instances`, `flows`, `crm_leads`, `prompt_versions`, `llm_providers`, `audit_logs`
@@ -35,17 +36,20 @@ A entrega é grande — proponho dividir em **5 fases**, aprovando uma de cada v
 **Dashboard `/app`:** KPIs reais (conversas hoje, leads, agentes ativos, custo IA estimado, msgs, tempo médio, instâncias conectadas) calculados de Firestore.
 
 **Agentes `/app/agents`:**
+
 - Wizard de criação em 4 passos: Básico → Persona → Prompt → Modelo
 - Editor de prompt avançado com variáveis `{{nome}}`, templates, **versionamento** (subcoleção `prompt_versions`)
 - Seletor de provedor LLM já cadastrado + modelo
 - Toggle ativo/inativo, duplicar, excluir
 
 **Provedores LLM `/app/llm-providers`** (novo):
+
 - Cadastrar: nome, provedor (Anthropic/Google/OpenAI/Groq/DeepSeek/OpenRouter), URL base, API key (criptografada via server fn)
 - Botão "Detectar modelos" → server fn chama `/v1/models` do provedor e popula modelos disponíveis + context window
 - Lista de modelos por provedor com preços
 
 **Playground `/app/playground`:**
+
 - Chat de teste com qualquer agente
 - Painel lateral: prompt resolvido, tokens IN/OUT, tempo, custo estimado
 - Cenários pré-prontos: vendas, suporte, objeção
@@ -63,7 +67,7 @@ A entrega é grande — proponho dividir em **5 fases**, aprovando uma de cada v
 
 ## Fase 4 — Conhecimento + Automações + CRM (plano)
 
-- **RAG `/app/knowledge`**: upload PDF/DOCX/XLSX/TXT/CSV/JSON para Firebase Storage, FAQ manual, crawler de site (server fn), status de indexação. *Nota: vetorização real precisa de pgvector ou serviço externo — Firestore não tem vetorial nativo; proponho usar Pinecone/Supabase pgvector como complemento, ou armazenar embeddings em Firestore com busca aproximada client-side para começar.*
+- **RAG `/app/knowledge`**: upload PDF/DOCX/XLSX/TXT/CSV/JSON para Firebase Storage, FAQ manual, crawler de site (server fn), status de indexação. _Nota: vetorização real precisa de pgvector ou serviço externo — Firestore não tem vetorial nativo; proponho usar Pinecone/Supabase pgvector como complemento, ou armazenar embeddings em Firestore com busca aproximada client-side para começar._
 - **Áudios `/app/audios`**: biblioteca no Storage, categorias, agente pode anexar
 - **Flow Builder `/app/flows`**: editor visual com React Flow — nós Mensagem/Condição/IA/API/Delay/Humano/WhatsApp
 - **CRM `/app/crm`**: leads, kanban (Novo→Contato→Negociação→Fechado), drag-and-drop
@@ -99,6 +103,7 @@ A entrega é grande — proponho dividir em **5 fases**, aprovando uma de cada v
 ## O que entrego ao aprovar este plano
 
 **Fases 1 + 2 completas** em um único push:
+
 - Auth + multi-tenant + guards + regras Firestore
 - Dashboard com KPIs reais
 - CRUD completo de Agentes com wizard + versionamento de prompt

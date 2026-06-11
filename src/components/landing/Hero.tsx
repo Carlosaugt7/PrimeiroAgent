@@ -28,8 +28,8 @@ export function Hero() {
         </h1>
 
         <p className="mt-6 text-lg md:text-xl text-muted-foreground max-w-2xl mx-auto leading-relaxed">
-          Conecte seus agentes ao WhatsApp via Evolution API em minutos.
-          Sem terminal, sem código, sem configuração manual — apenas resultados para sua empresa.
+          Conecte seus agentes ao WhatsApp via Evolution API em minutos. Sem terminal, sem código,
+          sem configuração manual — apenas resultados para sua empresa.
         </p>
 
         <div className="mt-10 flex flex-col sm:flex-row gap-3 justify-center">

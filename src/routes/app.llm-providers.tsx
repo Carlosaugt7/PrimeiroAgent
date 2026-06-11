@@ -91,8 +91,8 @@ function ProvidersPage() {
       setForm((f) => ({ ...f, models: modelsWithSelection }));
       if (r.models.length) toast.success(`${r.models.length} modelos detectados`);
       else if (!r.error) toast.warning("Nenhum modelo retornado");
-    } catch (e: any) {
-      toast.error(e?.message ?? "Falha");
+    } catch (e: unknown) {
+      toast.error(e instanceof Error ? e.message : "Falha");
     } finally {
       setBusy(false);
     }
@@ -118,8 +118,8 @@ function ProvidersPage() {
       toast.success("Provedor cadastrado");
       setOpen(false);
       setForm({ name: "", kind: "openai", baseUrl: DEFAULT_URLS.openai, apiKey: "", models: [] });
-    } catch (e: any) {
-      toast.error(e?.message ?? "Erro");
+    } catch (e: unknown) {
+      toast.error(e instanceof Error ? e.message : "Erro");
     } finally {
       setBusy(false);
     }
@@ -142,8 +142,8 @@ function ProvidersPage() {
 
       setDetectedModelsForRefresh(modelsWithSelection);
       setRefreshingProvider(p);
-    } catch (e: any) {
-      toast.error(e?.message ?? "Erro ao carregar modelos");
+    } catch (e: unknown) {
+      toast.error(e instanceof Error ? e.message : "Erro ao carregar modelos");
     } finally {
       setBusy(false);
     }
@@ -471,8 +471,8 @@ function ProvidersPage() {
                     `Modelos atualizados com sucesso (${selectedModels.length} ativos)`,
                   );
                   setRefreshingProvider(null);
-                } catch (e: any) {
-                  toast.error(e?.message ?? "Erro ao atualizar provedor");
+                } catch (e: unknown) {
+                  toast.error(e instanceof Error ? e.message : "Erro ao atualizar provedor");
                 } finally {
                   setBusy(false);
                 }

@@ -4,11 +4,12 @@ import { useServerFn } from "@tanstack/react-start";
 import { useAuth } from "@/lib/auth";
 import { useAppStore } from "@/lib/app-store";
 import { supabase } from "@/integrations/supabase/client";
-import { embedTexts } from "@/lib/llm.functions";
+import { embedTexts, fetchWebpageText } from "@/lib/llm.functions";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import {
   Select,
   SelectContent,
@@ -24,7 +25,7 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 import { Badge } from "@/components/ui/badge";
-import { Database, Upload, Loader2, Trash2, FileText } from "lucide-react";
+import { Database, Upload, Loader2, Trash2, FileText, Globe } from "lucide-react";
 import { toast } from "sonner";
 
 export const Route = createFileRoute("/app/knowledge")({ component: Page });
@@ -74,11 +75,14 @@ function Page() {
   const { tenant } = useAuth();
   const { providers } = useAppStore();
   const embed = useServerFn(embedTexts);
+  const fetchWebpage = useServerFn(fetchWebpageText);
 
   const [docs, setDocs] = useState<KnowDoc[]>([]);
   const [open, setOpen] = useState(false);
   const [name, setName] = useState("");
   const [text, setText] = useState("");
+  const [url, setUrl] = useState("");
+  const [activeTab, setActiveTab] = useState("file");
   const [providerId, setProviderId] = useState("");
   const [embedModel, setEmbedModel] = useState("text-embedding-3-small");
   const [ingesting, setIngesting] = useState(false);
@@ -145,15 +149,31 @@ function Page() {
       toast.error("Selecione um provedor de embeddings");
       return;
     }
-    if (!name.trim() || !text.trim()) {
-      toast.error("Nome e conteúdo obrigatórios");
+    if (!name.trim()) {
+      toast.error("Nome obrigatório");
+      return;
+    }
+    if (activeTab === "file" && !text.trim()) {
+      toast.error("Conteúdo obrigatório");
+      return;
+    }
+    if (activeTab === "url" && !url.trim()) {
+      toast.error("URL obrigatória");
       return;
     }
 
     setIngesting(true);
     const docId = crypto.randomUUID();
     try {
-      const chunks = chunkText(text);
+      let finalDocText = text;
+
+      if (activeTab === "url") {
+        setProgress("Buscando conteúdo da página web...");
+        const res = await fetchWebpage({ data: { url: url.trim() } });
+        finalDocText = res.text;
+      }
+
+      const chunks = chunkText(finalDocText);
       setProgress(`Gerando embeddings (${chunks.length} chunks)...`);
 
       // Lote de 64 chunks por chamada para evitar payload grande
@@ -175,10 +195,14 @@ function Page() {
 
       setProgress("Salvando no banco...");
 
+      // Salva o link no campo de nome se o usuário não inseriu um nome personalizado, ou mantém o nome
+      const finalDocName =
+        activeTab === "url" && name.trim() === url.trim() ? url.trim() : name.trim();
+
       const { error: docErr } = await supabase.from("knowledge").insert({
         id: docId,
         tenantId: tenant.id,
-        name: name.trim(),
+        name: finalDocName,
         embedModel,
         embedProviderId: providerId,
         createdAt: new Date().toISOString(),
@@ -199,13 +223,15 @@ function Page() {
         if (chunkErr) throw chunkErr;
       }
 
-      toast.success(`"${name}" indexado (${chunks.length} chunks)`);
+      toast.success(`"${finalDocName}" indexado (${chunks.length} chunks)`);
       setOpen(false);
       setName("");
       setText("");
+      setUrl("");
       setProgress("");
-    } catch (e: any) {
-      toast.error(e?.message ?? "Falha na ingestão");
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : "Falha na ingestão";
+      toast.error(msg);
     } finally {
       setIngesting(false);
     }
@@ -218,8 +244,9 @@ function Page() {
       const { error } = await supabase.from("knowledge").delete().eq("id", d.id);
       if (error) throw error;
       toast.success("Excluído");
-    } catch (e: any) {
-      toast.error(e?.message ?? "Falha ao excluir");
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : "Falha ao excluir";
+      toast.error(msg);
     }
   };
 
@@ -279,26 +306,56 @@ function Page() {
                   OpenAI: text-embedding-3-small (1536) ou text-embedding-3-large (3072).
                 </p>
               </div>
-              <div className="space-y-1.5">
-                <Label>Arquivo (.txt / .md) ou cole o texto</Label>
-                <input
-                  type="file"
-                  accept=".txt,.md"
-                  onChange={(e) => e.target.files?.[0] && onPickFile(e.target.files[0])}
-                  className="text-xs file:mr-3 file:px-3 file:py-1.5 file:rounded-lg file:border-0 file:bg-secondary file:text-foreground"
-                />
-                <Textarea
-                  value={text}
-                  onChange={(e) => setText(e.target.value)}
-                  rows={10}
-                  placeholder="Cole aqui FAQ, política, manual, transcrição..."
-                  className="font-mono text-xs"
-                />
-                <p className="text-[10px] text-muted-foreground">
-                  {text.length.toLocaleString()} chars · ~
-                  {Math.max(1, Math.ceil(text.length / 800))} chunks
-                </p>
-              </div>
+              <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
+                <TabsList className="grid w-full grid-cols-2">
+                  <TabsTrigger value="file">Arquivo / Texto</TabsTrigger>
+                  <TabsTrigger value="url">Link / URL</TabsTrigger>
+                </TabsList>
+
+                <TabsContent value="file" className="space-y-3 pt-3">
+                  <div className="space-y-1.5">
+                    <Label>Arquivo (.txt / .md) ou cole o texto</Label>
+                    <input
+                      type="file"
+                      accept=".txt,.md"
+                      onChange={(e) => e.target.files?.[0] && onPickFile(e.target.files[0])}
+                      className="text-xs file:mr-3 file:px-3 file:py-1.5 file:rounded-lg file:border-0 file:bg-secondary file:text-foreground"
+                    />
+                    <Textarea
+                      value={text}
+                      onChange={(e) => setText(e.target.value)}
+                      rows={8}
+                      placeholder="Cole aqui FAQ, política, manual, transcrição..."
+                      className="font-mono text-xs"
+                    />
+                    <p className="text-[10px] text-muted-foreground">
+                      {text.length.toLocaleString()} chars · ~
+                      {Math.max(1, Math.ceil(text.length / 800))} chunks
+                    </p>
+                  </div>
+                </TabsContent>
+
+                <TabsContent value="url" className="space-y-3 pt-3">
+                  <div className="space-y-1.5">
+                    <Label>Endereço URL (Link do site)</Label>
+                    <Input
+                      value={url}
+                      onChange={(e) => {
+                        setUrl(e.target.value);
+                        // Define o nome baseado na URL automaticamente caso o nome esteja vazio
+                        if (!name) {
+                          setName(e.target.value);
+                        }
+                      }}
+                      placeholder="https://exemplo.com/faq"
+                    />
+                    <p className="text-xs text-muted-foreground">
+                      O sistema fará o download da página, removerá menus e scripts, e indexará
+                      apenas o conteúdo principal.
+                    </p>
+                  </div>
+                </TabsContent>
+              </Tabs>
               {progress && <p className="text-xs text-muted-foreground">{progress}</p>}
               <Button variant="hero" className="w-full" onClick={ingest} disabled={ingesting}>
                 {ingesting ? (
@@ -338,7 +395,11 @@ function Page() {
             >
               <div className="min-w-0">
                 <p className="font-semibold text-sm truncate flex items-center gap-2">
-                  <FileText className="size-4" />
+                  {d.name.startsWith("http://") || d.name.startsWith("https://") ? (
+                    <Globe className="size-4 text-primary" />
+                  ) : (
+                    <FileText className="size-4 text-muted-foreground" />
+                  )}
                   {d.name}
                 </p>
                 <p className="text-xs text-muted-foreground mt-1">{d.embedModel}</p>

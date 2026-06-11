@@ -1,3 +1,4 @@
+-- cspell:disable
 -- =====================================================
 -- AgentHub AI: MIGRATION COMPLETA
 -- =====================================================
@@ -161,7 +162,21 @@ create table public.agents (
   model text,
   "systemPrompt" text,
   temperature numeric default 0.5,
-  "createdAt" timestamptz default now()
+  "createdAt" timestamptz default now(),
+  "photoUrl" text,
+  category text default 'Geral',
+  department text default 'Atendimento',
+  description text,
+  status text default 'offline',
+  segment text default 'Vendas',
+  "promptVersion" integer default 1,
+  "topP" numeric default 1,
+  "maxTokens" integer default 1024,
+  memory text default 'vetorial',
+  persona jsonb default '{}'::jsonb,
+  "messages30d" integer default 0,
+  "conversions30d" integer default 0,
+  "_createdBy" text
 );
 
 -- 12. Knowledge (Bases RAG)
@@ -449,6 +464,33 @@ drop policy if exists "storage_campaigns_delete" on storage.objects;
 create policy "storage_campaigns_insert" on storage.objects for insert to authenticated with check (bucket_id = 'campaigns');
 create policy "storage_campaigns_select" on storage.objects for select to public using (bucket_id = 'campaigns');
 create policy "storage_campaigns_delete" on storage.objects for delete to authenticated using (bucket_id = 'campaigns');
+
+-- =====================================================
+-- PASSO 4.5: TABELA DE AGENDAMENTOS (APPOINTMENTS)
+-- =====================================================
+create table if not exists public.appointments (
+  id uuid primary key default gen_random_uuid(),
+  "tenantId" text not null references public.tenants(id) on delete cascade,
+  "patientName" text not null,
+  "patientPhone" text not null,
+  specialty text not null,
+  "date" date not null,
+  "time" text not null,
+  status text default 'scheduled', -- 'scheduled', 'cancelled'
+  "createdAt" timestamptz default now()
+);
+
+alter table public.appointments enable row level security;
+create policy "appointments_all" on public.appointments for all to authenticated using (true) with check (true);
+
+-- =====================================================
+-- PASSO 4.75: ÍNDICES DE PERFORMANCE DO BANCO DE DADOS
+-- =====================================================
+create index if not exists idx_conversations_tenant_updated on public.conversations ("tenantId", "updatedAt" desc);
+create index if not exists idx_messages_conversation_created on public.messages ("conversationId", "createdAt" asc);
+create index if not exists idx_ai_logs_tenant_created on public.ai_logs ("tenantId", "createdAt" desc);
+create index if not exists idx_appointments_tenant_date on public.appointments ("tenantId", "date" asc);
+create index if not exists idx_knowledge_chunks_knowledge on public.knowledge_chunks ("knowledgeId");
 
 -- =====================================================
 -- PASSO 5: RECARREGAR CACHE DO SCHEMA

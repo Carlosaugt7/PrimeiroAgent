@@ -6,7 +6,13 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import { ArrowLeft, Bot, Save, Trash2 } from "lucide-react";
 import { toast } from "sonner";
@@ -47,7 +53,10 @@ function AgentDetail() {
   const provider = providers.find((p) => p.id === form.providerId);
 
   const handleSave = async () => {
-    if (!form.name?.trim()) { toast.error("Informe o nome do agente"); return; }
+    if (!form.name?.trim()) {
+      toast.error("Informe o nome do agente");
+      return;
+    }
     setBusy(true);
     try {
       await updateAgent(id, form);
@@ -66,7 +75,8 @@ function AgentDetail() {
     await navigate({ to: "/app/agents" });
   };
 
-  const pf = (p: Partial<Persona>) => setForm((f) => ({ ...f, persona: { ...(f.persona ?? agent.persona), ...p } }));
+  const pf = (p: Partial<Persona>) =>
+    setForm((f) => ({ ...f, persona: { ...(f.persona ?? agent.persona), ...p } }));
 
   function statusClass(status: string) {
     if (status === "online") return "bg-success/15 text-success";
@@ -89,12 +99,19 @@ function AgentDetail() {
               <span className={`text-[10px] px-2 py-0.5 rounded-full ${statusClass(agent.status)}`}>
                 {agent.status}
               </span>
-              <Badge variant="outline" className="text-[10px]">{agent.segment}</Badge>
+              <Badge variant="outline" className="text-[10px]">
+                {agent.segment}
+              </Badge>
             </div>
           </div>
         </div>
         <div className="flex gap-2">
-          <Button variant="outline" size="sm" onClick={handleDelete} className="text-destructive hover:text-destructive">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={handleDelete}
+            className="text-destructive hover:text-destructive"
+          >
             <Trash2 className="size-4" /> Excluir
           </Button>
           <Button variant="hero" size="sm" onClick={handleSave} disabled={busy}>
@@ -112,18 +129,62 @@ function AgentDetail() {
         </TabsList>
 
         <TabsContent value="basic" className="space-y-4 pt-4">
-          <div><Label>Nome</Label><Input value={form.name ?? ""} onChange={(e) => setForm({ ...form, name: e.target.value })} className="mt-1" /></div>
-          <div><Label>Descrição</Label><Input value={form.description ?? ""} onChange={(e) => setForm({ ...form, description: e.target.value })} className="mt-1" /></div>
+          <div>
+            <Label>Nome</Label>
+            <Input
+              value={form.name ?? ""}
+              onChange={(e) => setForm({ ...form, name: e.target.value })}
+              className="mt-1"
+            />
+          </div>
+          <div>
+            <Label>Descrição</Label>
+            <Input
+              value={form.description ?? ""}
+              onChange={(e) => setForm({ ...form, description: e.target.value })}
+              className="mt-1"
+            />
+          </div>
           <div className="grid grid-cols-3 gap-3">
-            <div><Label>Categoria</Label><Input value={form.category ?? ""} onChange={(e) => setForm({ ...form, category: e.target.value })} className="mt-1" /></div>
-            <div><Label>Departamento</Label><Input value={form.department ?? ""} onChange={(e) => setForm({ ...form, department: e.target.value })} className="mt-1" /></div>
+            <div>
+              <Label>Categoria</Label>
+              <Input
+                value={form.category ?? ""}
+                onChange={(e) => setForm({ ...form, category: e.target.value })}
+                className="mt-1"
+              />
+            </div>
+            <div>
+              <Label>Departamento</Label>
+              <Input
+                value={form.department ?? ""}
+                onChange={(e) => setForm({ ...form, department: e.target.value })}
+                className="mt-1"
+              />
+            </div>
             <div>
               <Label>Segmento</Label>
-              <Select value={form.segment ?? ""} onValueChange={(v) => setForm({ ...form, segment: v })}>
-                <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
+              <Select
+                value={form.segment ?? ""}
+                onValueChange={(v) => setForm({ ...form, segment: v })}
+              >
+                <SelectTrigger className="mt-1">
+                  <SelectValue />
+                </SelectTrigger>
                 <SelectContent>
-                  {["Vendas", "Suporte", "Saúde", "Imobiliária", "E-commerce", "Educação", "Financeiro", "Outros"].map((s) => (
-                    <SelectItem key={s} value={s}>{s}</SelectItem>
+                  {[
+                    "Vendas",
+                    "Suporte",
+                    "Saúde",
+                    "Imobiliária",
+                    "E-commerce",
+                    "Educação",
+                    "Financeiro",
+                    "Outros",
+                  ].map((s) => (
+                    <SelectItem key={s} value={s}>
+                      {s}
+                    </SelectItem>
                   ))}
                 </SelectContent>
               </Select>
@@ -138,7 +199,8 @@ function AgentDetail() {
               className="mt-1"
             />
             <p className="text-xs text-muted-foreground mt-1">
-              Nome da instância Evolution API. Quando preenchido, o agente responde automaticamente às mensagens recebidas.
+              Nome da instância Evolution API. Quando preenchido, o agente responde automaticamente
+              às mensagens recebidas.
             </p>
           </div>
           <div className="flex items-center gap-3">
@@ -155,49 +217,130 @@ function AgentDetail() {
 
         <TabsContent value="persona" className="space-y-3 pt-4">
           <div className="grid grid-cols-2 gap-3">
-            <div><Label>Nome da persona</Label><Input value={form.persona?.name ?? ""} onChange={(e) => pf({ name: e.target.value })} className="mt-1" /></div>
-            <div><Label>Cargo</Label><Input value={form.persona?.role ?? ""} onChange={(e) => pf({ role: e.target.value })} className="mt-1" /></div>
-            <div className="col-span-2"><Label>Especialidade</Label><Input value={form.persona?.specialty ?? ""} onChange={(e) => pf({ specialty: e.target.value })} className="mt-1" /></div>
-            <div><Label>Tom de voz</Label><Input value={form.persona?.tone ?? ""} onChange={(e) => pf({ tone: e.target.value })} className="mt-1" /></div>
-            <div><Label>Estilo de escrita</Label><Input value={form.persona?.writingStyle ?? ""} onChange={(e) => pf({ writingStyle: e.target.value })} className="mt-1" /></div>
-            <div className="col-span-2"><Label>Regras comportamentais</Label><Textarea rows={2} value={form.persona?.rules ?? ""} onChange={(e) => pf({ rules: e.target.value })} className="mt-1" /></div>
-            <div className="col-span-2"><Label>Objetivos</Label><Textarea rows={2} value={form.persona?.goals ?? ""} onChange={(e) => pf({ goals: e.target.value })} className="mt-1" /></div>
+            <div>
+              <Label>Nome da persona</Label>
+              <Input
+                value={form.persona?.name ?? ""}
+                onChange={(e) => pf({ name: e.target.value })}
+                className="mt-1"
+              />
+            </div>
+            <div>
+              <Label>Cargo</Label>
+              <Input
+                value={form.persona?.role ?? ""}
+                onChange={(e) => pf({ role: e.target.value })}
+                className="mt-1"
+              />
+            </div>
+            <div className="col-span-2">
+              <Label>Especialidade</Label>
+              <Input
+                value={form.persona?.specialty ?? ""}
+                onChange={(e) => pf({ specialty: e.target.value })}
+                className="mt-1"
+              />
+            </div>
+            <div>
+              <Label>Tom de voz</Label>
+              <Input
+                value={form.persona?.tone ?? ""}
+                onChange={(e) => pf({ tone: e.target.value })}
+                className="mt-1"
+              />
+            </div>
+            <div>
+              <Label>Estilo de escrita</Label>
+              <Input
+                value={form.persona?.writingStyle ?? ""}
+                onChange={(e) => pf({ writingStyle: e.target.value })}
+                className="mt-1"
+              />
+            </div>
+            <div className="col-span-2">
+              <Label>Regras comportamentais</Label>
+              <Textarea
+                rows={2}
+                value={form.persona?.rules ?? ""}
+                onChange={(e) => pf({ rules: e.target.value })}
+                className="mt-1"
+              />
+            </div>
+            <div className="col-span-2">
+              <Label>Objetivos</Label>
+              <Textarea
+                rows={2}
+                value={form.persona?.goals ?? ""}
+                onChange={(e) => pf({ goals: e.target.value })}
+                className="mt-1"
+              />
+            </div>
           </div>
         </TabsContent>
 
         <TabsContent value="prompt" className="space-y-3 pt-4">
           <Label>Prompt do sistema</Label>
-          <p className="text-xs text-muted-foreground">Suporta variáveis como <code className="text-accent">{"{{nome}}"}</code>, <code className="text-accent">{"{{empresa}}"}</code>.</p>
-          <Textarea rows={14} value={form.systemPrompt ?? ""} onChange={(e) => setForm({ ...form, systemPrompt: e.target.value })} className="font-mono text-xs" />
+          <p className="text-xs text-muted-foreground">
+            Suporta variáveis como <code className="text-accent">{"{{nome}}"}</code>,{" "}
+            <code className="text-accent">{"{{empresa}}"}</code>.
+          </p>
+          <Textarea
+            rows={14}
+            value={form.systemPrompt ?? ""}
+            onChange={(e) => setForm({ ...form, systemPrompt: e.target.value })}
+            className="font-mono text-xs"
+          />
         </TabsContent>
 
         <TabsContent value="model" className="space-y-4 pt-4">
           {providers.length === 0 ? (
             <div className="rounded-lg border border-dashed border-border p-6 text-center">
               <p className="text-sm font-semibold">Nenhum provedor cadastrado</p>
-              <p className="text-xs text-muted-foreground mt-1 mb-3">Cadastre um provedor LLM antes.</p>
-              <Link to="/app/llm-providers"><Button variant="outline" size="sm">Cadastrar provedor</Button></Link>
+              <p className="text-xs text-muted-foreground mt-1 mb-3">
+                Cadastre um provedor LLM antes.
+              </p>
+              <Link to="/app/llm-providers">
+                <Button variant="outline" size="sm">
+                  Cadastrar provedor
+                </Button>
+              </Link>
             </div>
           ) : (
             <>
               <div>
                 <Label>Provedor</Label>
-                <Select value={form.providerId ?? ""} onValueChange={(v) => setForm({ ...form, providerId: v, model: "" })}>
-                  <SelectTrigger className="mt-1"><SelectValue placeholder="Selecione..." /></SelectTrigger>
+                <Select
+                  value={form.providerId ?? ""}
+                  onValueChange={(v) => setForm({ ...form, providerId: v, model: "" })}
+                >
+                  <SelectTrigger className="mt-1">
+                    <SelectValue placeholder="Selecione..." />
+                  </SelectTrigger>
                   <SelectContent>
                     {providers.map((p) => (
-                      <SelectItem key={p.id} value={p.id}>{p.name} <span className="text-muted-foreground">({p.kind})</span></SelectItem>
+                      <SelectItem key={p.id} value={p.id}>
+                        {p.name} <span className="text-muted-foreground">({p.kind})</span>
+                      </SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
               </div>
               <div>
                 <Label>Modelo</Label>
-                <Select value={form.model ?? ""} onValueChange={(v) => setForm({ ...form, model: v })} disabled={!provider}>
-                  <SelectTrigger className="mt-1"><SelectValue placeholder={provider ? "Selecione..." : "Escolha um provedor"} /></SelectTrigger>
+                <Select
+                  value={form.model ?? ""}
+                  onValueChange={(v) => setForm({ ...form, model: v })}
+                  disabled={!provider}
+                >
+                  <SelectTrigger className="mt-1">
+                    <SelectValue placeholder={provider ? "Selecione..." : "Escolha um provedor"} />
+                  </SelectTrigger>
                   <SelectContent>
                     {provider?.models.map((m) => (
-                      <SelectItem key={m.id} value={m.id}>{m.id}{m.contextWindow ? ` · ${m.contextWindow.toLocaleString()} tokens` : ""}</SelectItem>
+                      <SelectItem key={m.id} value={m.id}>
+                        {m.id}
+                        {m.contextWindow ? ` · ${m.contextWindow.toLocaleString()} tokens` : ""}
+                      </SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
@@ -205,21 +348,40 @@ function AgentDetail() {
               <div className="grid grid-cols-3 gap-3">
                 <div>
                   <Label>Temperatura ({form.temperature ?? 0.5})</Label>
-                  <input type="range" min={0} max={1} step={0.1} value={form.temperature ?? 0.5}
-                    onChange={(e) => setForm({ ...form, temperature: Number.parseFloat(e.target.value) })}
-                    className="w-full accent-primary mt-3" />
+                  <input
+                    type="range"
+                    min={0}
+                    max={1}
+                    step={0.1}
+                    value={form.temperature ?? 0.5}
+                    onChange={(e) =>
+                      setForm({ ...form, temperature: Number.parseFloat(e.target.value) })
+                    }
+                    className="w-full accent-primary mt-3"
+                  />
                 </div>
                 <div>
                   <Label>Top P ({form.topP ?? 1})</Label>
-                  <input type="range" min={0} max={1} step={0.05} value={form.topP ?? 1}
+                  <input
+                    type="range"
+                    min={0}
+                    max={1}
+                    step={0.05}
+                    value={form.topP ?? 1}
                     onChange={(e) => setForm({ ...form, topP: Number.parseFloat(e.target.value) })}
-                    className="w-full accent-primary mt-3" />
+                    className="w-full accent-primary mt-3"
+                  />
                 </div>
                 <div>
                   <Label>Max tokens</Label>
-                  <Input type="number" value={form.maxTokens ?? 1024}
-                    onChange={(e) => setForm({ ...form, maxTokens: Number.parseInt(e.target.value, 10) || 1024 })}
-                    className="mt-1" />
+                  <Input
+                    type="number"
+                    value={form.maxTokens ?? 1024}
+                    onChange={(e) =>
+                      setForm({ ...form, maxTokens: Number.parseInt(e.target.value, 10) || 1024 })
+                    }
+                    className="mt-1"
+                  />
                 </div>
               </div>
             </>

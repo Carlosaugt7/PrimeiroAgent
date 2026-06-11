@@ -16,14 +16,30 @@ export function Navbar() {
             </span>
           </Link>
           <nav className="hidden md:flex items-center gap-8 text-sm text-muted-foreground">
-            <a href="#features" className="hover:text-foreground transition-colors">Recursos</a>
-            <a href="#how" className="hover:text-foreground transition-colors">Como funciona</a>
-            <a href="#pricing" className="hover:text-foreground transition-colors">Planos</a>
-            <a href="#faq" className="hover:text-foreground transition-colors">FAQ</a>
+            <a href="#features" className="hover:text-foreground transition-colors">
+              Recursos
+            </a>
+            <a href="#how" className="hover:text-foreground transition-colors">
+              Como funciona
+            </a>
+            <a href="#pricing" className="hover:text-foreground transition-colors">
+              Planos
+            </a>
+            <a href="#faq" className="hover:text-foreground transition-colors">
+              FAQ
+            </a>
           </nav>
           <div className="flex items-center gap-2">
-            <Link to="/app"><Button variant="ghost" size="sm" className="hidden sm:inline-flex">Entrar</Button></Link>
-            <Link to="/app"><Button variant="hero" size="sm">Abrir console</Button></Link>
+            <Link to="/app">
+              <Button variant="ghost" size="sm" className="hidden sm:inline-flex">
+                Entrar
+              </Button>
+            </Link>
+            <Link to="/app">
+              <Button variant="hero" size="sm">
+                Abrir console
+              </Button>
+            </Link>
           </div>
         </div>
       </div>

@@ -15,7 +15,9 @@ export const Route = createFileRoute("/api/public/mp-webhook")({
           let id = url.searchParams.get("data.id") ?? url.searchParams.get("id") ?? "";
 
           let body: any = {};
-          try { body = await request.json(); } catch {}
+          try {
+            body = await request.json();
+          } catch {}
           topic = topic || body?.type || body?.topic || "";
           id = id || body?.data?.id || body?.resource?.toString().split("/").pop() || "";
 
@@ -37,8 +39,11 @@ export const Route = createFileRoute("/api/public/mp-webhook")({
             return new Response(JSON.stringify({ ok: false }), { status: 200 });
           }
           const pay = (await r.json()) as {
-            id: number; status: string; transaction_amount: number;
-            external_reference?: string; payment_method_id?: string;
+            id: number;
+            status: string;
+            transaction_amount: number;
+            external_reference?: string;
+            payment_method_id?: string;
             date_approved?: string;
             metadata?: { tenantId?: string; planId?: string };
           };
@@ -70,17 +75,21 @@ export const Route = createFileRoute("/api/public/mp-webhook")({
           if (paid) {
             const finalPlan = planId ?? planFromAmount(pay.transaction_amount);
             if (finalPlan) {
-              await supabase.from("tenants").update({
-                plan: finalPlan,
-                status: "active",
-                lastPaymentAt: new Date().toISOString(),
-                billingProvider: "mercadopago",
-              }).eq("id", tenantId);
+              await supabase
+                .from("tenants")
+                .update({
+                  plan: finalPlan,
+                  status: "active",
+                  lastPaymentAt: new Date().toISOString(),
+                  billingProvider: "mercadopago",
+                })
+                .eq("id", tenantId);
             }
           }
 
           return new Response(JSON.stringify({ ok: true }), {
-            status: 200, headers: { "content-type": "application/json" },
+            status: 200,
+            headers: { "content-type": "application/json" },
           });
         } catch (e) {
           console.error("[mp-webhook] erro:", e);

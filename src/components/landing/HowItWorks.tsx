@@ -26,7 +26,9 @@ export function HowItWorks() {
     <section id="how" className="py-28 relative">
       <div className="mx-auto max-w-7xl px-6">
         <div className="text-center max-w-2xl mx-auto mb-16">
-          <p className="text-sm font-medium text-accent uppercase tracking-wider mb-3">Como funciona</p>
+          <p className="text-sm font-medium text-accent uppercase tracking-wider mb-3">
+            Como funciona
+          </p>
           <h2 className="font-display text-4xl md:text-5xl font-bold leading-tight">
             Do zero ao primeiro atendimento <span className="text-gradient">em minutos</span>
           </h2>

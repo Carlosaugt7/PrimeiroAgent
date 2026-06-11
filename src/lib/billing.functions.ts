@@ -113,15 +113,17 @@ export const createCheckout = createServerFn({ method: "POST" })
         await supabase.from("billing_intents").upsert({
           id: pay.id,
           tenantId: data.tenantId,
-          provider: "asaas", 
-          planId: data.planId, 
+          provider: "asaas",
+          planId: data.planId,
           externalId: pay.id,
-          status: "pending", 
-          amount: plan.priceBRL, 
+          status: "pending",
+          amount: plan.priceBRL,
           createdAt: new Date().toISOString(),
           url: pay.invoiceUrl,
         });
-      } catch (e) { console.warn("[billing] supabase intent skip:", e); }
+      } catch (e) {
+        console.warn("[billing] supabase intent skip:", e);
+      }
       return { url: pay.invoiceUrl, externalId: pay.id };
     }
 
@@ -131,16 +133,20 @@ export const createCheckout = createServerFn({ method: "POST" })
       {
         method: "POST",
         body: JSON.stringify({
-          items: [{
-            title: `AgentHub AI — Plano ${plan.name}`,
-            quantity: 1,
-            unit_price: plan.priceBRL,
-            currency_id: "BRL",
-          }],
+          items: [
+            {
+              title: `AgentHub AI — Plano ${plan.name}`,
+              quantity: 1,
+              unit_price: plan.priceBRL,
+              currency_id: "BRL",
+            },
+          ],
           payer: { name: data.customer.name, email: data.customer.email },
           external_reference: ref,
           metadata: { tenantId: data.tenantId, planId: data.planId },
-          back_urls: data.successUrl ? { success: data.successUrl, failure: data.successUrl, pending: data.successUrl } : undefined,
+          back_urls: data.successUrl
+            ? { success: data.successUrl, failure: data.successUrl, pending: data.successUrl }
+            : undefined,
         }),
       },
     );
@@ -150,14 +156,16 @@ export const createCheckout = createServerFn({ method: "POST" })
       await supabase.from("billing_intents").upsert({
         id: pref.id,
         tenantId: data.tenantId,
-        provider: "mercadopago", 
-        planId: data.planId, 
+        provider: "mercadopago",
+        planId: data.planId,
         externalId: pref.id,
-        status: "pending", 
-        amount: plan.priceBRL, 
+        status: "pending",
+        amount: plan.priceBRL,
         createdAt: new Date().toISOString(),
         url,
       });
-    } catch (e) { console.warn("[billing] supabase intent skip:", e); }
+    } catch (e) {
+      console.warn("[billing] supabase intent skip:", e);
+    }
     return { url, externalId: pref.id };
   });

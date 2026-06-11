@@ -22,7 +22,10 @@ function getAuthSupabase(accessToken: string) {
 }
 
 async function lookupUser(accessToken: string) {
-  const { data: { user }, error } = await supabase.auth.getUser(accessToken);
+  const {
+    data: { user },
+    error,
+  } = await supabase.auth.getUser(accessToken);
   if (error || !user) throw new Error(`Token inválido: ${error?.message}`);
   return { uid: user.id, email: (user.email || "").toLowerCase() };
 }
@@ -41,7 +44,7 @@ export const promoteSelfToMaster = createServerFn({ method: "POST" })
     const u = await lookupUser(data.idToken);
     const allowed = MASTER_ADMINS.map((e) => e.toLowerCase()).includes(u.email);
     if (!allowed) throw new Error(`E-mail ${u.email} não está em MASTER_ADMINS`);
-    
+
     const authClient = getAuthSupabase(data.idToken);
     const { error } = await authClient.from("master_admins").upsert({
       id: u.uid,
@@ -58,9 +61,9 @@ export const createTenantAsMaster = createServerFn({ method: "POST" })
     if (!name) throw new Error("Nome do cliente é obrigatório");
     const tenantId = `cli_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
     const now = new Date().toISOString();
-    
+
     const authClient = getAuthSupabase(data.idToken);
-    
+
     const { error: tenantErr } = await authClient.from("tenants").upsert({
       id: tenantId,
       name,
@@ -70,7 +73,7 @@ export const createTenantAsMaster = createServerFn({ method: "POST" })
       createdAt: now,
     });
     if (tenantErr) throw new Error(`Erro ao criar tenant: ${tenantErr.message}`);
-    
+
     const { error: memberErr } = await authClient.from("tenant_members").upsert({
       uid: master.uid,
       tenantId: tenantId,
@@ -80,6 +83,6 @@ export const createTenantAsMaster = createServerFn({ method: "POST" })
       joinedAt: now,
     });
     if (memberErr) throw new Error(`Erro ao vincular membro: ${memberErr.message}`);
-    
+
     return { ok: true, tenantId, name };
   });

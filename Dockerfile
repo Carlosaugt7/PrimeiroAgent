@@ -1,3 +1,4 @@
+# cspell:disable
 # --- ESTÁGIO 1: BUILD ---
 FROM node:22-alpine AS builder
 

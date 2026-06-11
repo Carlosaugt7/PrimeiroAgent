@@ -8,7 +8,10 @@ interface DetectInput {
   apiKey: string;
 }
 
-interface ModelInfo { id: string; contextWindow?: number }
+interface ModelInfo {
+  id: string;
+  contextWindow?: number;
+}
 
 const DEFAULT_BASE: Record<Kind, string> = {
   openai: "https://api.openai.com/v1",
@@ -37,18 +40,27 @@ async function fetchOpenAICompatible(baseUrl: string, apiKey: string): Promise<M
   try {
     r = await fetch(url, { headers: { Authorization: `Bearer ${apiKey}` } });
   } catch (e) {
-    throw new Error(`Falha de rede ao acessar ${url}: ${e instanceof Error ? e.message : String(e)}`);
+    throw new Error(
+      `Falha de rede ao acessar ${url}: ${e instanceof Error ? e.message : String(e)}`,
+    );
   }
   if (!r.ok) {
     const body = await r.text().catch(() => "");
     throw new Error(`HTTP ${r.status} em ${url}: ${body.slice(0, 300)}`);
   }
-  const data = (await r.json()) as { data?: Array<{ id: string; context_length?: number; context_window?: number }> };
-  return (data.data ?? []).map((m) => ({ id: m.id, contextWindow: m.context_length ?? m.context_window }));
+  const data = (await r.json()) as {
+    data?: Array<{ id: string; context_length?: number; context_window?: number }>;
+  };
+  return (data.data ?? []).map((m) => ({
+    id: m.id,
+    contextWindow: m.context_length ?? m.context_window,
+  }));
 }
 
 async function fetchGoogle(apiKey: string): Promise<ModelInfo[]> {
-  const r = await fetch(`https://generativelanguage.googleapis.com/v1beta/models?key=${encodeURIComponent(apiKey)}`);
+  const r = await fetch(
+    `https://generativelanguage.googleapis.com/v1beta/models?key=${encodeURIComponent(apiKey)}`,
+  );
   if (!r.ok) throw new Error(`HTTP ${r.status}: ${await r.text().catch(() => "")}`);
   const data = (await r.json()) as { models?: Array<{ name: string; inputTokenLimit?: number }> };
   return (data.models ?? [])
@@ -58,7 +70,8 @@ async function fetchGoogle(apiKey: string): Promise<ModelInfo[]> {
 
 export const detectModels = createServerFn({ method: "POST" })
   .inputValidator((d: DetectInput) => {
-    if (!d || typeof d.apiKey !== "string" || d.apiKey.length < 5) throw new Error("apiKey ausente");
+    if (!d || typeof d.apiKey !== "string" || d.apiKey.length < 5)
+      throw new Error("apiKey ausente");
     if (!d.kind) throw new Error("kind ausente");
     return d;
   })
@@ -71,7 +84,10 @@ export const detectModels = createServerFn({ method: "POST" })
       const models = await fetchOpenAICompatible(base, data.apiKey);
       return { models };
     } catch (e) {
-      return { models: [] as ModelInfo[], error: e instanceof Error ? e.message : "Falha ao detectar" };
+      return {
+        models: [] as ModelInfo[],
+        error: e instanceof Error ? e.message : "Falha ao detectar",
+      };
     }
   });
 
@@ -112,7 +128,10 @@ export const chatCompletion = createServerFn({ method: "POST" })
         }),
       });
       if (!r.ok) throw new Error(await r.text());
-      const j = (await r.json()) as { content: Array<{ text: string }>; usage?: { input_tokens: number; output_tokens: number } };
+      const j = (await r.json()) as {
+        content: Array<{ text: string }>;
+        usage?: { input_tokens: number; output_tokens: number };
+      };
       return {
         text: j.content?.[0]?.text ?? "",
         inputTokens: j.usage?.input_tokens ?? 0,
@@ -128,12 +147,18 @@ export const chatCompletion = createServerFn({ method: "POST" })
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           systemInstruction: { parts: [{ text: data.systemPrompt }] },
-          contents: data.messages.map((m) => ({ role: m.role === "assistant" ? "model" : "user", parts: [{ text: m.content }] })),
+          contents: data.messages.map((m) => ({
+            role: m.role === "assistant" ? "model" : "user",
+            parts: [{ text: m.content }],
+          })),
           generationConfig: { temperature: data.temperature ?? 0.5 },
         }),
       });
       if (!r.ok) throw new Error(await r.text());
-      const j = (await r.json()) as { candidates?: Array<{ content: { parts: Array<{ text: string }> } }>; usageMetadata?: { promptTokenCount: number; candidatesTokenCount: number } };
+      const j = (await r.json()) as {
+        candidates?: Array<{ content: { parts: Array<{ text: string }> } }>;
+        usageMetadata?: { promptTokenCount: number; candidatesTokenCount: number };
+      };
       return {
         text: j.candidates?.[0]?.content?.parts?.[0]?.text ?? "",
         inputTokens: j.usageMetadata?.promptTokenCount ?? 0,
@@ -153,7 +178,10 @@ export const chatCompletion = createServerFn({ method: "POST" })
       }),
     });
     if (!r.ok) throw new Error(await r.text());
-    const j = (await r.json()) as { choices: Array<{ message: { content: string } }>; usage?: { prompt_tokens: number; completion_tokens: number } };
+    const j = (await r.json()) as {
+      choices: Array<{ message: { content: string } }>;
+      usage?: { prompt_tokens: number; completion_tokens: number };
+    };
     return {
       text: j.choices?.[0]?.message?.content ?? "",
       inputTokens: j.usage?.prompt_tokens ?? 0,
@@ -181,12 +209,94 @@ export const embedTexts = createServerFn({ method: "POST" })
   })
   .handler(async ({ data }) => {
     const base = (data.baseUrl?.trim() || "https://api.openai.com/v1").replace(/\/$/, "");
-    const r = await fetch(`${base}/embeddings`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json", Authorization: `Bearer ${data.apiKey}` },
-      body: JSON.stringify({ model: data.model, input: data.texts }),
-    });
-    if (!r.ok) throw new Error(`Embeddings ${r.status}: ${(await r.text()).slice(0, 400)}`);
-    const j = (await r.json()) as { data: { embedding: number[] }[] };
-    return { vectors: j.data.map((x) => x.embedding) };
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 15000); // 15s timeout
+
+    try {
+      const r = await fetch(`${base}/embeddings`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${data.apiKey}` },
+        body: JSON.stringify({ model: data.model, input: data.texts }),
+        signal: controller.signal,
+      });
+      clearTimeout(timeoutId);
+
+      if (!r.ok) {
+        throw new Error(
+          `Embeddings respondeu com HTTP ${r.status}: ${(await r.text()).slice(0, 400)}`,
+        );
+      }
+      const j = (await r.json()) as { data: { embedding: number[] }[] };
+      return { vectors: j.data.map((x) => x.embedding) };
+    } catch (e: unknown) {
+      clearTimeout(timeoutId);
+      const msg = e instanceof Error ? e.message : "Falha ao gerar embeddings";
+      throw new Error(msg);
+    }
+  });
+
+interface FetchWebpageInput {
+  url: string;
+}
+
+export const fetchWebpageText = createServerFn({ method: "POST" })
+  .inputValidator((d: FetchWebpageInput) => {
+    if (!d?.url) throw new Error("URL ausente");
+    if (!/^https?:\/\//i.test(d.url.trim())) {
+      throw new Error("A URL deve começar com http:// ou https://");
+    }
+    return d;
+  })
+  .handler(async ({ data }) => {
+    try {
+      const controller = new AbortController();
+      const id = setTimeout(() => controller.abort(), 10000); // 10s timeout
+
+      const r = await fetch(data.url.trim(), {
+        headers: {
+          "User-Agent":
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+          Accept: "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8",
+          "Accept-Language": "pt-BR,pt;q=0.9,en-US;q=0.8,en;q=0.7",
+        },
+        signal: controller.signal,
+      });
+      clearTimeout(id);
+
+      if (!r.ok) {
+        throw new Error(`Servidor respondeu com código de status HTTP ${r.status}`);
+      }
+
+      const contentType = r.headers.get("content-type") ?? "";
+      if (!contentType.includes("text/html") && !contentType.includes("text/plain")) {
+        throw new Error("A URL fornecida não aponta para uma página de texto ou HTML legível.");
+      }
+
+      const html = await r.text();
+
+      // Limpeza simples e robusta do HTML no servidor
+      let text = html.replace(
+        /<(script|style|svg|noscript|header|footer|nav)[^>]*>[\s\S]*?<\/\1>/gi,
+        "",
+      );
+      text = text.replace(/<!--[\s\S]*?-->/g, "");
+      text = text.replace(/<[^>]+>/g, " ");
+      text = text
+        .replace(/&nbsp;/g, " ")
+        .replace(/&lt;/g, "<")
+        .replace(/&gt;/g, ">")
+        .replace(/&amp;/g, "&")
+        .replace(/&quot;/g, '"')
+        .replace(/&#39;/g, "'");
+      text = text.replace(/\s+/g, " ").trim();
+
+      if (text.length < 20) {
+        throw new Error("A página carregada não possui conteúdo de texto legível suficiente.");
+      }
+
+      return { text };
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : "Falha ao buscar conteúdo da página.";
+      throw new Error(msg);
+    }
   });

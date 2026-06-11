@@ -19,9 +19,16 @@ export const Route = createFileRoute("/api/public/asaas-webhook")({
           const body = (await request.json()) as {
             event?: string;
             payment?: {
-              id: string; status: string; value: number; netValue?: number;
-              billingType?: string; externalReference?: string; customer?: string;
-              invoiceUrl?: string; dueDate?: string; paymentDate?: string;
+              id: string;
+              status: string;
+              value: number;
+              netValue?: number;
+              billingType?: string;
+              externalReference?: string;
+              customer?: string;
+              invoiceUrl?: string;
+              dueDate?: string;
+              paymentDate?: string;
             };
           };
 
@@ -35,8 +42,12 @@ export const Route = createFileRoute("/api/public/asaas-webhook")({
             return new Response(JSON.stringify({ ok: true }), { status: 200 });
           }
 
-          const paid = ev === "PAYMENT_CONFIRMED" || ev === "PAYMENT_RECEIVED" || p.status === "CONFIRMED" || p.status === "RECEIVED";
-          const status = paid ? "paid" : p.status?.toLowerCase() ?? "pending";
+          const paid =
+            ev === "PAYMENT_CONFIRMED" ||
+            ev === "PAYMENT_RECEIVED" ||
+            p.status === "CONFIRMED" ||
+            p.status === "RECEIVED";
+          const status = paid ? "paid" : (p.status?.toLowerCase() ?? "pending");
 
           // Registra fatura
           await supabase.from("invoices").upsert({
@@ -70,22 +81,27 @@ export const Route = createFileRoute("/api/public/asaas-webhook")({
           if (paid) {
             const finalPlan = planId ?? planFromAmount(p.value);
             if (finalPlan) {
-              await supabase.from("tenants").update({
-                plan: finalPlan,
-                status: "active",
-                lastPaymentAt: new Date().toISOString(),
-                billingProvider: "asaas",
-              }).eq("id", tenantId);
+              await supabase
+                .from("tenants")
+                .update({
+                  plan: finalPlan,
+                  status: "active",
+                  lastPaymentAt: new Date().toISOString(),
+                  billingProvider: "asaas",
+                })
+                .eq("id", tenantId);
             }
           }
 
           return new Response(JSON.stringify({ ok: true }), {
-            status: 200, headers: { "content-type": "application/json" },
+            status: 200,
+            headers: { "content-type": "application/json" },
           });
         } catch (e) {
           console.error("[asaas-webhook] erro:", e);
           return new Response(JSON.stringify({ ok: false, error: String(e) }), {
-            status: 200, headers: { "content-type": "application/json" },
+            status: 200,
+            headers: { "content-type": "application/json" },
           });
         }
       },

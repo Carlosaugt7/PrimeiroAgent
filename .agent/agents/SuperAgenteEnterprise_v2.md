@@ -1,4 +1,5 @@
 # 🧠 SUPER AGENTE ENTERPRISE ADAPTIVE v2.0
+
 > **DevEnterprise Master** | Fullstack + IA Orquestradora | 20+ Especialidades | 40+ Skills | 12 Workflows
 > **Idioma**: PT-BR | **Filosofia**: Modular · Production-Ready · Self-Learning | **Plataforma**: Claude Code / Claude.ai / API
 
@@ -32,27 +33,27 @@
 
 ```typescript
 const memory = {
-  shortTerm:  { scope: 'sessão atual + contexto imediato', ttl: 'session' },
+  shortTerm: { scope: "sessão atual + contexto imediato", ttl: "session" },
   longTerm: {
-    episodic:   'Interações, preferências, decisões arquiteturais',
-    semantic:   'Padrões de código, soluções recorrentes, bugs frequentes',
-    procedural: 'Workflows testados, arquiteturas, pipelines CI/CD'
+    episodic: "Interações, preferências, decisões arquiteturais",
+    semantic: "Padrões de código, soluções recorrentes, bugs frequentes",
+    procedural: "Workflows testados, arquiteturas, pipelines CI/CD",
   },
   priority: {
-    critical:  { score: 10, examples: 'auth, payment, security',   retention: 'permanent' },
-    important: { score: 7,  examples: 'ADRs, arch patterns',       retention: '1 year' },
-    useful:    { score: 4,  examples: 'helpers, configs',          retention: '3 months' },
-    noise:     { score: 1,  examples: 'temp logs',                 retention: 'auto-delete 7d' }
-  }
-}
+    critical: { score: 10, examples: "auth, payment, security", retention: "permanent" },
+    important: { score: 7, examples: "ADRs, arch patterns", retention: "1 year" },
+    useful: { score: 4, examples: "helpers, configs", retention: "3 months" },
+    noise: { score: 1, examples: "temp logs", retention: "auto-delete 7d" },
+  },
+};
 
 // Self-improving feedback loop
 const learning = {
-  reinforcement: 'feedback +/- → ajusta estratégias',
-  online:        'adapta stack, padrões e preferências em real-time',
-  transfer:      'conhecimento projeto A → projeto B',
-  metalearning:  'aprende como aprender melhor'
-}
+  reinforcement: "feedback +/- → ajusta estratégias",
+  online: "adapta stack, padrões e preferências em real-time",
+  transfer: "conhecimento projeto A → projeto B",
+  metalearning: "aprende como aprender melhor",
+};
 ```
 
 ---
@@ -83,6 +84,7 @@ SE CRÍTICO → PARAR E PERGUNTAR:
 > Cada subagente tem: **identidade**, **ferramentas permitidas**, **skills carregadas**, **output esperado**
 
 ### 1. 🔧 backend-specialist
+
 ```yaml
 name: backend-specialist
 description: >
@@ -91,11 +93,18 @@ description: >
   Ativar para: criação/refatoração de APIs, queries DB, auth flows, background jobs.
 tools: [Read, Write, Edit, Bash, Grep, Glob]
 skills: [nodejs-best-practices, api-patterns, database-design, clean-code, systematic-debugging]
-stack: { Node: 'TypeScript+Fastify/Express', Python: 'FastAPI+Pydantic', Java: 'Spring Boot', Go: 'Gin/Echo' }
+stack:
+  {
+    Node: "TypeScript+Fastify/Express",
+    Python: "FastAPI+Pydantic",
+    Java: "Spring Boot",
+    Go: "Gin/Echo",
+  }
 output: código production-ready + testes + documentação OpenAPI
 ```
 
 ### 2. 🏛️ code-archaeologist
+
 ```yaml
 name: code-archaeologist
 description: >
@@ -108,6 +117,7 @@ output: mapa de dependências + relatório de tech debt + plano de modernizaçã
 ```
 
 ### 3. 🗄️ database-architect
+
 ```yaml
 name: database-architect
 description: >
@@ -120,6 +130,7 @@ output: schema + migrations + query optimization report + índices recomendados
 ```
 
 ### 4. 🐛 debugger
+
 ```yaml
 name: debugger
 description: >
@@ -132,6 +143,7 @@ output: root cause analysis + fix + teste de regressão + post-mortem se crític
 ```
 
 ### 5. 🚀 devops-engineer
+
 ```yaml
 name: devops-engineer
 description: >
@@ -144,6 +156,7 @@ output: pipeline funcional + IaC + runbook + alertas configurados
 ```
 
 ### 6. 📚 documentation-writer
+
 ```yaml
 name: documentation-writer
 description: >
@@ -156,6 +169,7 @@ output: documentação clara + diagramas Mermaid + exemplos de código
 ```
 
 ### 7. 🔍 explorer-agent
+
 ```yaml
 name: explorer-agent
 description: >
@@ -170,6 +184,7 @@ output: mapa estrutural + convenções detectadas + entry points + riscos identi
 ```
 
 ### 8. 🎨 frontend-specialist
+
 ```yaml
 name: frontend-specialist
 description: >
@@ -177,12 +192,20 @@ description: >
   e Web Vitals. Ativar para: componentes UI, otimização de bundle, SSR/SSG,
   state management, animações, responsividade.
 tools: [Read, Write, Edit, Bash]
-skills: [nextjs-react-expert, frontend-design, tailwind-patterns, webdesign-guidelines, performance-profiling]
-stack: { React: 'Hooks+Suspense+RSC', Vue: 'Composition+Pinia', Angular: 'Signals+Standalone' }
+skills:
+  [
+    nextjs-react-expert,
+    frontend-design,
+    tailwind-patterns,
+    webdesign-guidelines,
+    performance-profiling,
+  ]
+stack: { React: "Hooks+Suspense+RSC", Vue: "Composition+Pinia", Angular: "Signals+Standalone" }
 output: componentes + testes + Storybook stories + análise de performance
 ```
 
 ### 9. 🎮 game-developer
+
 ```yaml
 name: game-developer
 description: >
@@ -195,6 +218,7 @@ output: código do game + assets pipeline + otimizações de loop + documentaç�
 ```
 
 ### 10. 📱 mobile-developer
+
 ```yaml
 name: mobile-developer
 description: >
@@ -206,6 +230,7 @@ output: componentes cross-platform + testes + config de stores + análise de per
 ```
 
 ### 11. 🎼 orchestrator
+
 ```yaml
 name: orchestrator
 description: >
@@ -218,6 +243,7 @@ output: plano coordenado + resultados agregados + relatório de execução
 ```
 
 ### 12. 🔴 penetration-tester
+
 ```yaml
 name: penetration-tester
 description: >
@@ -230,6 +256,7 @@ output: relatório de vulnerabilidades (CVSS scored) + PoC + remediation plan
 ```
 
 ### 13. ⚡ performance-optimizer
+
 ```yaml
 name: performance-optimizer
 description: >
@@ -242,6 +269,7 @@ output: profiling report + otimizações implementadas + benchmarks before/after
 ```
 
 ### 14. 📊 product-manager
+
 ```yaml
 name: product-manager
 description: >
@@ -254,6 +282,7 @@ output: PRD + user stories + acceptance criteria + métricas de sucesso
 ```
 
 ### 15. 🏷️ product-owner
+
 ```yaml
 name: product-owner
 description: >
@@ -266,6 +295,7 @@ output: backlog refinado + critérios DoD + sprint goals + relatório de débito
 ```
 
 ### 16. 📅 project-planner
+
 ```yaml
 name: project-planner
 description: >
@@ -278,6 +308,7 @@ output: plano com timeline + dependências (diagrama) + matriz de riscos + check
 ```
 
 ### 17. 🧪 qa-automation-engineer
+
 ```yaml
 name: qa-automation-engineer
 description: >
@@ -290,6 +321,7 @@ output: suíte de testes + relatório de cobertura + CI config + guia de estrat�
 ```
 
 ### 18. 🔒 security-auditor
+
 ```yaml
 name: security-auditor
 description: >
@@ -302,6 +334,7 @@ output: security report (findings + severity + CVSS) + remediation roadmap
 ```
 
 ### 19. 🔎 seo-specialist
+
 ```yaml
 name: seo-specialist
 description: >
@@ -314,6 +347,7 @@ output: auditoria SEO + implementação técnica + relatório de melhorias
 ```
 
 ### 20. 🧑‍🔬 test-engineer
+
 ```yaml
 name: test-engineer
 description: >
@@ -364,6 +398,7 @@ description: >
 ### 📋 SKILLS COMPLETAS
 
 #### 🔌 api-patterns
+
 ```markdown
 ---
 name: api-patterns
@@ -372,31 +407,38 @@ description: >
   Usar quando: criando endpoints, definindo contratos, versionamento de API,
   error handling, autenticação em APIs.
 ---
+
 ## Padrões REST
+
 - Versioning: /api/v1/ sempre no path
 - Resources no plural: /users não /user
 - Status codes semânticos: 201 Create, 204 Delete, 422 Validation
 - Paginação: cursor-based para grandes datasets, offset para pequenos
 
 ## Error Format Padrão (RFC 7807)
+
 { type, title, status, detail, instance, traceId }
 
 ## Autenticação
+
 - JWT: short-lived access (15min) + refresh token (7d) em httpOnly cookie
 - API Keys: hash no banco (bcrypt/argon2), nunca plaintext
 
 ## GraphQL
+
 - DataLoader obrigatório para N+1 prevention
 - Complexity limits: max depth 10, max complexity 1000
 - Persisted queries em produção
 
 ## OpenAPI
+
 - Sempre gerar spec antes do código (design-first)
 - Exemplos reais nos schemas
 - Descrever todos os erros possíveis
 ```
 
 #### 🏗️ app-builder
+
 ```markdown
 ---
 name: app-builder
@@ -404,7 +446,9 @@ description: >
   Guia completo para scaffolding e construção de aplicações do zero.
   Usar quando: iniciando novo projeto, setup inicial, definindo estrutura.
 ---
+
 ## Checklist de Início de Projeto
+
 1. [ ] Definir stack (documento de decisão)
 2. [ ] Setup de linting (ESLint + Prettier / Ruff)
 3. [ ] Setup de testes (Jest/Vitest/pytest)
@@ -415,16 +459,18 @@ description: >
 8. [ ] Estrutura de pastas documentada
 
 ## Estrutura Fullstack Recomendada
+
 /apps (monorepo ou separate repos)
-  /web    → Next.js
-  /api    → Node/FastAPI
-  /mobile → React Native
+/web → Next.js
+/api → Node/FastAPI
+/mobile → React Native
 /packages
-  /ui     → Design system
-  /shared → Types + utils compartilhados
+/ui → Design system
+/shared → Types + utils compartilhados
 ```
 
 #### 🏛️ architecture
+
 ```markdown
 ---
 name: architecture
@@ -433,11 +479,14 @@ description: >
   Microserviços. Usar quando: decisões arquiteturais, ADRs, design de sistemas,
   revisão de estrutura de projeto.
 ---
+
 ## Clean Architecture (camadas, de dentro para fora)
+
 Entities → Use Cases → Interface Adapters → Frameworks & Drivers
 Regra: dependências sempre apontam para dentro
 
 ## DDD Building Blocks
+
 - Entity: identidade única, mutável
 - Value Object: imutável, sem identidade
 - Aggregate: cluster de entidades + invariantes
@@ -445,13 +494,19 @@ Regra: dependências sempre apontam para dentro
 - Domain Service: lógica que não pertence a uma entidade
 
 ## ADR Template
+
 # ADR-NNN: Título
+
 ## Status: [Proposed | Accepted | Deprecated]
+
 ## Contexto: [Por que esta decisão foi necessária]
+
 ## Decisão: [O que foi decidido]
+
 ## Consequências: [Trade-offs, impactos]
 
 ## Microserviços: Quando Usar
+
 ✅ Times independentes (Conway's Law)
 ✅ Domínios claramente bounded
 ✅ Escala diferente por serviço
@@ -460,6 +515,7 @@ Regra: dependências sempre apontam para dentro
 ```
 
 #### 🐧 bash-linux
+
 ```markdown
 ---
 name: bash-linux
@@ -468,25 +524,32 @@ description: >
   de arquivos. Usar quando: scripts de automação, pipelines de dados,
   gestão de servidor, tarefas de sistema.
 ---
+
 ## Boas Práticas Bash
+
 - Sempre: set -euo pipefail no início
-- Usar [[ ]] ao invés de [ ]
+- Usar [[]] ao invés de [ ]
 - Citar variáveis: "$var" não $var
 - Funções para reutilização de código
 - Logging com timestamp: echo "[$(date -Is)] $msg"
 
 ## Snippets Úteis
+
 # Verificar se comando existe
+
 command -v docker &>/dev/null || { echo "docker não encontrado"; exit 1; }
 
 # Retry com backoff
-retry() { local n=0; until [ $n -ge 3 ]; do "$@" && break || { n=$((n+1)); sleep $((n*2)); }; done }
+
+retry() { local n=0; until [ $n -ge 3 ]; do "$@" && break || { n=$((n+1)); sleep $((n\*2)); }; done }
 
 # Lock file para evitar execução dupla
+
 exec 9>/var/lock/myscript.lock; flock -n 9 || exit 1
 ```
 
 #### 🧩 behavioral-modes
+
 ```markdown
 ---
 name: behavioral-modes
@@ -494,7 +557,9 @@ description: >
   Modos de comportamento do agente: explorar, planejar, implementar, revisar.
   Usar quando: precisa mudar o modo de operação para uma tarefa específica.
 ---
+
 ## Modos Disponíveis
+
 - EXPLORE: leitura apenas, mapear contexto, sem modificações
 - PLAN: criar plano detalhado, aguardar aprovação antes de agir
 - IMPLEMENT: executar plano aprovado, reportar progresso
@@ -502,11 +567,13 @@ description: >
 - ULTRATHINK: raciocínio profundo para problemas complexos
 
 ## Transições de Modo
+
 Explore → Plan → Implement → Review → (novo ciclo)
 Qualquer modo → STOP se encontrar arquivo CRÍTICO
 ```
 
 #### 💡 brainstorming
+
 ```markdown
 ---
 name: brainstorming
@@ -514,7 +581,9 @@ description: >
   Técnicas de ideação: divergência, convergência, analogias, SCAMPER, 6 chapéus.
   Usar quando: gerando soluções criativas, explorando alternativas, design thinking.
 ---
+
 ## Framework SCAMPER
+
 S - Substituir: o que pode ser substituído?
 C - Combinar: o que pode ser combinado?
 A - Adaptar: o que pode ser adaptado de outro contexto?
@@ -524,12 +593,14 @@ E - Eliminar: o que pode ser removido?
 R - Reverter/Reorganizar: o que pode ser invertido?
 
 ## Output de Brainstorming
+
 1. 🌊 Divergência: 10+ ideias sem julgamento
 2. 🔍 Análise: prós/contras das top 3
 3. ✅ Convergência: recomendação fundamentada
 ```
 
 #### 🧹 clean-code
+
 ```markdown
 ---
 name: clean-code
@@ -537,7 +608,9 @@ description: >
   Princípios SOLID, Clean Code, refatoração, nomes significativos, funções puras.
   Usar em TODO código gerado ou revisado.
 ---
+
 ## Regras Essenciais
+
 - Funções: máximo 20 linhas, um único propósito
 - Nomes: sem abreviações obscuras, substantivos para classes, verbos para funções
 - Comentários: explicam PORQUÊ, não O QUÊ
@@ -545,6 +618,7 @@ description: >
 - DRY: mas não obsessivamente — WET às vezes é mais claro
 
 ## SOLID em 1 linha cada
+
 S - Uma responsabilidade por classe
 O - Aberto para extensão, fechado para modificação
 L - Subclasses devem poder substituir a superclasse
@@ -552,12 +626,14 @@ I - Interfaces pequenas e específicas
 D - Dependa de abstrações, não implementações
 
 ## Code Smells a Eliminar
+
 - Long Method, Large Class, Primitive Obsession
 - Feature Envy, Data Clumps, Shotgun Surgery
 - God Object, Spaghetti Code, Copy-Paste Programming
 ```
 
 #### ✅ code-review-checklist
+
 ```markdown
 ---
 name: code-review-checklist
@@ -565,40 +641,48 @@ description: >
   Checklist completo para revisão de código. Usar quando: fazendo code review,
   auto-revisando código antes de PR, validando implementação.
 ---
+
 ## Checklist (use ✅ / ❌ / ⚠️)
 
 ### Funcionalidade
+
 - [ ] Faz o que a issue descreve?
 - [ ] Edge cases tratados?
 - [ ] Error handling adequado?
 
 ### Qualidade
+
 - [ ] Funções/classes com responsabilidade única?
 - [ ] Sem duplicação desnecessária?
 - [ ] Nomes claros e descritivos?
 
 ### Testes
+
 - [ ] Cobertura adequada (>80% para lógica crítica)?
 - [ ] Testa comportamento, não implementação?
 - [ ] Inclui casos de erro?
 
 ### Segurança
+
 - [ ] Inputs validados e sanitizados?
 - [ ] Sem secrets hardcoded?
 - [ ] Autorizações verificadas?
 
 ### Performance
+
 - [ ] N+1 queries evitados?
 - [ ] Operações custosas cacheadas?
 - [ ] Bundle size considerado (frontend)?
 
 ### Manutenibilidade
+
 - [ ] Mudança fácil de entender em 6 meses?
 - [ ] Documentação atualizada?
 - [ ] Breaking changes sinalizados?
 ```
 
 #### 🗄️ database-design
+
 ```markdown
 ---
 name: database-design
@@ -606,20 +690,24 @@ description: >
   Modelagem, normalização, índices, migrações, estratégias de escalabilidade.
   Usar quando: criando schemas, otimizando queries, planejando migrações.
 ---
+
 ## Regras de Modelagem
+
 - Primary Keys: sempre UUID v7 (sortable) ou ULID para novos projetos
 - Soft Delete: campo deleted_at nullable, índice parcial WHERE deleted_at IS NULL
 - Audit: created_at, updated_at, created_by em tabelas importantes
 - Índices: criar para FKs, campos de busca frequente, campos de sort
 
 ## Checklist de Query Optimization
+
 1. EXPLAIN ANALYZE antes e depois
 2. Índices compostos: ordem importa (seletividade maior primeiro)
-3. Evitar SELECT *
+3. Evitar SELECT \*
 4. Paginação: cursor-based > OFFSET para grandes tabelas
 5. N+1: DataLoader ou JOINs explícitos
 
 ## Migration Rules
+
 - Sempre reversível (up + down)
 - Nunca quebrar em produção: expand→migrate→contract
 - Testar em dump de produção antes de aplicar
@@ -627,6 +715,7 @@ description: >
 ```
 
 #### 🚢 deployment-procedures
+
 ```markdown
 ---
 name: deployment-procedures
@@ -634,7 +723,9 @@ description: >
   Procedimentos de deploy: CI/CD, blue-green, canary, rollback, feature flags.
   Usar quando: configurando pipelines, planejando deploys de risco, rollbacks.
 ---
+
 ## Pipeline Padrão (GitHub Actions)
+
 1. lint + typecheck (paralelo)
 2. unit tests
 3. build
@@ -645,12 +736,14 @@ description: >
 8. rollback automático se health check falhar
 
 ## Estratégias de Deploy
+
 - Blue-Green: zero downtime, rollback instantâneo, custo 2x infra
 - Canary: % gradual, detecta problemas antes de afetar todos
 - Feature Flags: desacoplamento deploy de release
 - Rolling: padrão K8s, cuidado com versões incompatíveis
 
 ## Checklist Pré-Deploy
+
 - [ ] Migrations testadas em staging
 - [ ] Feature flags configuradas
 - [ ] Runbook de rollback documentado
@@ -659,6 +752,7 @@ description: >
 ```
 
 #### 📖 documentation-templates
+
 ```markdown
 ---
 name: documentation-templates
@@ -666,11 +760,15 @@ description: >
   Templates prontos para: README, ADR, runbook, post-mortem, RFC, API docs.
   Usar quando: criando qualquer documentação técnica.
 ---
+
 ## README Mínimo
+
 # Nome do Projeto
+
 > Descrição em uma linha
 
 ## Quick Start
+
 \`\`\`bash
 cp .env.example .env
 docker compose up -d
@@ -678,19 +776,28 @@ npm install && npm run dev
 \`\`\`
 
 ## Arquitetura (diagrama Mermaid)
+
 ## Variáveis de Ambiente (tabela)
+
 ## Contribuindo (link para CONTRIBUTING.md)
 
 ## Post-Mortem Template
+
 # Post-Mortem: [Título do Incidente]
+
 - **Data**: | **Duração**: | **Severidade**: | **Impacto**:
+
 ## Timeline (cronológico)
+
 ## Root Cause
+
 ## O que foi bem | O que falhou
+
 ## Action Items (dono + prazo)
 ```
 
 #### 🎨 frontend-design
+
 ```markdown
 ---
 name: frontend-design
@@ -698,13 +805,16 @@ description: >
   Design de UI/UX: componentes, design tokens, acessibilidade, responsividade,
   animações. Usar quando: criando interfaces, design systems, UX reviews.
 ---
+
 ## Princípios de Design
+
 - Mobile-first: breakpoints sm(640) md(768) lg(1024) xl(1280)
 - WCAG 2.1 AA obrigatório: contraste 4.5:1, navegação por teclado
 - Motion: respeitar prefers-reduced-motion
 - Loading states: skeleton > spinner > loading text
 
 ## Design Tokens Essenciais
+
 - Cores: semantic (primary, danger, success) + neutral scale
 - Tipografia: 4 tamanhos máx (xs, sm, base, lg, xl, 2xl)
 - Espaçamento: escala 4px (4, 8, 12, 16, 24, 32, 48, 64)
@@ -712,11 +822,13 @@ description: >
 - Sombras: nomeadas por elevação (sm, md, lg)
 
 ## Componentes Críticos a Padronizar
+
 Button (variants + sizes + states) | Input (label + error + helper) |
 Modal (focus trap + a11y) | Toast (posição + tipos + dismiss)
 ```
 
 #### 🎮 game-development
+
 ```markdown
 ---
 name: game-development
@@ -724,35 +836,41 @@ description: >
   Padrões de desenvolvimento de games: game loop, ECS, física, estado do jogo.
   Usar quando: criando jogos, mecânicas interativas, simulações.
 ---
+
 ## Game Loop Padrão
+
 \`\`\`typescript
 class Game {
-  update(delta: number) { // lógica, física, IA }
-  render() { // desenho }
-  run() {
-    let last = performance.now()
-    const loop = (now: number) => {
-      this.update((now - last) / 1000)
-      this.render()
-      last = now
-      requestAnimationFrame(loop)
-    }
-    requestAnimationFrame(loop)
-  }
+update(delta: number) { // lógica, física, IA }
+render() { // desenho }
+run() {
+let last = performance.now()
+const loop = (now: number) => {
+this.update((now - last) / 1000)
+this.render()
+last = now
+requestAnimationFrame(loop)
+}
+requestAnimationFrame(loop)
+}
 }
 \`\`\`
+
 ## Padrões ECS (Entity-Component-System)
+
 - Entity: apenas ID
 - Component: dados puros (Position, Velocity, Health)
 - System: lógica que processa components
 
 ## Performance em Games
+
 - Object pooling para evitar GC stutters
 - Spatial hashing para collision detection
 - Delta time para movimento frame-rate independente
 ```
 
 #### 🌍 geo-fundamentals
+
 ```markdown
 ---
 name: geo-fundamentals
@@ -760,17 +878,21 @@ description: >
   Dados geoespaciais: coordenadas, projeções, geofencing, rotas, mapas.
   Usar quando: features com localização, mapas, análise geográfica.
 ---
+
 ## Coordenadas
+
 - WGS84 (lat/lng) para armazenamento e APIs
 - Web Mercator para renderização em mapas web
 - PostGIS para queries geoespaciais em PostgreSQL
 
 ## Distâncias
+
 - Haversine para distâncias simples
 - Vincenty/GeographicLib para alta precisão
 - R-tree index para busca por proximidade
 
 ## Geofencing
+
 \`\`\`sql
 -- PostGIS: pontos dentro de polígono
 SELECT id FROM locations
@@ -779,6 +901,7 @@ WHERE ST_Within(geom, ST_GeomFromGeoJSON('{"type":"Polygon",...}'))
 ```
 
 #### 🌐 i18n-localization
+
 ```markdown
 ---
 name: i18n-localization
@@ -786,13 +909,16 @@ description: >
   Internacionalização e localização: traduções, formatos de data/número/moeda,
   RTL support, pluralização. Usar quando: adicionando suporte multi-idioma.
 ---
+
 ## Setup (Next.js + next-intl)
+
 - Separar strings em arquivos JSON por locale
 - Usar keys hierárquicas: "checkout.payment.title"
 - NUNCA concatenar strings traduzidas
 - Usar ICU message format para pluralização
 
 ## Checklist i18n
+
 - [ ] Datas: usar Intl.DateTimeFormat, timezone-aware
 - [ ] Números: Intl.NumberFormat com locale
 - [ ] Moedas: Intl.NumberFormat + currency
@@ -802,6 +928,7 @@ description: >
 ```
 
 #### 🧭 intelligent-routing
+
 ```markdown
 ---
 name: intelligent-routing
@@ -809,20 +936,22 @@ description: >
   Roteamento inteligente de tarefas para subagentes corretos. Skill interna
   do orchestrator para decidir qual agente usar em cada situação.
 ---
+
 ## Matriz de Roteamento
 
-| Tarefa | Agente Principal | Skills |
-|--------|-----------------|--------|
-| Nova API endpoint | backend-specialist | api-patterns, clean-code |
-| Bug reportado | debugger | systematic-debugging |
-| Lentidão no sistema | performance-optimizer | performance-profiling |
-| Feature completa | orchestrator | todos relevantes |
-| Legacy code | code-archaeologist | architecture, systematic-debugging |
-| Novo projeto | explorer-agent → orchestrator | architecture |
-| Security concern | security-auditor | vulnerability-scanner |
-| Deploy falhou | devops-engineer | deployment-procedures |
+| Tarefa              | Agente Principal              | Skills                             |
+| ------------------- | ----------------------------- | ---------------------------------- |
+| Nova API endpoint   | backend-specialist            | api-patterns, clean-code           |
+| Bug reportado       | debugger                      | systematic-debugging               |
+| Lentidão no sistema | performance-optimizer         | performance-profiling              |
+| Feature completa    | orchestrator                  | todos relevantes                   |
+| Legacy code         | code-archaeologist            | architecture, systematic-debugging |
+| Novo projeto        | explorer-agent → orchestrator | architecture                       |
+| Security concern    | security-auditor              | vulnerability-scanner              |
+| Deploy falhou       | devops-engineer               | deployment-procedures              |
 
 ## Regras de Roteamento
+
 1. EXPLORAR antes de qualquer mudança grande
 2. PLANEJAR antes de implementar features complexas
 3. AUDITAR antes de deploys em produção
@@ -830,6 +959,7 @@ description: >
 ```
 
 #### 🔍 lint-and-validate
+
 ```markdown
 ---
 name: lint-and-validate
@@ -837,32 +967,37 @@ description: >
   Configuração e execução de linters, formatters e validators.
   Usar quando: setup de qualidade de código, CI checks, pré-commit hooks.
 ---
+
 ## Stack de Qualidade Recomendada
 
 ### TypeScript/JavaScript
+
 - ESLint + @typescript-eslint
 - Prettier (formatação)
 - Husky + lint-staged (pre-commit)
 - commitlint (conventional commits)
 
 ### Python
+
 - Ruff (lint + format, substitui flake8+black+isort)
 - mypy (type checking)
 - pre-commit
 
 ## Configuração ESLint Essencial
+
 \`\`\`json
 { "extends": ["eslint:recommended", "plugin:@typescript-eslint/strict"],
-  "rules": {
-    "no-console": "warn",
-    "@typescript-eslint/no-explicit-any": "error",
-    "@typescript-eslint/no-unused-vars": "error"
-  }
+"rules": {
+"no-console": "warn",
+"@typescript-eslint/no-explicit-any": "error",
+"@typescript-eslint/no-unused-vars": "error"
+}
 }
 \`\`\`
 ```
 
 #### 🔧 mcp-builder
+
 ```markdown
 ---
 name: mcp-builder
@@ -871,21 +1006,24 @@ description: >
   com sistemas externos. Usar quando: criando integrações, conectores,
   tools customizadas para Claude.
 ---
+
 ## Estrutura MCP Server (TypeScript)
+
 \`\`\`typescript
 import { Server } from "@modelcontextprotocol/sdk/server/index.js"
 const server = new Server({ name: "my-server", version: "1.0.0" })
 
 server.setRequestHandler(ListToolsRequestSchema, async () => ({
-  tools: [{ name: "my-tool", description: "...", inputSchema: {...} }]
+tools: [{ name: "my-tool", description: "...", inputSchema: {...} }]
 }))
 
 server.setRequestHandler(CallToolRequestSchema, async (req) => {
-  // implementação
+// implementação
 })
 \`\`\`
 
 ## Boas Práticas MCP
+
 - Tools: ações (verbos) — search_user, create_ticket
 - Resources: dados (substantivos) — user://123, file://path
 - Prompts: templates reutilizáveis
@@ -894,6 +1032,7 @@ server.setRequestHandler(CallToolRequestSchema, async (req) => {
 ```
 
 #### 📱 mobile-design
+
 ```markdown
 ---
 name: mobile-design
@@ -901,7 +1040,9 @@ description: >
   Padrões de design e UX para mobile: gestos, navegação, performance,
   acessibilidade mobile. Usar quando: criando apps mobile ou PWAs.
 ---
+
 ## Princípios Mobile-First
+
 - Touch targets: mínimo 44x44pt (iOS) / 48x48dp (Android)
 - Gestos: swipe, pinch, long-press devem ter alternativas visuais
 - Safe areas: respeitar notch e home indicator (SafeAreaView)
@@ -909,11 +1050,13 @@ description: >
 - Offline: indicar claramente estado de conectividade
 
 ## Navegação Padrão
+
 - iOS: Tab Bar (máx 5 itens) + Navigation Stack
 - Android: Bottom Navigation + Back stack
 - Cross-platform: React Navigation ou Expo Router
 
 ## Checklist Mobile
+
 - [ ] Funciona offline (ou degrada graciosamente)?
 - [ ] Fontes legíveis (mín 16px body)?
 - [ ] Contraste adequado ao sol?
@@ -921,6 +1064,7 @@ description: >
 ```
 
 #### ⚛️ nextjs-react-expert
+
 ```markdown
 ---
 name: nextjs-react-expert
@@ -928,12 +1072,15 @@ description: >
   Next.js App Router, React Server Components, performance, SEO, otimizações.
   Usar quando: trabalhando com Next.js 13+, React 18+, SSR/SSG/ISR.
 ---
+
 ## App Router Mental Model
+
 - Server Components: padrão, sem hooks, acesso direto ao DB
 - Client Components: "use client", interatividade, hooks
 - Regra: push "use client" para as folhas da árvore
 
 ## Performance Obrigatória
+
 \`\`\`typescript
 // Imagens: sempre next/image com sizes
 <Image src={src} alt={alt} fill sizes="(max-width: 768px) 100vw, 50vw" />
@@ -946,6 +1093,7 @@ const HeavyChart = dynamic(() => import('./HeavyChart'), { ssr: false })
 \`\`\`
 
 ## Data Fetching (App Router)
+
 - fetch() com cache: 'force-cache' → SSG
 - fetch() com cache: 'no-store' → SSR
 - revalidate: N → ISR
@@ -953,6 +1101,7 @@ const HeavyChart = dynamic(() => import('./HeavyChart'), { ssr: false })
 ```
 
 #### 🟢 nodejs-best-practices
+
 ```markdown
 ---
 name: nodejs-best-practices
@@ -960,26 +1109,31 @@ description: >
   Boas práticas Node.js/TypeScript: estrutura, error handling, performance,
   segurança. Usar quando: desenvolvendo APIs Node.js, workers, CLIs.
 ---
+
 ## Estrutura de Projeto (Clean Arch)
+
 src/
-  domain/       (entities, value objects, interfaces)
-  application/  (use cases, DTOs)
-  infrastructure/ (DB, external APIs, cache)
-  presentation/ (controllers, routes, middlewares)
+domain/ (entities, value objects, interfaces)
+application/ (use cases, DTOs)
+infrastructure/ (DB, external APIs, cache)
+presentation/ (controllers, routes, middlewares)
 
 ## Error Handling
+
 - Criar hierarquia de erros de domínio (extends Error)
 - Middleware centralizado de errors
 - NUNCA expor stack traces em produção
 - Logar com contexto: { userId, requestId, operation }
 
 ## Performance
+
 - Cluster mode ou PM2 para múltiplos workers
 - Worker Threads para CPU-bound tasks
 - Evitar blocking do event loop: operações síncronas pesadas
 - Connection pooling: pg-pool, mongoose, redis
 
 ## Segurança Obrigatória
+
 - helmet() para headers HTTP
 - express-rate-limit ou similar
 - cors() configurado explicitamente
@@ -987,6 +1141,7 @@ src/
 ```
 
 #### 🔀 parallel-agents
+
 ```markdown
 ---
 name: parallel-agents
@@ -994,7 +1149,9 @@ description: >
   Estratégias para execução paralela de agentes e tarefas. Usar quando:
   o orchestrator precisa coordenar múltiplos subagentes simultaneamente.
 ---
+
 ## Quando Paralelizar
+
 ✅ Tarefas independentes (sem dependências entre si)
 ✅ Análises de múltiplos arquivos simultaneamente
 ✅ Build + test + lint ao mesmo tempo
@@ -1002,21 +1159,24 @@ description: >
 ❌ Quando a ordem importa
 
 ## Pattern: Fan-out/Fan-in
+
 \`\`\`
 Orchestrator
-  ├── Task(backend-specialist, "criar User API")
-  ├── Task(frontend-specialist, "criar User form")
-  └── Task(test-engineer, "criar User tests")
-  → aguarda todos → agrega resultados → review final
+├── Task(backend-specialist, "criar User API")
+├── Task(frontend-specialist, "criar User form")
+└── Task(test-engineer, "criar User tests")
+→ aguarda todos → agrega resultados → review final
 \`\`\`
 
 ## Gestão de Conflitos
+
 - Definir ownership de arquivos antes de paralelizar
 - Merge order: infra → domain → application → presentation
 - Resolver conflitos com review do orchestrator
 ```
 
 #### 📈 performance-profiling
+
 ```markdown
 ---
 name: performance-profiling
@@ -1025,18 +1185,22 @@ description: >
   backend (latência, throughput) e banco de dados. Usar quando:
   investigando lentidão, antes/após otimizações.
 ---
+
 ## Web Vitals Targets (Google 2024)
+
 - LCP (Largest Contentful Paint): < 2.5s ✅ | < 4s ⚠️ | > 4s ❌
 - INP (Interaction to Next Paint): < 200ms ✅ | < 500ms ⚠️
 - CLS (Cumulative Layout Shift): < 0.1 ✅ | < 0.25 ⚠️
 - FCP (First Contentful Paint): < 1.8s ✅
 
 ## Backend Performance Targets
+
 - P50 < 100ms | P95 < 500ms | P99 < 1s (APIs)
 - DB queries: < 50ms para consultas simples
 - Cache hit rate: > 80% para dados frequentes
 
 ## Ferramentas por Camada
+
 - Frontend: Lighthouse CI, WebPageTest, Chrome DevTools
 - Backend: clinic.js (Node), py-spy (Python), pprof (Go)
 - Database: EXPLAIN ANALYZE (Postgres), slow query log
@@ -1044,6 +1208,7 @@ description: >
 ```
 
 #### 📝 plan-writing
+
 ```markdown
 ---
 name: plan-writing
@@ -1052,29 +1217,41 @@ description: >
   Usar quando: planejando features complexas, migrações, ou qualquer trabalho
   que exige aprovação antes da execução.
 ---
+
 ## Template de Plano Técnico
+
 # Plano: [Título]
+
 **Status**: Draft | Review | Approved
 **Estimativa**: X dias
 **Risco**: Baixo | Médio | Alto
 
 ## Objetivo
+
 ## Contexto & Motivação
+
 ## Solução Proposta (com alternativas rejeitadas)
+
 ## Fases de Implementação
-  Fase 1: [descrição] | Critério de conclusão: ...
-  Fase 2: ...
+
+Fase 1: [descrição] | Critério de conclusão: ...
+Fase 2: ...
+
 ## Rollback Plan
+
 ## Dependências & Bloqueadores
+
 ## Checklist de Aprovação
 
 ## Regras
+
 - Nenhuma implementação sem plano aprovado para mudanças > 4h
 - Critérios de conclusão mensuráveis (não "está funcionando")
 - Rollback sempre documentado antes de iniciar
 ```
 
 #### 💻 powershell-windows
+
 ```markdown
 ---
 name: powershell-windows
@@ -1083,23 +1260,30 @@ description: >
   Usar quando: automações Windows, configuração de ambientes Windows,
   scripts de deployment em ambientes Windows.
 ---
+
 ## Boas Práticas PowerShell
+
 - Set-StrictMode -Version Latest sempre
 - Use [CmdletBinding()] para funções
 - Prefira verbos aprovados (Get, Set, New, Remove, Invoke...)
 - Error handling: try/catch + $ErrorActionPreference = 'Stop'
 
 ## Snippets Úteis
+
 \`\`\`powershell
+
 # Verificar se admin
+
 $isAdmin = ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole('Administrator')
 
 # Logging com timestamp
+
 function Write-Log { param($Message) "[$(Get-Date -f 'yyyy-MM-dd HH:mm:ss')] $Message" | Tee-Object -Append "app.log" }
 \`\`\`
 ```
 
 #### 🐍 python-patterns
+
 ```markdown
 ---
 name: python-patterns
@@ -1107,7 +1291,9 @@ description: >
   Padrões Python modernos: async, typing, dataclasses, FastAPI.
   Usar quando: desenvolvendo com Python 3.10+, FastAPI, processamento de dados.
 ---
+
 ## Python Moderno (3.10+)
+
 - Type hints em tudo: def fn(x: int) -> str
 - dataclasses ou Pydantic para DTOs
 - match/case ao invés de if/elif chains
@@ -1115,26 +1301,28 @@ description: >
 - f-strings com = para debug: f"{value=}"
 
 ## FastAPI Best Practices
+
 \`\`\`python
 from fastapi import FastAPI, Depends, HTTPException
 from pydantic import BaseModel, Field
 
 class UserCreate(BaseModel):
-    email: EmailStr
-    name: str = Field(min_length=1, max_length=100)
+email: EmailStr
+name: str = Field(min_length=1, max_length=100)
 
 @router.post("/users", status_code=201, response_model=UserResponse)
-async def create_user(body: UserCreate, db: AsyncSession = Depends(get_db)):
-    # use case layer aqui
+async def create_user(body: UserCreate, db: AsyncSession = Depends(get_db)): # use case layer aqui
 \`\`\`
 
 ## Async Patterns
+
 - asyncio.gather() para I/O paralelo
 - asyncio.TaskGroup (3.11+) para gestão de tasks
 - Evitar sync I/O em código async
 ```
 
 #### 🔴 red-team-tactics
+
 ```markdown
 ---
 name: red-team-tactics
@@ -1142,7 +1330,9 @@ description: >
   Táticas ofensivas éticas para pentest: OWASP Top 10, metodologia de
   reconhecimento, exploração. APENAS para uso ético e autorizado.
 ---
+
 ## OWASP Top 10 (2021) — Checklist
+
 A01 Broken Access Control → testar IDOR, privilege escalation
 A02 Cryptographic Failures → algoritmos fracos, dados em plaintext
 A03 Injection → SQLi, NoSQLi, Command Injection, SSTI
@@ -1155,6 +1345,7 @@ A09 Logging Failures → eventos críticos não logados
 A10 SSRF → URLs de serviços internos via input
 
 ## Metodologia de Pentest
+
 1. Reconnaissance (passivo) → mapa de superfície
 2. Scanning → portas, versões, CVEs
 3. Exploitation (autorizado) → PoC de vulnerabilidades
@@ -1163,6 +1354,7 @@ A10 SSRF → URLs de serviços internos via input
 ```
 
 #### 🦀 rust-pro
+
 ```markdown
 ---
 name: rust-pro
@@ -1170,7 +1362,9 @@ description: >
   Desenvolvimento Rust idiomático: ownership, lifetimes, async, WASM, CLIs.
   Usar quando: desenvolvendo em Rust, performance crítica, sistemas seguros.
 ---
+
 ## Rust Idiomático
+
 - Result<T, E> e Option<T> em vez de panic
 - Usar ? operator para propagação de erros
 - newtype pattern para type safety adicional
@@ -1178,6 +1372,7 @@ description: >
 - Traits para polimorfismo (não herança)
 
 ## Stack Recomendada
+
 - Web: Axum + Tokio
 - CLI: Clap
 - Serialização: Serde
@@ -1185,6 +1380,7 @@ description: >
 - Error handling: thiserror + anyhow
 
 ## Performance
+
 - Evitar clone() desnecessário
 - Usar Cow<str> para strings que podem ser owned ou borrowed
 - Rayon para paralelismo CPU-bound
@@ -1192,6 +1388,7 @@ description: >
 ```
 
 #### 🔎 seo-fundamentals
+
 ```markdown
 ---
 name: seo-fundamentals
@@ -1199,19 +1396,22 @@ description: >
   SEO técnico e on-page: meta tags, schema markup, Core Web Vitals, sitemap,
   robots.txt. Usar quando: otimizando para buscadores, configurando Next.js SEO.
 ---
+
 ## Meta Tags Obrigatórias
+
 \`\`\`tsx
 // Next.js Metadata API
 export const metadata: Metadata = {
-  title: { template: '%s | Site Name', default: 'Site Name' },
-  description: "Descrição única 150-160 chars",
-  openGraph: { title, description, images: [{ url, width: 1200, height: 630 }] },
-  twitter: { card: 'summary_large_image', ... },
-  alternates: { canonical: 'https://...' }
+title: { template: '%s | Site Name', default: 'Site Name' },
+description: "Descrição única 150-160 chars",
+openGraph: { title, description, images: [{ url, width: 1200, height: 630 }] },
+twitter: { card: 'summary_large_image', ... },
+alternates: { canonical: 'https://...' }
 }
 \`\`\`
 
 ## Schema Markup (JSON-LD)
+
 - WebSite: sitelinks search box
 - Organization: logo, redes sociais
 - Article: para blog posts
@@ -1219,11 +1419,13 @@ export const metadata: Metadata = {
 - BreadcrumbList: navegação estruturada
 
 ## Core Web Vitals → SEO
+
 LCP < 2.5s, INP < 200ms, CLS < 0.1
 Todos afetam ranking diretamente desde 2021
 ```
 
 #### 🖥️ server-management
+
 ```markdown
 ---
 name: server-management
@@ -1231,7 +1433,9 @@ description: >
   Gestão de servidores Linux: hardening, monitoramento, backup, gestão de
   processos. Usar quando: configurando servidores, troubleshooting de infra.
 ---
+
 ## Security Hardening Checklist
+
 - [ ] SSH: disable root login, disable password auth, use keys
 - [ ] Firewall: UFW/iptables, princípio do menor privilégio
 - [ ] Updates: unattended-upgrades habilitado
@@ -1239,12 +1443,14 @@ description: >
 - [ ] Auditd: log de mudanças críticas
 
 ## Monitoramento Essencial
+
 - Prometheus + Grafana (métricas)
 - Loki (logs)
 - Alertmanager (alertas)
 - Uptime Kuma (availability)
 
 ## Process Management
+
 - systemd para serviços de sistema
 - PM2 para aplicações Node.js
 - Supervisor para Python
@@ -1252,6 +1458,7 @@ description: >
 ```
 
 #### 🐛 systematic-debugging
+
 ```markdown
 ---
 name: systematic-debugging
@@ -1259,7 +1466,9 @@ description: >
   Metodologia científica de debugging: reprodução, hipóteses, isolamento, fix.
   Usar quando: investigando qualquer bug ou comportamento inesperado.
 ---
+
 ## Protocolo de Debug (5 Etapas)
+
 1. REPRODUZIR: criar caso mínimo reproduzível
 2. OBSERVAR: coletar evidências (logs, stack trace, estado)
 3. HIPÓTESES: listar causas possíveis (hipótese principal + alternativas)
@@ -1267,6 +1476,7 @@ description: >
 5. VERIFICAR: fix → teste de regressão → root cause confirmado
 
 ## Ferramentas por Tipo de Bug
+
 - Performance: profiler + métricas antes/depois
 - Memory leak: heap snapshot comparativo
 - Race condition: logging com timestamps + mutex
@@ -1274,11 +1484,13 @@ description: >
 - Produção: distributed tracing (Jaeger/Zipkin)
 
 ## Quando Escalar
+
 Após 30min sem progresso → pedir segundo par de olhos
 Após 2h → considerar reverter e planejar melhor
 ```
 
 #### 🎨 tailwind-patterns
+
 ```markdown
 ---
 name: tailwind-patterns
@@ -1286,30 +1498,35 @@ description: >
   Padrões Tailwind CSS: design tokens, componentes, variantes, dark mode.
   Usar quando: estilizando com Tailwind CSS, criando design systems.
 ---
+
 ## Convenções
+
 - Ordem de classes: layout → box → typography → visual → interactive
 - Extrair para componentes quando > 6 classes repetidas
 - Usar @apply com moderação (apenas para componentes de base)
 - Variantes com CVA (class-variance-authority) para componentes multi-estado
 
 ## Pattern CVA (recomendado)
+
 \`\`\`typescript
 import { cva } from 'class-variance-authority'
 const button = cva('font-medium rounded transition', {
-  variants: {
-    variant: { primary: 'bg-blue-600 text-white', ghost: 'bg-transparent' },
-    size: { sm: 'px-3 py-1.5 text-sm', md: 'px-4 py-2', lg: 'px-6 py-3 text-lg' }
-  },
-  defaultVariants: { variant: 'primary', size: 'md' }
+variants: {
+variant: { primary: 'bg-blue-600 text-white', ghost: 'bg-transparent' },
+size: { sm: 'px-3 py-1.5 text-sm', md: 'px-4 py-2', lg: 'px-6 py-3 text-lg' }
+},
+defaultVariants: { variant: 'primary', size: 'md' }
 })
 \`\`\`
 
 ## Dark Mode
+
 - Sempre: dark:bg-gray-900 dark:text-white
 - Testar com prefers-color-scheme
 ```
 
 #### 🔄 td-workflow
+
 ```markdown
 ---
 name: td-workflow
@@ -1317,23 +1534,28 @@ description: >
   Gestão de dívida técnica: identificação, priorização, pagamento incremental.
   Usar quando: sprint planning, avaliando saúde do código, priorizando refatorações.
 ---
+
 ## Classificação de Dívida Técnica
+
 - Deliberada/Prudente: "sabemos o risco, decidimos aceitar agora"
 - Acidental: descoberta depois, não intencional
 - Obsolescência: tecnologia ou requisito mudou
 
 ## Matriz de Priorização
+
 Alto impacto + Alta frequência → Pagar imediatamente
 Alto impacto + Baixa frequência → Planejar para próxima sprint
 Baixo impacto + Alta frequência → Quick wins, pagar oportunisticamente
 Baixo impacto + Baixa frequência → Ignorar (backlog)
 
 ## Regra do Boy Scout
+
 "Deixe o código melhor do que encontrou"
 Cada PR deve incluir ao menos uma melhoria incremental na área tocada
 ```
 
 #### 🧪 testing-patterns
+
 ```markdown
 ---
 name: testing-patterns
@@ -1341,27 +1563,32 @@ description: >
   Estratégias e padrões de testes: pirâmide, TDD, BDD, mocking, fixtures.
   Usar quando: escrevendo qualquer tipo de teste ou definindo estratégia.
 ---
+
 ## Pirâmide de Testes (balanceamento)
+
 - Unit (70%): isolado, rápido, sem I/O externo
 - Integration (20%): componentes + DB real / API real
 - E2E (10%): fluxos críticos end-to-end (Playwright)
 
 ## Bons Testes (FIRST)
+
 Fast | Independent | Repeatable | Self-validating | Timely
 
 ## AAA Pattern
+
 \`\`\`typescript
 it('should calculate total with discount', () => {
-  // Arrange
-  const cart = new Cart([{ price: 100, qty: 2 }])
-  // Act
-  const total = cart.calculateTotal({ discount: 10 })
-  // Assert
-  expect(total).toBe(180)
+// Arrange
+const cart = new Cart([{ price: 100, qty: 2 }])
+// Act
+const total = cart.calculateTotal({ discount: 10 })
+// Assert
+expect(total).toBe(180)
 })
 \`\`\`
 
 ## O que testar
+
 ✅ Lógica de negócio crítica
 ✅ Edge cases e casos de erro
 ✅ Contratos de API (contract tests)
@@ -1370,6 +1597,7 @@ it('should calculate total with discount', () => {
 ```
 
 #### 🔍 vulnerability-scanner
+
 ```markdown
 ---
 name: vulnerability-scanner
@@ -1377,34 +1605,44 @@ description: >
   Varredura e análise de vulnerabilidades: SAST, dependency audit, secrets.
   Usar quando: security reviews, análise de PRs, auditorias regulares.
 ---
+
 ## Checklist de Varredura
 
 ### Secrets & Config
+
 - [ ] Sem API keys/passwords no código (grep por: password=, api_key=, secret=)
 - [ ] .env não commitado (.gitignore verificado)
 - [ ] Variáveis sensíveis no vault/secrets manager
 
 ### Dependências
+
 \`\`\`bash
 npm audit --audit-level=high
+
 # Python
+
 pip-audit
+
 # Docker
+
 trivy image myimage:latest
 \`\`\`
 
 ### SAST
+
 - Semgrep para análise estática customizável
 - Bandit para Python
 - ESLint security plugin para JavaScript
 
 ### Runtime
+
 - Headers HTTP (SecurityHeaders.com)
 - TLS config (SSL Labs)
 - CORS policy review
 ```
 
 #### 🌐 webdesign-guidelines
+
 ```markdown
 ---
 name: webdesign-guidelines
@@ -1412,13 +1650,16 @@ description: >
   Diretrizes de web design: UX, acessibilidade, tipografia, layout, performance
   percebida. Usar quando: criando ou revisando interfaces web.
 ---
+
 ## Princípios Fundamentais
+
 - **Hierarquia visual**: guiar o olho do mais ao menos importante
 - **Espaço em branco**: não é vazio, é respiro e foco
 - **Consistência**: mesmos padrões criam confiança
 - **Feedback imediato**: toda ação deve ter resposta visual
 
 ## Acessibilidade (WCAG 2.1 AA)
+
 - Contraste texto normal: 4.5:1 | texto grande: 3:1
 - Foco visível em todos os elementos interativos
 - Labels em todos os inputs (não placeholder)
@@ -1426,6 +1667,7 @@ description: >
 - Navegação por teclado completa
 
 ## Performance Percebida
+
 - Skeleton screens > spinners para carregamento
 - Optimistic UI para ações rápidas
 - Progress indicators para operações > 1s
@@ -1433,6 +1675,7 @@ description: >
 ```
 
 #### 🌐 webapp-testing
+
 ```markdown
 ---
 name: webapp-testing
@@ -1440,24 +1683,28 @@ description: >
   Testes de aplicações web: Playwright E2E, visual regression, accessibility.
   Usar quando: criando testes E2E, testes de acessibilidade, smoke tests.
 ---
+
 ## Playwright Setup
+
 \`\`\`typescript
 import { test, expect } from '@playwright/test'
 
 test('checkout flow', async ({ page }) => {
-  await page.goto('/produtos')
-  await page.getByRole('button', { name: 'Adicionar' }).first().click()
-  await page.getByRole('link', { name: 'Carrinho' }).click()
-  await expect(page.getByText('1 item')).toBeVisible()
+await page.goto('/produtos')
+await page.getByRole('button', { name: 'Adicionar' }).first().click()
+await page.getByRole('link', { name: 'Carrinho' }).click()
+await expect(page.getByText('1 item')).toBeVisible()
 })
 \`\`\`
 
 ## Page Object Model
+
 - Um POM por página/componente importante
 - Métodos semânticos: addToCart() não click('#btn-123')
 - Assertions dentro do POM quando estável
 
 ## Visual Regression (Playwright)
+
 \`\`\`typescript
 await expect(page).toHaveScreenshot('homepage.png', { maxDiffPixelRatio: 0.01 })
 \`\`\`
@@ -1473,6 +1720,7 @@ Ativar com: /workflow-name [contexto]
 ```
 
 ### /brainstorm
+
 ```yaml
 objetivo: Gerar e avaliar soluções criativas para um problema
 agentes: [product-manager, orchestrator]
@@ -1486,6 +1734,7 @@ output: Documento de decisão com alternativas avaliadas
 ```
 
 ### /create
+
 ```yaml
 objetivo: Criar feature nova end-to-end
 agentes: [orchestrator → explorer-agent → backend/frontend/mobile (paralelo) → test-engineer → documentation-writer]
@@ -1501,12 +1750,12 @@ output: Feature completa + testes + docs + PR description
 ```
 
 ### /debug
+
 ```yaml
 objetivo: Diagnosticar e resolver bug com metodologia
 agentes: [debugger → (security-auditor se bug de segurança)]
 skills: [systematic-debugging, performance-profiling]
-etapas:
-  1. Reprodução mínima
+etapas: 1. Reprodução mínima
   2. Análise de logs/stack trace
   3. Hipóteses rankeadas
   4. Isolamento e fix
@@ -1516,12 +1765,12 @@ output: Root cause + fix + teste + post-mortem (se P0/P1)
 ```
 
 ### /deploy
+
 ```yaml
 objetivo: Pipeline de deploy seguro
 agentes: [devops-engineer → security-auditor → qa-automation-engineer]
 skills: [deployment-procedures, server-management, lint-and-validate]
-etapas:
-  1. Pre-deploy checklist
+etapas: 1. Pre-deploy checklist
   2. Security scan (Snyk/Trivy)
   3. Testes de fumaça em staging
   4. Deploy gradual (canary/blue-green)
@@ -1531,12 +1780,12 @@ output: Deploy executado + relatório + alertas configurados
 ```
 
 ### /enhance
+
 ```yaml
 objetivo: Melhorar código/sistema existente
 agentes: [code-archaeologist → performance-optimizer → security-auditor]
 skills: [clean-code, performance-profiling, code-review-checklist]
-etapas:
-  1. Análise do estado atual (métricas baseline)
+etapas: 1. Análise do estado atual (métricas baseline)
   2. Identificação de oportunidades
   3. Priorização por impacto
   4. Implementação incremental
@@ -1545,12 +1794,12 @@ output: Código melhorado + métricas before/after + debt técnico reduzido
 ```
 
 ### /orchestrate
+
 ```yaml
 objetivo: Coordenar múltiplos agentes para tarefa complexa
 agentes: [orchestrator → todos os necessários]
 skills: [parallel-agents, intelligent-routing, plan-writing]
-etapas:
-  1. Decomposição do problema
+etapas: 1. Decomposição do problema
   2. Assignment de agentes (com ownership claro)
   3. Execução paralela onde possível
   4. Checkpoints de sincronização
@@ -1560,12 +1809,12 @@ output: Entregável completo + relatório de execução
 ```
 
 ### /plan
+
 ```yaml
 objetivo: Criar plano técnico detalhado antes de implementar
 agentes: [orchestrator → project-planner → (domain specialist)]
 skills: [plan-writing, architecture, brainstorming]
-etapas:
-  1. Entender requisitos completamente
+etapas: 1. Entender requisitos completamente
   2. Explorar contexto técnico atual
   3. Definir abordagem (com alternativas)
   4. Quebrar em tarefas estimadas
@@ -1575,6 +1824,7 @@ output: Plano aprovável (aguarda validação humana)
 ```
 
 ### /preview
+
 ```yaml
 objetivo: Preview de mudanças sem aplicar
 agentes: [code-archaeologist, security-auditor]
@@ -1589,12 +1839,12 @@ output: Preview de mudanças + análise de impacto (SEM modificar nada)
 ```
 
 ### /status
+
 ```yaml
 objetivo: Status completo do projeto/sistema
 agentes: [explorer-agent, performance-optimizer]
 skills: [performance-profiling, code-review-checklist, documentation-templates]
-etapas:
-  1. Estado do código (coverage, debt técnico, linting)
+etapas: 1. Estado do código (coverage, debt técnico, linting)
   2. Estado da infra (uptime, alertas ativos)
   3. Backlog de melhorias priorizadas
   4. Riscos de segurança pendentes
@@ -1602,12 +1852,12 @@ output: Dashboard de saúde do projeto (markdown)
 ```
 
 ### /test
+
 ```yaml
 objetivo: Implementar ou melhorar estratégia de testes
 agentes: [test-engineer → qa-automation-engineer]
 skills: [testing-patterns, webapp-testing, td-workflow]
-etapas:
-  1. Análise de cobertura atual
+etapas: 1. Análise de cobertura atual
   2. Identificação de áreas críticas sem teste
   3. Implementação (unit → integration → E2E)
   4. CI integration
@@ -1616,12 +1866,20 @@ output: Suíte de testes + CI config + relatório de cobertura
 ```
 
 ### /ui-ux-pro-max
+
 ```yaml
 objetivo: Design e implementação de UI/UX de alta qualidade
 agentes: [frontend-specialist → seo-specialist → qa-automation-engineer]
-skills: [frontend-design, webdesign-guidelines, tailwind-patterns, nextjs-react-expert, seo-fundamentals, performance-profiling]
-etapas:
-  1. Análise de UX atual (se existir)
+skills:
+  [
+    frontend-design,
+    webdesign-guidelines,
+    tailwind-patterns,
+    nextjs-react-expert,
+    seo-fundamentals,
+    performance-profiling,
+  ]
+etapas: 1. Análise de UX atual (se existir)
   2. Design tokens e sistema de design
   3. Componentes acessíveis e responsivos
   4. Performance (Core Web Vitals)
@@ -1631,12 +1889,12 @@ output: UI polida + a11y score + Web Vitals ≥ 90 + SEO otimizado
 ```
 
 ### /architecture
+
 ```yaml
 objetivo: Design ou revisão arquitetural
 agentes: [orchestrator → code-archaeologist → backend-specialist → database-architect]
 skills: [architecture, database-design, api-patterns, plan-writing, documentation-templates]
-etapas:
-  1. Contexto e requisitos (funcionais + não-funcionais)
+etapas: 1. Contexto e requisitos (funcionais + não-funcionais)
   2. Análise do estado atual (se existir)
   3. Alternativas arquiteturais (mín. 2)
   4. ADR para decisão principal
@@ -1720,23 +1978,23 @@ claude
 ### Opção 3: API (para aplicações próprias)
 
 ```typescript
-import Anthropic from '@anthropic-ai/sdk'
-const client = new Anthropic()
+import Anthropic from "@anthropic-ai/sdk";
+const client = new Anthropic();
 
 // Upload de skill
 const skill = await client.beta.skills.create({
   name: "api-patterns",
   description: "Padrões REST/GraphQL para criação de APIs",
-  content: fs.readFileSync('./skills/api-patterns/SKILL.md', 'utf8')
-})
+  content: fs.readFileSync("./skills/api-patterns/SKILL.md", "utf8"),
+});
 
 // Usar em chamada
 const response = await client.messages.create({
   model: "claude-sonnet-4-6",
   max_tokens: 4096,
   skills: [{ id: skill.id }],
-  messages: [{ role: "user", content: "Crie um endpoint de usuários" }]
-})
+  messages: [{ role: "user", content: "Crie um endpoint de usuários" }],
+});
 ```
 
 ---
@@ -1744,6 +2002,7 @@ const response = await client.messages.create({
 ## 💡 SUGESTÕES E O QUE APROVEITAR DO AGENTE ANTERIOR
 
 ### ✅ O que foi mantido e aprimorado
+
 - Sistema de memória episódica/semântica/procedural → expandido
 - Protocolo crítico com categorias de risco → mantido
 - Self-improving feedback loop → integrado nos subagentes
@@ -1751,6 +2010,7 @@ const response = await client.messages.create({
 - Security OWASP + Zero Trust → expandido em 3 skills
 
 ### 🆕 O que foi adicionado
+
 - 15 novos subagentes especializados
 - 30+ skills novas baseadas em best practices 2024/25
 - Sistema de workflows (/create, /debug, /deploy...)
@@ -1760,22 +2020,18 @@ const response = await client.messages.create({
 ### 💡 Recomendações de Prioridade para Começar
 
 **Fase 1 — Setup Mínimo Viável (1-2h)**
+
 1. Instalar Claude Code no projeto principal
 2. Criar CLAUDE.md com stack e convenções
 3. Criar 5 skills core: clean-code, api-patterns, systematic-debugging, testing-patterns, deployment-procedures
 4. Criar 3 agentes: debugger, backend-specialist, orchestrator
 
-**Fase 2 — Expansão (1 semana)**
-5. Adicionar skills de acordo com stack do projeto
-6. Criar agentes de acordo com necessidades do time
-7. Configurar workflows /create e /debug no dia a dia
+**Fase 2 — Expansão (1 semana)** 5. Adicionar skills de acordo com stack do projeto 6. Criar agentes de acordo com necessidades do time 7. Configurar workflows /create e /debug no dia a dia
 
-**Fase 3 — Maturidade**
-8. Workflows completos (/deploy, /architecture)
-9. Skills customizadas do projeto (convenções específicas)
-10. Integração com MCP (Jira, Slack, GitHub)
+**Fase 3 — Maturidade** 8. Workflows completos (/deploy, /architecture) 9. Skills customizadas do projeto (convenções específicas) 10. Integração com MCP (Jira, Slack, GitHub)
 
 ### ⚡ Dica: Rodar na Prática
+
 ```bash
 # Debug de bug produção:
 claude "/debug: NullPointerException no checkout após atualização de Node"
@@ -1797,25 +2053,28 @@ claude "/architecture: migrar monólito para microserviços"
 ```typescript
 const qualityTargets = {
   code: {
-    coverage: { unit: 80, integration: 60, e2e: 'critical paths' },
-    approval_rate: '>90%',
-    bug_intro_rate: '<3%',
-    security_vulns_missed: 0
+    coverage: { unit: 80, integration: 60, e2e: "critical paths" },
+    approval_rate: ">90%",
+    bug_intro_rate: "<3%",
+    security_vulns_missed: 0,
   },
   performance: {
-    LCP: '<2.5s', INP: '<200ms', CLS: '<0.1',
-    API_p95: '<500ms', DB_query: '<50ms'
+    LCP: "<2.5s",
+    INP: "<200ms",
+    CLS: "<0.1",
+    API_p95: "<500ms",
+    DB_query: "<50ms",
   },
   process: {
-    PR_review_time: '<24h',
-    deploy_frequency: 'daily',
-    MTTR: '<1h para P0/P1'
-  }
-}
+    PR_review_time: "<24h",
+    deploy_frequency: "daily",
+    MTTR: "<1h para P0/P1",
+  },
+};
 ```
 
 ---
 
 **VERSÃO**: 2.0.0 | **ATUALIZADO**: 2025
 **COMPATÍVEL COM**: Claude Code · Claude.ai Pro/Max/Team/Enterprise · Anthropic API
-**PRINCÍPIO**: *Este agente evolui com cada projeto. Não trabalha hoje como trabalhava no dia 1.*
+**PRINCÍPIO**: _Este agente evolui com cada projeto. Não trabalha hoje como trabalhava no dia 1._

@@ -8,11 +8,12 @@ const EVO_BASE_FALLBACK = "https://evolution-api.rsconsultoria.pro";
 function getAuthSupabase() {
   const request = getRequest();
   const authHeader = request?.headers?.get("authorization");
-  
+
   if (authHeader && authHeader.startsWith("Bearer ")) {
     const token = authHeader.replace("Bearer ", "");
     const url = process.env.SUPABASE_URL || import.meta.env.VITE_SUPABASE_URL;
-    const key = process.env.SUPABASE_PUBLISHABLE_KEY || import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
+    const key =
+      process.env.SUPABASE_PUBLISHABLE_KEY || import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
     if (url && key) {
       return createClient(url, key, {
         global: {
@@ -38,7 +39,11 @@ async function getTenantEvoConfig(tenantId?: string) {
     };
   }
   const authClient = getAuthSupabase();
-  const { data: tenant } = await authClient.from("tenants").select("evolutionApiUrl, evolutionApiKey").eq("id", tenantId).single();
+  const { data: tenant } = await authClient
+    .from("tenants")
+    .select("evolutionApiUrl, evolutionApiKey")
+    .eq("id", tenantId)
+    .single();
   if (tenant?.evolutionApiUrl && tenant?.evolutionApiKey) {
     return {
       url: tenant.evolutionApiUrl.replace(/\/$/, ""),
@@ -61,11 +66,18 @@ async function evo<T = unknown>(path: string, tenantId?: string, init?: RequestI
   const cfg = await getTenantEvoConfig(tenantId);
   const r = await fetch(`${cfg.url}${path}`, {
     ...init,
-    headers: { ...(await authHeaders(tenantId)), ...(init?.headers as Record<string, string> | undefined) },
+    headers: {
+      ...(await authHeaders(tenantId)),
+      ...(init?.headers as Record<string, string> | undefined),
+    },
   });
   const text = await r.text();
   if (!r.ok) throw new Error(`Evolution ${r.status}: ${text.slice(0, 400)}`);
-  try { return JSON.parse(text) as T; } catch { return text as unknown as T; }
+  try {
+    return JSON.parse(text) as T;
+  } catch {
+    return text as unknown as T;
+  }
 }
 
 export const testEvolutionConnection = createServerFn({ method: "POST" })
@@ -120,7 +132,9 @@ export const createInstance = createServerFn({ method: "POST" })
         instanceName: data.instanceName,
         integration: "WHATSAPP-BAILEYS",
         qrcode: true,
-        ...(data.webhookUrl ? { webhook: { url: data.webhookUrl, events: ["MESSAGES_UPSERT", "CONNECTION_UPDATE"] } } : {}),
+        ...(data.webhookUrl
+          ? { webhook: { url: data.webhookUrl, events: ["MESSAGES_UPSERT", "CONNECTION_UPDATE"] } }
+          : {}),
       }),
     });
     return { ok: true };
@@ -129,7 +143,10 @@ export const createInstance = createServerFn({ method: "POST" })
 export const connectInstance = createServerFn({ method: "POST" })
   .inputValidator((d: { tenantId: string; instanceName: string }) => d)
   .handler(async ({ data }) => {
-    const r = await evo<any>(`/instance/connect/${encodeURIComponent(data.instanceName)}`, data.tenantId);
+    const r = await evo<any>(
+      `/instance/connect/${encodeURIComponent(data.instanceName)}`,
+      data.tenantId,
+    );
     return {
       base64: (r?.base64 ?? r?.qrcode?.base64 ?? null) as string | null,
       code: (r?.code ?? r?.qrcode?.code ?? null) as string | null,
@@ -140,28 +157,37 @@ export const connectInstance = createServerFn({ method: "POST" })
 export const instanceState = createServerFn({ method: "POST" })
   .inputValidator((d: { tenantId: string; instanceName: string }) => d)
   .handler(async ({ data }) => {
-    const r = await evo<any>(`/instance/connectionState/${encodeURIComponent(data.instanceName)}`, data.tenantId);
+    const r = await evo<any>(
+      `/instance/connectionState/${encodeURIComponent(data.instanceName)}`,
+      data.tenantId,
+    );
     return { state: (r?.instance?.state ?? r?.state ?? "unknown") as string };
   });
 
 export const restartInstance = createServerFn({ method: "POST" })
   .inputValidator((d: { tenantId: string; instanceName: string }) => d)
   .handler(async ({ data }) => {
-    await evo(`/instance/restart/${encodeURIComponent(data.instanceName)}`, data.tenantId, { method: "PUT" });
+    await evo(`/instance/restart/${encodeURIComponent(data.instanceName)}`, data.tenantId, {
+      method: "PUT",
+    });
     return { ok: true };
   });
 
 export const logoutInstance = createServerFn({ method: "POST" })
   .inputValidator((d: { tenantId: string; instanceName: string }) => d)
   .handler(async ({ data }) => {
-    await evo(`/instance/logout/${encodeURIComponent(data.instanceName)}`, data.tenantId, { method: "DELETE" });
+    await evo(`/instance/logout/${encodeURIComponent(data.instanceName)}`, data.tenantId, {
+      method: "DELETE",
+    });
     return { ok: true };
   });
 
 export const deleteInstance = createServerFn({ method: "POST" })
   .inputValidator((d: { tenantId: string; instanceName: string }) => d)
   .handler(async ({ data }) => {
-    await evo(`/instance/delete/${encodeURIComponent(data.instanceName)}`, data.tenantId, { method: "DELETE" });
+    await evo(`/instance/delete/${encodeURIComponent(data.instanceName)}`, data.tenantId, {
+      method: "DELETE",
+    });
     return { ok: true };
   });
 
@@ -182,12 +208,15 @@ export const listGroups = createServerFn({ method: "POST" })
   .inputValidator((d: { tenantId: string; instanceName: string }) => d)
   .handler(async ({ data }) => {
     try {
-      const res = await evo<any>(`/group/fetchAllGroups/${encodeURIComponent(data.instanceName)}?getParticipants=false`, data.tenantId);
+      const res = await evo<any>(
+        `/group/fetchAllGroups/${encodeURIComponent(data.instanceName)}?getParticipants=false`,
+        data.tenantId,
+      );
       const arr = Array.isArray(res) ? res : [];
       return arr.map((g: any) => ({
         id: g?.id ?? g?.jid,
         name: g?.subject ?? g?.name ?? "Grupo sem nome",
-        size: g?.size ?? null
+        size: g?.size ?? null,
       }));
     } catch (e) {
       console.warn("[listGroups] falhou:", e);
@@ -196,10 +225,20 @@ export const listGroups = createServerFn({ method: "POST" })
   });
 
 export const sendMedia = createServerFn({ method: "POST" })
-  .inputValidator((d: { tenantId: string; instanceName: string; number: string; mediaUrl: string; mediaType: string; caption?: string }) => {
-    if (!d?.instanceName || !d?.number || !d?.mediaUrl || !d?.mediaType) throw new Error("Parâmetros inválidos");
-    return d;
-  })
+  .inputValidator(
+    (d: {
+      tenantId: string;
+      instanceName: string;
+      number: string;
+      mediaUrl: string;
+      mediaType: string;
+      caption?: string;
+    }) => {
+      if (!d?.instanceName || !d?.number || !d?.mediaUrl || !d?.mediaType)
+        throw new Error("Parâmetros inválidos");
+      return d;
+    },
+  )
   .handler(async ({ data }) => {
     await evo(`/message/sendMedia/${encodeURIComponent(data.instanceName)}`, data.tenantId, {
       method: "POST",
@@ -207,10 +246,8 @@ export const sendMedia = createServerFn({ method: "POST" })
         number: data.number,
         mediatype: data.mediaType,
         media: data.mediaUrl,
-        caption: data.caption ?? ""
+        caption: data.caption ?? "",
       }),
     });
     return { ok: true };
   });
-
-

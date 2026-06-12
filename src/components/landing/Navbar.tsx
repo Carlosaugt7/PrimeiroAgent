@@ -12,7 +12,7 @@ export function Navbar() {
               <Sparkles className="size-4 text-primary-foreground" />
             </div>
             <span className="font-display font-bold text-lg tracking-tight">
-              AgentHub<span className="text-gradient"> AI</span>
+              AgentFlow<span className="text-gradient"> IA</span>
             </span>
           </Link>
           <nav className="hidden md:flex items-center gap-8 text-sm text-muted-foreground">

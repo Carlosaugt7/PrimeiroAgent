@@ -27,6 +27,7 @@ import { Route as AppLlmProvidersRouteImport } from './routes/app.llm-providers'
 import { Route as AppKnowledgeRouteImport } from './routes/app.knowledge'
 import { Route as AppIntegrationsRouteImport } from './routes/app.integrations'
 import { Route as AppInboxRouteImport } from './routes/app.inbox'
+import { Route as AppExtractorRouteImport } from './routes/app.extractor'
 import { Route as AppDeployRouteImport } from './routes/app.deploy'
 import { Route as AppCrmRouteImport } from './routes/app.crm'
 import { Route as AppCampaignsRouteImport } from './routes/app.campaigns'
@@ -132,6 +133,11 @@ const AppInboxRoute = AppInboxRouteImport.update({
   path: '/inbox',
   getParentRoute: () => AppRoute,
 } as any)
+const AppExtractorRoute = AppExtractorRouteImport.update({
+  id: '/extractor',
+  path: '/extractor',
+  getParentRoute: () => AppRoute,
+} as any)
 const AppDeployRoute = AppDeployRouteImport.update({
   id: '/deploy',
   path: '/deploy',
@@ -216,6 +222,7 @@ export interface FileRoutesByFullPath {
   '/app/campaigns': typeof AppCampaignsRoute
   '/app/crm': typeof AppCrmRoute
   '/app/deploy': typeof AppDeployRoute
+  '/app/extractor': typeof AppExtractorRoute
   '/app/inbox': typeof AppInboxRoute
   '/app/integrations': typeof AppIntegrationsRoute
   '/app/knowledge': typeof AppKnowledgeRoute
@@ -248,6 +255,7 @@ export interface FileRoutesByTo {
   '/app/campaigns': typeof AppCampaignsRoute
   '/app/crm': typeof AppCrmRoute
   '/app/deploy': typeof AppDeployRoute
+  '/app/extractor': typeof AppExtractorRoute
   '/app/inbox': typeof AppInboxRoute
   '/app/integrations': typeof AppIntegrationsRoute
   '/app/knowledge': typeof AppKnowledgeRoute
@@ -283,6 +291,7 @@ export interface FileRoutesById {
   '/app/campaigns': typeof AppCampaignsRoute
   '/app/crm': typeof AppCrmRoute
   '/app/deploy': typeof AppDeployRoute
+  '/app/extractor': typeof AppExtractorRoute
   '/app/inbox': typeof AppInboxRoute
   '/app/integrations': typeof AppIntegrationsRoute
   '/app/knowledge': typeof AppKnowledgeRoute
@@ -319,6 +328,7 @@ export interface FileRouteTypes {
     | '/app/campaigns'
     | '/app/crm'
     | '/app/deploy'
+    | '/app/extractor'
     | '/app/inbox'
     | '/app/integrations'
     | '/app/knowledge'
@@ -351,6 +361,7 @@ export interface FileRouteTypes {
     | '/app/campaigns'
     | '/app/crm'
     | '/app/deploy'
+    | '/app/extractor'
     | '/app/inbox'
     | '/app/integrations'
     | '/app/knowledge'
@@ -385,6 +396,7 @@ export interface FileRouteTypes {
     | '/app/campaigns'
     | '/app/crm'
     | '/app/deploy'
+    | '/app/extractor'
     | '/app/inbox'
     | '/app/integrations'
     | '/app/knowledge'
@@ -546,6 +558,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppInboxRouteImport
       parentRoute: typeof AppRoute
     }
+    '/app/extractor': {
+      id: '/app/extractor'
+      path: '/extractor'
+      fullPath: '/app/extractor'
+      preLoaderRoute: typeof AppExtractorRouteImport
+      parentRoute: typeof AppRoute
+    }
     '/app/deploy': {
       id: '/app/deploy'
       path: '/deploy'
@@ -670,6 +689,7 @@ interface AppRouteChildren {
   AppCampaignsRoute: typeof AppCampaignsRoute
   AppCrmRoute: typeof AppCrmRoute
   AppDeployRoute: typeof AppDeployRoute
+  AppExtractorRoute: typeof AppExtractorRoute
   AppInboxRoute: typeof AppInboxRoute
   AppIntegrationsRoute: typeof AppIntegrationsRoute
   AppKnowledgeRoute: typeof AppKnowledgeRoute
@@ -696,6 +716,7 @@ const AppRouteChildren: AppRouteChildren = {
   AppCampaignsRoute: AppCampaignsRoute,
   AppCrmRoute: AppCrmRoute,
   AppDeployRoute: AppDeployRoute,
+  AppExtractorRoute: AppExtractorRoute,
   AppInboxRoute: AppInboxRoute,
   AppIntegrationsRoute: AppIntegrationsRoute,
   AppKnowledgeRoute: AppKnowledgeRoute,

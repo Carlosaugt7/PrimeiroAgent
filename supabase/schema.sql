@@ -38,6 +38,8 @@ drop table if exists public.billing_intents cascade;
 drop table if exists public.audit cascade;
 drop table if exists public.campaign_recipients cascade;
 drop table if exists public.campaigns cascade;
+drop table if exists public.group_campaign_recipients cascade;
+drop table if exists public.group_campaigns cascade;
 
 -- =====================================================
 -- PASSO 2: RECRIAR TABELAS COM ESTRUTURA CORRETA
@@ -445,13 +447,43 @@ create table public.campaign_recipients (
   error text
 );
 
+-- Group Campaigns
+create table public.group_campaigns (
+  id uuid primary key default gen_random_uuid(),
+  "tenantId" text not null references public.tenants(id) on delete cascade,
+  name text not null,
+  "instanceName" text not null,
+  "messageText" text not null,
+  "mediaUrl" text,
+  "mediaType" text,
+  status text not null default 'draft',
+  "minDelay" integer not null default 60,
+  "maxDelay" integer not null default 180,
+  "createdAt" timestamptz default now()
+);
+
+-- Group Campaign Recipients
+create table public.group_campaign_recipients (
+  id uuid primary key default gen_random_uuid(),
+  "campaignId" uuid not null references public.group_campaigns(id) on delete cascade,
+  "groupId" text not null,
+  "groupName" text,
+  status text not null default 'pending',
+  "sentAt" timestamptz,
+  error text
+);
+
 -- Habilitar RLS nas novas tabelas
 alter table public.campaigns enable row level security;
 alter table public.campaign_recipients enable row level security;
+alter table public.group_campaigns enable row level security;
+alter table public.group_campaign_recipients enable row level security;
 
 -- Criar políticas para autenticados
 create policy "camp_all" on public.campaigns for all to authenticated using (true) with check (true);
 create policy "camp_rec_all" on public.campaign_recipients for all to authenticated using (true) with check (true);
+create policy "group_camp_all" on public.group_campaigns for all to authenticated using (true) with check (true);
+create policy "group_camp_rec_all" on public.group_campaign_recipients for all to authenticated using (true) with check (true);
 
 -- Criar o bucket de storage para mídias de campanha
 insert into storage.buckets (id, name, public) values ('campaigns', 'campaigns', true) on conflict (id) do nothing;
@@ -491,6 +523,8 @@ create index if not exists idx_messages_conversation_created on public.messages 
 create index if not exists idx_ai_logs_tenant_created on public.ai_logs ("tenantId", "createdAt" desc);
 create index if not exists idx_appointments_tenant_date on public.appointments ("tenantId", "date" asc);
 create index if not exists idx_knowledge_chunks_knowledge on public.knowledge_chunks ("knowledgeId");
+create index if not exists idx_group_campaigns_tenant on public.group_campaigns ("tenantId");
+create index if not exists idx_group_campaign_recipients on public.group_campaign_recipients ("campaignId");
 
 -- =====================================================
 -- PASSO 5: RECARREGAR CACHE DO SCHEMA

@@ -8,7 +8,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Sparkles, Loader2, Eye, EyeOff } from "lucide-react";
 
 export const Route = createFileRoute("/auth")({
-  head: () => ({ meta: [{ title: "Entrar — AgentHub AI" }] }),
+  head: () => ({ meta: [{ title: "Entrar — AgentFlow IA" }] }),
   component: AuthPage,
 });
 
@@ -74,7 +74,7 @@ function AuthPage() {
             <Sparkles className="size-4 text-primary-foreground" />
           </div>
           <span className="font-display font-bold text-xl">
-            AgentHub<span className="text-gradient"> AI</span>
+            AgentFlow<span className="text-gradient"> IA</span>
           </span>
         </Link>
         <div>
@@ -87,7 +87,7 @@ function AuthPage() {
             Multi-tenant, multi-LLM, integração nativa com Evolution API. Sem código, sem terminal.
           </p>
         </div>
-        <p className="text-xs text-muted-foreground">© AgentHub AI — RS Consultoria</p>
+        <p className="text-xs text-muted-foreground">© AgentFlow IA — RS Consultoria</p>
       </div>
 
       <div className="flex items-center justify-center p-6">

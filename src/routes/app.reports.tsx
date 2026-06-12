@@ -15,7 +15,7 @@ import {
 import { Download, BarChart3, MessageSquare, Users, CheckCircle2 } from "lucide-react";
 
 export const Route = createFileRoute("/app/reports")({
-  head: () => ({ meta: [{ title: "Relatórios — AgentHub AI" }] }),
+  head: () => ({ meta: [{ title: "Relatórios — AgentFlow IA" }] }),
   component: Reports,
 });
 

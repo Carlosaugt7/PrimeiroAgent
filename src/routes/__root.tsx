@@ -79,10 +79,10 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
     meta: [
       { charSet: "utf-8" },
       { name: "viewport", content: "width=device-width, initial-scale=1" },
-      { title: "AgentHub AI" },
+      { title: "AgentFlow IA" },
       { name: "description", content: "Plataforma SaaS de Agentes de IA para WhatsApp" },
       { name: "author", content: "RS Consultoria" },
-      { property: "og:title", content: "AgentHub AI" },
+      { property: "og:title", content: "AgentFlow IA" },
       { property: "og:description", content: "Plataforma SaaS de Agentes de IA para WhatsApp" },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary" },

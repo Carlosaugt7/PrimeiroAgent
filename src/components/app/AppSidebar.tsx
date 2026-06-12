@@ -10,6 +10,7 @@ import {
   CreditCard,
   Crown,
   Database,
+  Download,
   FlaskConical,
   History,
   LayoutDashboard,
@@ -42,6 +43,7 @@ const groups: { title: string; items: NavItem[] }[] = [
       { to: "/app/templates", label: "Templates", icon: MessageSquareText },
       { to: "/app/scheduled", label: "Agendamentos", icon: CalendarClock },
       { to: "/app/campaigns", label: "Campanhas", icon: Megaphone },
+      { to: "/app/extractor", label: "Extrator", icon: Download },
       { to: "/app/automations", label: "Automações", icon: Zap },
     ],
   },
@@ -95,12 +97,12 @@ export function AppSidebar({ tenantName, planName }: { tenantName: string; planN
 
   return (
     <aside className="hidden md:flex w-64 shrink-0 flex-col gap-2 p-4 border-r border-border bg-card/40 backdrop-blur-xl">
-      <Link to="/" className="flex items-center gap-2 px-2 py-3">
+      <Link to="/app" className="flex items-center gap-2 px-2 py-3">
         <div className="size-8 rounded-lg bg-gradient-primary grid place-items-center shadow-glow">
           <Sparkles className="size-4 text-primary-foreground" />
         </div>
         <span className="font-display font-bold text-lg tracking-tight">
-          AgentHub<span className="text-gradient"> AI</span>
+          AgentFlow<span className="text-gradient"> IA</span>
         </span>
       </Link>
 

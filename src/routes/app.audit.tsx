@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Download, ShieldCheck, History } from "lucide-react";
 
 export const Route = createFileRoute("/app/audit")({
-  head: () => ({ meta: [{ title: "Auditoria — AgentHub AI" }] }),
+  head: () => ({ meta: [{ title: "Auditoria — AgentFlow IA" }] }),
   component: Page,
 });
 

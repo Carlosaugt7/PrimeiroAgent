@@ -8,10 +8,10 @@ export function Footer() {
           <div className="size-7 rounded-lg bg-gradient-primary grid place-items-center">
             <Sparkles className="size-3.5 text-primary-foreground" />
           </div>
-          <span className="font-display font-bold">AgentHub AI</span>
+          <span className="font-display font-bold">AgentFlow IA</span>
         </div>
         <p className="text-xs text-muted-foreground">
-          © {new Date().getFullYear()} AgentHub AI. Todos os direitos reservados.
+          © {new Date().getFullYear()} AgentFlow IA. Todos os direitos reservados.
         </p>
         <div className="flex gap-6 text-xs text-muted-foreground">
           <a href="#" className="hover:text-foreground">

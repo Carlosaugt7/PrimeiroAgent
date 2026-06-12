@@ -20,7 +20,7 @@ import {
 import { cn } from "@/lib/utils";
 
 export const Route = createFileRoute("/app/onboarding")({
-  head: () => ({ meta: [{ title: "Começar — AgentHub AI" }] }),
+  head: () => ({ meta: [{ title: "Começar — AgentFlow IA" }] }),
   component: OnboardingPage,
 });
 
@@ -124,7 +124,6 @@ function OnboardingPage() {
         .from("tenants")
         .update({
           onboardedAt: new Date().toISOString(),
-          onboardedBy: profile?.uid ?? "",
         })
         .eq("id", tenant.id);
       if (error) throw error;

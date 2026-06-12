@@ -251,3 +251,82 @@ export const sendMedia = createServerFn({ method: "POST" })
     });
     return { ok: true };
   });
+
+export const sendPresence = createServerFn({ method: "POST" })
+  .inputValidator(
+    (d: {
+      tenantId: string;
+      instanceName: string;
+      number: string;
+      presence: "composing" | "recording" | "paused";
+      delay?: number;
+    }) => {
+      if (!d?.instanceName || !d?.number || !d?.presence) throw new Error("Parâmetros inválidos");
+      return d;
+    },
+  )
+  .handler(async ({ data }) => {
+    try {
+      await evo(`/chat/sendPresence/${encodeURIComponent(data.instanceName)}`, data.tenantId, {
+        method: "POST",
+        body: JSON.stringify({
+          number: data.number,
+          presence: data.presence,
+          delay: data.delay ?? 3000,
+        }),
+      });
+      return { ok: true };
+    } catch (e) {
+      console.warn("[sendPresence] falhou:", e);
+      return { ok: false, error: e instanceof Error ? e.message : "Erro desconhecido" };
+    }
+  });
+
+export const fetchInstanceContacts = createServerFn({ method: "POST" })
+  .inputValidator((d: { tenantId: string; instanceName: string }) => d)
+  .handler(async ({ data }) => {
+    try {
+      const res = await evo<any>(
+        `/chat/findContacts/${encodeURIComponent(data.instanceName)}`,
+        data.tenantId,
+        {
+          method: "POST",
+          body: JSON.stringify({ where: {} }),
+        }
+      );
+      const arr = Array.isArray(res) ? res : [];
+      return arr.map((c: any) => ({
+        id: c?.id ?? c?.jid ?? "",
+        name: c?.name ?? null,
+        pushName: c?.pushName ?? c?.pushname ?? null,
+        verifiedName: c?.verifiedName ?? null,
+      }));
+    } catch (e) {
+      console.warn("[fetchInstanceContacts] falhou:", e);
+      return [];
+    }
+  });
+
+export const fetchGroupParticipants = createServerFn({ method: "POST" })
+  .inputValidator((d: { tenantId: string; instanceName: string; groupJid: string }) => d)
+  .handler(async ({ data }) => {
+    try {
+      const res = await evo<any>(
+        `/group/participants/${encodeURIComponent(data.instanceName)}?groupJid=${encodeURIComponent(data.groupJid)}`,
+        data.tenantId
+      );
+      const participants = Array.isArray(res) ? res : (res?.participants || []);
+      return participants.map((p: any) => ({
+        id: p?.id ?? p?.jid ?? p?.number ?? "",
+        name: p?.name ?? null,
+        pushName: p?.pushName ?? p?.pushname ?? null,
+        verifiedName: p?.verifiedName ?? null,
+        isAdmin: !!(p?.admin || p?.isAdmin || p?.adminJid),
+        isSuperAdmin: !!(p?.isSuperAdmin),
+      }));
+    } catch (e) {
+      console.warn("[fetchGroupParticipants] falhou:", e);
+      return [];
+    }
+  });
+

@@ -16,7 +16,7 @@ import { Contact, Download, MessageCircle, Search, X } from "lucide-react";
 import { toast } from "sonner";
 
 export const Route = createFileRoute("/app/crm")({
-  head: () => ({ meta: [{ title: "Contatos (CRM) — AgentHub AI" }] }),
+  head: () => ({ meta: [{ title: "Contatos (CRM) — AgentFlow IA" }] }),
   component: CRM,
 });
 

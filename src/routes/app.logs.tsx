@@ -7,7 +7,7 @@ import { Badge } from "@/components/ui/badge";
 import { ScrollText, CheckCircle2, AlertCircle, Bot, Clock, Search } from "lucide-react";
 
 export const Route = createFileRoute("/app/logs")({
-  head: () => ({ meta: [{ title: "Logs & Traces — AgentHub AI" }] }),
+  head: () => ({ meta: [{ title: "Logs & Traces — AgentFlow IA" }] }),
   component: Logs,
 });
 

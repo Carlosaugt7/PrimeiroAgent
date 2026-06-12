@@ -20,7 +20,7 @@ import { Check, CreditCard, ExternalLink, Loader2, ShieldCheck, Sparkles } from 
 import { cn } from "@/lib/utils";
 
 export const Route = createFileRoute("/app/billing")({
-  head: () => ({ meta: [{ title: "Planos & faturamento — AgentHub AI" }] }),
+  head: () => ({ meta: [{ title: "Planos & faturamento — AgentFlow IA" }] }),
   component: BillingPage,
 });
 

@@ -19,7 +19,7 @@ import { Trash2, Plus, Zap, Tag, PauseCircle, MessageCircle, ArrowRightCircle } 
 import { toast } from "sonner";
 
 export const Route = createFileRoute("/app/automations")({
-  head: () => ({ meta: [{ title: "Automações — AgentHub AI" }] }),
+  head: () => ({ meta: [{ title: "Automações — AgentFlow IA" }] }),
   component: Automations,
 });
 

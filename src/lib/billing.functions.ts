@@ -104,7 +104,7 @@ export const createCheckout = createServerFn({ method: "POST" })
           billingType: "UNDEFINED", // deixa o cliente escolher PIX/Boleto/Cartão
           value: plan.priceBRL,
           dueDate: due,
-          description: `AgentHub AI — Plano ${plan.name}`,
+          description: `AgentFlow IA — Plano ${plan.name}`,
           externalReference: ref,
         }),
       });
@@ -135,7 +135,7 @@ export const createCheckout = createServerFn({ method: "POST" })
         body: JSON.stringify({
           items: [
             {
-              title: `AgentHub AI — Plano ${plan.name}`,
+              title: `AgentFlow IA — Plano ${plan.name}`,
               quantity: 1,
               unit_price: plan.priceBRL,
               currency_id: "BRL",

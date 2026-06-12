@@ -20,7 +20,7 @@ import { useAuth } from "@/lib/auth";
 import { toast } from "sonner";
 
 export const Route = createFileRoute("/app/master")({
-  head: () => ({ meta: [{ title: "Master Admin — AgentHub AI" }] }),
+  head: () => ({ meta: [{ title: "Master Admin — AgentFlow IA" }] }),
   component: Master,
 });
 

@@ -10,13 +10,13 @@ import { Footer } from "@/components/landing/Footer";
 export const Route = createFileRoute("/")({
   head: () => ({
     meta: [
-      { title: "AgentHub AI — Agentes de IA para WhatsApp em minutos" },
+      { title: "AgentFlow IA — Agentes de IA para WhatsApp em minutos" },
       {
         name: "description",
         content:
           "Plataforma SaaS Enterprise para criar, treinar e implantar agentes de IA conectados ao WhatsApp via Evolution API. Multi-tenant, sem código, sem terminal.",
       },
-      { property: "og:title", content: "AgentHub AI — Agentes de IA para WhatsApp" },
+      { property: "og:title", content: "AgentFlow IA — Agentes de IA para WhatsApp" },
       {
         property: "og:description",
         content:

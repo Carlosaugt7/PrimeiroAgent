@@ -19,7 +19,7 @@ import { Trash2, CalendarClock, Send, CheckCircle2, AlertCircle, Clock } from "l
 import { toast } from "sonner";
 
 export const Route = createFileRoute("/app/scheduled")({
-  head: () => ({ meta: [{ title: "Agendamentos — AgentHub AI" }] }),
+  head: () => ({ meta: [{ title: "Agendamentos — AgentFlow IA" }] }),
   component: Scheduled,
 });
 

@@ -13,7 +13,7 @@ export function CTA() {
           </h2>
           <p className="mt-5 text-muted-foreground max-w-xl mx-auto">
             Junte-se a centenas de empresas que automatizaram atendimento, vendas e suporte com
-            AgentHub AI.
+            AgentFlow IA.
           </p>
           <div className="mt-8 flex flex-col sm:flex-row justify-center gap-3">
             <Button variant="hero" size="xl">

@@ -703,11 +703,19 @@ export const Route = createFileRoute("/api/public/evolution-webhook")({
           return new Response("invalid json", { status: 400 });
         }
 
-        const instanceName: string | undefined = (body?.instance ??
+        // Evolution API v2 sends instance as object: { instanceName: "name", ... }
+        // Evolution API v1 sends instance as string
+        const rawInstance = body?.instance ?? body?.data?.instance;
+        const instanceName: string | undefined = (
+          (typeof rawInstance === "object" && rawInstance !== null
+            ? rawInstance.instanceName ?? rawInstance.name
+            : rawInstance) ??
           body?.instanceName ??
-          body?.data?.instance ??
-          body?.sender) as string | undefined;
+          body?.sender
+        ) as string | undefined;
         const event: string = ((body?.event ?? body?.type ?? "") as string).toUpperCase();
+
+        console.log(`[webhook] event=${event} instance=${instanceName} rawInstance=${JSON.stringify(rawInstance)}`);
 
         if (!instanceName) return new Response("missing instance", { status: 200 });
 
@@ -717,7 +725,12 @@ export const Route = createFileRoute("/api/public/evolution-webhook")({
           .eq("instanceName", instanceName)
           .single();
         const tenantId: string | undefined = idx?.tenantId as string | undefined;
-        if (!tenantId) return new Response("unknown instance", { status: 200 });
+        if (!tenantId) {
+          console.warn(`[webhook] instance "${instanceName}" not found in instance_index`);
+          return new Response("unknown instance", { status: 200 });
+        }
+
+        console.log(`[webhook] tenantId=${tenantId} processing ${event} for ${instanceName}`);
 
         if (event.includes("CONNECTION")) {
           const state = ((body?.data as Record<string, unknown>)?.state ??

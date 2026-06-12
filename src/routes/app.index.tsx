@@ -56,7 +56,11 @@ function Overview() {
   const { agents, conversations, instances, providers, plan } = useAppStore();
   const { profile, tenant } = useAuth();
 
-  const online = agents.filter((a) => a.status === "online").length;
+  const online = agents.filter((a) => {
+    const linkedInstance = instances.find((inst) => inst.name === a.whatsappInstanceId);
+    const currentStatus = linkedInstance ? linkedInstance.status : a.status;
+    return currentStatus === "online";
+  }).length;
   const totalMsgs = agents.reduce((s, a) => s + (a.messages30d || 0), 0);
   const totalConv = agents.reduce((s, a) => s + (a.conversions30d || 0), 0);
   const connected = instances.filter((i) => i.status === "online").length;
@@ -170,12 +174,14 @@ function Overview() {
             <div className="space-y-4">
               {agents.slice(0, 6).map((a) => {
                 const pct = Math.min(100, Math.round(((a.messages30d || 0) / 5000) * 100));
+                const linkedInstance = instances.find((inst) => inst.name === a.whatsappInstanceId);
+                const currentStatus = linkedInstance ? linkedInstance.status : a.status;
                 return (
                   <div key={a.id}>
                     <div className="flex items-center justify-between text-sm mb-1.5">
                       <div className="flex items-center gap-2">
                         <span
-                          className={`size-2 rounded-full ${a.status === "online" ? "bg-success" : a.status === "treinando" ? "bg-accent" : "bg-muted-foreground"}`}
+                          className={`size-2 rounded-full ${currentStatus === "online" ? "bg-success" : currentStatus === "treinando" ? "bg-accent" : "bg-muted-foreground"}`}
                         />
                         <span className="font-medium">{a.name}</span>
                         <span className="text-muted-foreground text-xs">· {a.segment}</span>

@@ -343,6 +343,7 @@ export function AppStoreProvider({ children }: { readonly children: ReactNode })
           messages30d: 0,
           conversions30d: 0,
           createdAt: new Date().toISOString(),
+          autoReply: a.autoReply ?? true,
           _createdBy: profile?.uid ?? "",
         };
 
@@ -375,6 +376,13 @@ export function AppStoreProvider({ children }: { readonly children: ReactNode })
       },
       updateAgent: async (id, patch) => {
         if (!tenantId) return;
+        // Sync agent status when linking to a WhatsApp instance
+        if (patch.whatsappInstanceId) {
+          const linkedInstance = instances.find((inst) => inst.name === patch.whatsappInstanceId);
+          if (linkedInstance?.status === "online") {
+            patch.status = "online" as AgentStatus;
+          }
+        }
         await supabase.from("agents").update(patch).eq("id", id).eq("tenantId", tenantId);
         logAudit(tenantId, {
           action: "agent.update",

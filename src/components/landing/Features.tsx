@@ -1,4 +1,4 @@
-import { Bot, Database, Globe, MessagesSquare, Shield, Workflow } from "lucide-react";
+import { Bot, Database, Download, Globe, MessagesSquare, Shield, Users, Workflow } from "lucide-react";
 
 const features = [
   {
@@ -10,6 +10,16 @@ const features = [
     icon: MessagesSquare,
     title: "WhatsApp em 1 clique",
     desc: "Integração nativa com Evolution API. Conecte números e dispare conversas sem tocar em terminal.",
+  },
+  {
+    icon: Download,
+    title: "Extrator de Leads Higienizado",
+    desc: "Extraia contatos reais da agenda ou de grupos em formato internacional limpo (DDI+DDD+Número) e livre de códigos corrompidos.",
+  },
+  {
+    icon: Users,
+    title: "Campanhas de Grupo & Anti-Ban",
+    desc: "Dispare mensagens e mídias para dezenas de grupos com delay inteligente (60-180s) e simulação de digitação automática por API.",
   },
   {
     icon: Database,
@@ -45,7 +55,7 @@ export function Features() {
           </h2>
         </div>
 
-        <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-5">
+        <div className="grid md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-5">
           {features.map((f) => (
             <div
               key={f.title}

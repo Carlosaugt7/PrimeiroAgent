@@ -120,7 +120,7 @@ const empty = {
 };
 
 function AgentsList() {
-  const { agents, providers, createAgent, updateAgent, deleteAgent } = useAppStore();
+  const { agents, providers, createAgent, updateAgent, deleteAgent, instances } = useAppStore();
   const [open, setOpen] = useState(() => localStorage.getItem("agentflow_draft_open") === "true");
   const [q, setQ] = useState("");
   const [step, setStep] = useState<"basic" | "persona" | "prompt" | "model">(() => {
@@ -256,12 +256,15 @@ function AgentsList() {
                 </p>
                 <div className="flex items-center gap-2 mt-4">
                   {(() => {
+                    const linkedInstance = instances.find((inst) => inst.name === a.whatsappInstanceId);
+                    const currentStatus = linkedInstance ? linkedInstance.status : a.status;
                     let cls = "bg-muted text-muted-foreground";
-                    if (a.status === "online") cls = "bg-success/15 text-success";
-                    else if (a.status === "treinando") cls = "bg-accent/15 text-accent";
+                    if (currentStatus === "online") cls = "bg-success/15 text-success";
+                    else if (currentStatus === "conectando") cls = "bg-amber-500/15 text-amber-500";
+                    else if (currentStatus === "treinando") cls = "bg-accent/15 text-accent";
                     return (
                       <span className={`text-[10px] px-2 py-1 rounded-full ${cls}`}>
-                        {a.status}
+                        {currentStatus}
                       </span>
                     );
                   })()}

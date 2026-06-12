@@ -15,6 +15,7 @@ import {
 } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import { ArrowLeft, Bot, Save, Trash2, Loader2 } from "lucide-react";
+import { Switch } from "@/components/ui/switch";
 import { toast } from "sonner";
 
 export const Route = createFileRoute("/app/agents/$id")({
@@ -23,7 +24,7 @@ export const Route = createFileRoute("/app/agents/$id")({
 
 function AgentDetail() {
   const { id } = Route.useParams();
-  const { agents, providers, updateAgent, deleteAgent, loading } = useAppStore();
+  const { agents, providers, updateAgent, deleteAgent, loading, instances } = useAppStore();
   const navigate = useNavigate();
 
   if (loading) {
@@ -59,6 +60,7 @@ function AgentDetail() {
     <AgentDetailForm
       agent={agent}
       providers={providers}
+      instances={instances}
       updateAgent={updateAgent}
       deleteAgent={deleteAgent}
       navigate={navigate}
@@ -69,12 +71,13 @@ function AgentDetail() {
 interface AgentFormProps {
   agent: Agent;
   providers: any[];
+  instances: any[];
   updateAgent: (id: string, patch: Partial<Agent>) => Promise<void>;
   deleteAgent: (id: string) => Promise<void>;
   navigate: ReturnType<typeof useNavigate>;
 }
 
-function AgentDetailForm({ agent, providers, updateAgent, deleteAgent, navigate }: AgentFormProps) {
+function AgentDetailForm({ agent, providers, instances, updateAgent, deleteAgent, navigate }: AgentFormProps) {
   const id = agent.id;
   const [form, setForm] = useState<Partial<Agent>>(agent);
   const [busy, setBusy] = useState(false);
@@ -109,9 +112,13 @@ function AgentDetailForm({ agent, providers, updateAgent, deleteAgent, navigate 
   const pf = (p: Partial<Persona>) =>
     setForm((f) => ({ ...f, persona: { ...(f.persona ?? agent.persona), ...p } }));
 
+  const linkedInstance = instances.find((inst) => inst.name === form.whatsappInstanceId);
+  const currentStatus = linkedInstance ? linkedInstance.status : agent.status;
+
   function statusClass(status: string) {
     if (status === "online") return "bg-success/15 text-success";
     if (status === "treinando") return "bg-accent/15 text-accent";
+    if (status === "conectando") return "bg-amber-500/15 text-amber-500";
     return "bg-muted text-muted-foreground";
   }
 
@@ -127,8 +134,8 @@ function AgentDetailForm({ agent, providers, updateAgent, deleteAgent, navigate 
           <div>
             <h1 className="font-display text-2xl font-bold">{agent.name}</h1>
             <div className="flex items-center gap-2 mt-1">
-              <span className={`text-[10px] px-2 py-0.5 rounded-full ${statusClass(agent.status)}`}>
-                {agent.status}
+              <span className={`text-[10px] px-2 py-0.5 rounded-full ${statusClass(currentStatus)}`}>
+                {currentStatus}
               </span>
               <Badge variant="outline" className="text-[10px]">
                 {agent.segment}
@@ -234,15 +241,17 @@ function AgentDetailForm({ agent, providers, updateAgent, deleteAgent, navigate 
               às mensagens recebidas.
             </p>
           </div>
-          <div className="flex items-center gap-3">
-            <Label>Resposta automática (IA)</Label>
-            <input
-              type="checkbox"
-              checked={(form as any).autoReply !== false}
-              onChange={(e) => setForm({ ...form, autoReply: e.target.checked } as any)}
-              className="accent-primary"
+          <div className="flex items-center justify-between p-4 rounded-xl border border-border bg-gradient-card">
+            <div className="space-y-0.5">
+              <Label className="text-sm font-semibold">Respostas Automáticas (IA)</Label>
+              <p className="text-xs text-muted-foreground">
+                Habilite ou desabilite as respostas automáticas do agente na instância do WhatsApp vinculada.
+              </p>
+            </div>
+            <Switch
+              checked={form.autoReply !== false}
+              onCheckedChange={(checked) => setForm({ ...form, autoReply: checked })}
             />
-            <span className="text-xs text-muted-foreground">Ativar auto-reply via WhatsApp</span>
           </div>
         </TabsContent>
 

@@ -1,5 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { supabase } from "@/integrations/supabase/client";
+import { supabaseAdmin as supabase } from "@/integrations/supabase/client.server";
 
 const EVO_BASE_FALLBACK = "https://evolution-api.rsconsultoria.pro";
 
@@ -723,13 +723,22 @@ export const Route = createFileRoute("/api/public/evolution-webhook")({
           const state = ((body?.data as Record<string, unknown>)?.state ??
             body?.state ??
             "unknown") as string;
+          const resolvedStatus = resolveInstanceStatus(state);
           await supabase.from("instances").upsert({
             id: instanceName,
             tenantId,
             name: instanceName,
-            status: resolveInstanceStatus(state),
+            status: resolvedStatus,
             updatedAt: new Date().toISOString(),
           });
+
+          // Sincroniza o status dos agentes vinculados a esta instância no banco de dados
+          await supabase
+            .from("agents")
+            .update({ status: resolvedStatus })
+            .eq("whatsappInstanceId", instanceName)
+            .eq("tenantId", tenantId);
+
           return Response.json({ ok: true });
         }
 

@@ -1,5 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { supabase } from "@/integrations/supabase/client";
+import { supabaseAdmin as supabase } from "@/integrations/supabase/client.server";
 import { planFromAmount, parseRef } from "@/lib/billing-helpers";
 
 // Mercado Pago envia notificações (topic=payment) com o paymentId em data.id.

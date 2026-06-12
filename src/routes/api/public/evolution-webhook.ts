@@ -473,7 +473,12 @@ async function runBridge(
   try {
     const ragCtx = await buildRagContext(tenantId, userText);
     if (ragCtx) {
-      systemPrompt = `${systemPrompt}\n\n## CONTEXTO RELEVANTE DA BASE DE CONHECIMENTO\nUse APENAS estas informações quando forem pertinentes. Se a resposta não estiver no contexto, diga que vai verificar.\n\n${ragCtx}`;
+      systemPrompt = `${systemPrompt}\n\n## CONTEXTO RELEVANTE DA BASE DE CONHECIMENTO (FONTE ÚNICA DE VERDADE)\n` +
+        `Use ESTRITAMENTE as informações fornecidas abaixo para responder à pergunta do usuário. Nunca utilize seu conhecimento prévio externo para inventar dados que não estejam descritos explicitamente aqui (como listas de canais, novos planos, preços, etc.).\n` +
+        `Se o assunto da pergunta do usuário não estiver detalhado abaixo nem nas suas regras comportamentais, responda amigavelmente: "Vou verificar isso para você agora."\n\n${ragCtx}`;
+    } else {
+      systemPrompt = `${systemPrompt}\n\n## DIRETRIZ DE CONHECIMENTO LIMITADO\n` +
+        `Se o usuário perguntar sobre detalhes específicos de planos, preços, canais ou suporte técnico que não estejam no seu prompt básico, você não deve inventar. Responda amigavelmente informando: "Vou verificar isso para você agora."`;
     }
   } catch (e) {
     console.warn("[bridge] RAG falhou:", e);

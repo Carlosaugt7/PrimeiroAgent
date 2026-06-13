@@ -679,8 +679,31 @@ async function handleMessage(
     createdAt: new Date().toISOString(),
   });
 
+  // Lógica de controle do Bot via WhatsApp (atendente interage pelo celular)
+  if (fromMe) {
+    if (text && text !== "[mídia]") {
+      const cleanText = text.trim().toLowerCase();
+      const isActivationCommand = ["#ia", "#voltar", "/ia", "/voltar"].includes(cleanText);
+
+      if (isActivationCommand) {
+        await supabase
+          .from("conversations")
+          .update({ botPaused: false, updatedAt: new Date().toISOString() })
+          .eq("id", convId)
+          .eq("tenantId", tenantId);
+      } else {
+        await supabase
+          .from("conversations")
+          .update({ botPaused: true, updatedAt: new Date().toISOString() })
+          .eq("id", convId)
+          .eq("tenantId", tenantId);
+      }
+    }
+    return Response.json({ ok: true });
+  }
+
   // Automações + Bridge IA: só para mensagens recebidas com texto
-  if (fromMe || !text || text === "[mídia]") {
+  if (!text || text === "[mídia]") {
     return Response.json({ ok: true });
   }
 

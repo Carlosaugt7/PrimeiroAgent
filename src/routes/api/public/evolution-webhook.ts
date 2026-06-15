@@ -758,6 +758,18 @@ export const Route = createFileRoute("/api/public/evolution-webhook")({
           return new Response("unknown instance", { status: 200 });
         }
 
+        const { data: tenant } = await supabase
+          .from("tenants")
+          .select("status, planExpiresAt")
+          .eq("id", tenantId)
+          .single();
+
+        const isExpired = tenant?.planExpiresAt ? new Date() > new Date(tenant.planExpiresAt) : false;
+        if (tenant?.status === "suspended" || isExpired) {
+          console.warn(`[webhook] tenant "${tenantId}" suspenso ou expirado (status=${tenant?.status}, expires=${tenant?.planExpiresAt}). Ignorando evento ${event}`);
+          return Response.json({ ok: false, error: "tenant_suspended_or_expired" });
+        }
+
         console.log(`[webhook] tenantId=${tenantId} processing ${event} for ${instanceName}`);
 
         if (event.includes("CONNECTION")) {

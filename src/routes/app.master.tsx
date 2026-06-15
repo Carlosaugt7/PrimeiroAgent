@@ -12,10 +12,21 @@ import {
   Smartphone,
   Edit,
   Trash,
+  Calendar,
+  Settings,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { useAuth } from "@/lib/auth";
 import { toast } from "sonner";
 
@@ -31,6 +42,12 @@ interface TenantRow {
   plan?: string;
   status?: string;
   createdAt?: string;
+  planExpiresAt?: string;
+  maxAgents?: number | null;
+  maxMessages?: number | null;
+  maxInstances?: number | null;
+  enabledFeatures?: string[] | null;
+  phone?: string | null;
 }
 
 function messageFromError(error: unknown, fallback: string) {
@@ -43,6 +60,100 @@ function Master() {
   const [rows, setRows] = useState<TenantRow[]>([]);
   const [filter, setFilter] = useState("");
   const [loading, setLoading] = useState(true);
+
+  // Estados do Modal de Planos
+  const [selectedTenant, setSelectedTenant] = useState<TenantRow | null>(null);
+  const [modalPlan, setModalPlan] = useState<string>("trial");
+  const [modalStatus, setModalStatus] = useState<string>("active");
+  const [modalExpiresAt, setModalExpiresAt] = useState<string>("");
+  const [modalMaxAgents, setModalMaxAgents] = useState<string>("");
+  const [modalMaxMessages, setModalMaxMessages] = useState<string>("");
+  const [modalMaxInstances, setModalMaxInstances] = useState<string>("");
+  const [modalFeatures, setModalFeatures] = useState<string[]>([]);
+  const [modalPhone, setModalPhone] = useState<string>("");
+  const [savingPlan, setSavingPlan] = useState(false);
+
+  const formatPhone = (value: string) => {
+    if (!value) return "";
+    const numbers = value.replace(/\D/g, "");
+    if (numbers.length <= 2) return `(${numbers}`;
+    if (numbers.length <= 6) return `(${numbers.substring(0, 2)}) ${numbers.substring(2)}`;
+    return `(${numbers.substring(0, 2)}) ${numbers.substring(2, 7)}-${numbers.substring(7, 11)}`;
+  };
+
+  const openPlanModal = (t: TenantRow) => {
+    setSelectedTenant(t);
+    setModalPlan(t.plan || "trial");
+    setModalStatus(t.status || "active");
+    setModalExpiresAt(t.planExpiresAt ? new Date(t.planExpiresAt).toISOString().split("T")[0] : "");
+    setModalMaxAgents(t.maxAgents !== null && t.maxAgents !== undefined ? t.maxAgents.toString() : "");
+    setModalMaxMessages(t.maxMessages !== null && t.maxMessages !== undefined ? t.maxMessages.toString() : "");
+    setModalMaxInstances(t.maxInstances !== null && t.maxInstances !== undefined ? t.maxInstances.toString() : "");
+    setModalFeatures(t.enabledFeatures || []);
+    setModalPhone(t.phone || "");
+  };
+
+  const handleFeatureToggle = (feature: string) => {
+    setModalFeatures((prev) =>
+      prev.includes(feature) ? prev.filter((f) => f !== feature) : [...prev, feature]
+    );
+  };
+
+  const renewPlan30Days = () => {
+    const currentExpiry = modalExpiresAt ? new Date(modalExpiresAt + "T23:59:59") : new Date();
+    const baseDate = currentExpiry > new Date() ? currentExpiry : new Date();
+    const newExpiry = new Date(baseDate.getTime() + 30 * 24 * 60 * 60 * 1000);
+    setModalExpiresAt(newExpiry.toISOString().split("T")[0]);
+    setModalStatus("active");
+    toast.success("Plano renovado por +30 dias!");
+  };
+
+  const savePlanChanges = async () => {
+    if (!selectedTenant) return;
+    setSavingPlan(true);
+    try {
+      const { error } = await supabase
+        .from("tenants")
+        .update({
+          plan: modalPlan,
+          status: modalStatus,
+          planExpiresAt: modalExpiresAt ? new Date(modalExpiresAt + "T23:59:59Z").toISOString() : null,
+          maxAgents: modalMaxAgents ? parseInt(modalMaxAgents) : null,
+          maxMessages: modalMaxMessages ? parseInt(modalMaxMessages) : null,
+          maxInstances: modalMaxInstances ? parseInt(modalMaxInstances) : null,
+          enabledFeatures: modalFeatures,
+          phone: modalPhone || null,
+        })
+        .eq("id", selectedTenant.id);
+
+      if (error) throw error;
+
+      setRows((prev) =>
+        prev.map((r) =>
+          r.id === selectedTenant.id
+            ? {
+                ...r,
+                plan: modalPlan,
+                status: modalStatus,
+                planExpiresAt: modalExpiresAt ? new Date(modalExpiresAt + "T23:59:59Z").toISOString() : undefined,
+                maxAgents: modalMaxAgents ? parseInt(modalMaxAgents) : null,
+                maxMessages: modalMaxMessages ? parseInt(modalMaxMessages) : null,
+                maxInstances: modalMaxInstances ? parseInt(modalMaxInstances) : null,
+                enabledFeatures: modalFeatures,
+                phone: modalPhone || null,
+              }
+            : r
+        )
+      );
+
+      toast.success("Plano e limites do cliente salvos com sucesso!");
+      setSelectedTenant(null);
+    } catch (e) {
+      toast.error(`Falha ao salvar plano: ${messageFromError(e, "erro desconhecido")}`);
+    } finally {
+      setSavingPlan(false);
+    }
+  };
 
   useEffect(() => {
     if (!isMaster) return;
@@ -215,8 +326,10 @@ function Master() {
                     </Badge>
                   )}
                 </div>
-                <div className="text-xs text-muted-foreground font-mono truncate">
-                  {t.id} · owner: {t.ownerId ?? "—"}
+                <div className="text-xs text-muted-foreground font-mono truncate mt-1">
+                  ID: {t.id} · owner: {t.ownerId ?? "—"}
+                  {t.phone && ` · cel: ${t.phone}`}
+                  {t.planExpiresAt && ` · expira: ${new Date(t.planExpiresAt).toLocaleDateString("pt-BR")}`}
                 </div>
               </div>
               <div className="flex items-center gap-2">
@@ -225,6 +338,9 @@ function Master() {
                 </Button>
                 <Button size="icon" variant="ghost" className="text-muted-foreground hover:text-destructive" onClick={() => deleteTenant(t.id, t.name)} title="Excluir workspace">
                   <Trash className="size-4" />
+                </Button>
+                <Button size="icon" variant="ghost" className="text-amber-500 hover:text-amber-600" onClick={() => openPlanModal(t)} title="Gerenciar plano e limites">
+                  <Crown className="size-4" />
                 </Button>
                 <div className="w-[1px] h-6 bg-border mx-1" />
                 <Button size="sm" variant="outline" onClick={() => openInstances(t.id)}>
@@ -242,6 +358,169 @@ function Master() {
       <p className="text-xs text-muted-foreground">
         Total: {rows.length} tenant{rows.length !== 1 && "s"}.
       </p>
+
+      {selectedTenant && (
+        <Dialog open={!!selectedTenant} onOpenChange={(o) => !o && setSelectedTenant(null)}>
+          <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2">
+                <Crown className="size-5 text-amber-500" />
+                Gerenciar Plano: {selectedTenant.name || selectedTenant.id}
+              </DialogTitle>
+              <DialogDescription>
+                Configure as datas, status, limites e permissões/serviços adicionais para este cliente.
+              </DialogDescription>
+            </DialogHeader>
+
+            <div className="space-y-6 my-4">
+              <div className="grid grid-cols-2 gap-4">
+                {/* Seleção do Plano */}
+                <div>
+                  <Label htmlFor="m-plan" className="text-xs font-semibold">Plano da Workspace</Label>
+                  <select
+                    id="m-plan"
+                    value={modalPlan}
+                    onChange={(e) => setModalPlan(e.target.value)}
+                    className="w-full h-10 mt-1.5 rounded-lg bg-secondary border border-border text-sm px-3 focus:outline-none focus:ring-1 focus:ring-ring"
+                  >
+                    <option value="trial">Trial</option>
+                    <option value="basic">Basic</option>
+                    <option value="starter">Starter</option>
+                    <option value="pro">Pro</option>
+                    <option value="enterprise">Enterprise</option>
+                  </select>
+                </div>
+
+                {/* Seleção do Status */}
+                <div>
+                  <Label htmlFor="m-status" className="text-xs font-semibold">Status do Cliente</Label>
+                  <select
+                    id="m-status"
+                    value={modalStatus}
+                    onChange={(e) => setModalStatus(e.target.value)}
+                    className="w-full h-10 mt-1.5 rounded-lg bg-secondary border border-border text-sm px-3 focus:outline-none focus:ring-1 focus:ring-ring"
+                  >
+                    <option value="active">Ativo (Permite uso)</option>
+                    <option value="suspended">Suspenso (Bloqueia tudo)</option>
+                  </select>
+                </div>
+              </div>
+
+              {/* Celular do Cliente */}
+              <div>
+                <Label htmlFor="m-phone" className="text-xs font-semibold">Celular do Cliente (Dono)</Label>
+                <Input
+                  id="m-phone"
+                  value={modalPhone}
+                  onChange={(e) => setModalPhone(formatPhone(e.target.value))}
+                  placeholder="(11) 99999-9999"
+                  className="mt-1.5"
+                  maxLength={15}
+                />
+              </div>
+
+              {/* Expiração do Plano & Renovação */}
+              <div className="border border-border bg-muted/20 p-4 rounded-xl space-y-3">
+                <div className="flex items-center justify-between flex-wrap gap-2">
+                  <Label className="text-xs font-semibold flex items-center gap-1.5">
+                    <Calendar className="size-4 text-muted-foreground" />
+                    Data de Expiração / Validade do Plano
+                  </Label>
+                  <Button size="sm" variant="hero" onClick={renewPlan30Days}>
+                    🔄 Confirmar Renovação (+30 dias)
+                  </Button>
+                </div>
+                <Input
+                  type="date"
+                  value={modalExpiresAt}
+                  onChange={(e) => setModalExpiresAt(e.target.value)}
+                  className="w-full mt-1"
+                />
+                <p className="text-[11px] text-muted-foreground">
+                  Se a data atual for posterior à data de expiração, a workspace do cliente será bloqueada automaticamente.
+                </p>
+              </div>
+
+              {/* Limites Customizados (Overrides) */}
+              <div className="space-y-3">
+                <h3 className="text-sm font-semibold border-b border-border pb-1">Limites Customizados (Vazio usa o padrão do plano)</h3>
+                <div className="grid grid-cols-3 gap-3">
+                  <div>
+                    <Label htmlFor="m-agents" className="text-xs">Máx. Agentes</Label>
+                    <Input
+                      id="m-agents"
+                      type="number"
+                      placeholder="Padrão"
+                      value={modalMaxAgents}
+                      onChange={(e) => setModalMaxAgents(e.target.value)}
+                      className="mt-1"
+                    />
+                  </div>
+                  <div>
+                    <Label htmlFor="m-messages" className="text-xs">Máx. Mensagens</Label>
+                    <Input
+                      id="m-messages"
+                      type="number"
+                      placeholder="Padrão"
+                      value={modalMaxMessages}
+                      onChange={(e) => setModalMaxMessages(e.target.value)}
+                      className="mt-1"
+                    />
+                  </div>
+                  <div>
+                    <Label htmlFor="m-instances" className="text-xs">Máx. Instâncias</Label>
+                    <Input
+                      id="m-instances"
+                      type="number"
+                      placeholder="Padrão"
+                      value={modalMaxInstances}
+                      onChange={(e) => setModalMaxInstances(e.target.value)}
+                      className="mt-1"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* Habilitar / Desabilitar Serviços adicionais */}
+              <div className="space-y-3">
+                <h3 className="text-sm font-semibold border-b border-border pb-1">Habilitar / Desabilitar Serviços e Módulos</h3>
+                <div className="grid grid-cols-2 gap-3">
+                  {[
+                    { key: "campaigns_csv", label: "Campanhas por CSV" },
+                    { key: "templates_unlimited", label: "Templates Ilimitados" },
+                    { key: "contact_extractor", label: "Extrator de Contatos (Agenda/Grupos)" },
+                    { key: "export_csv_excel", label: "Exportação nativa CSV/Excel" },
+                    { key: "advanced_automations_api", label: "Automações avançadas + API" },
+                    { key: "anti_ban", label: "Anti-Ban (Digitação por API)" },
+                  ].map((feat) => {
+                    const isChecked = modalFeatures.includes(feat.key);
+                    return (
+                      <label key={feat.key} className="flex items-center gap-2 p-2.5 rounded-lg border border-border bg-card/20 hover:bg-muted/50 cursor-pointer select-none transition-colors">
+                        <input
+                          type="checkbox"
+                          checked={isChecked}
+                          onChange={() => handleFeatureToggle(feat.key)}
+                          className="size-4 rounded border-gray-300 text-primary focus:ring-primary accent-accent"
+                        />
+                        <span className="text-xs font-medium text-foreground">{feat.label}</span>
+                      </label>
+                    );
+                  })}
+                </div>
+              </div>
+            </div>
+
+            <DialogFooter className="gap-2">
+              <Button variant="outline" onClick={() => setSelectedTenant(null)} disabled={savingPlan}>
+                Cancelar
+              </Button>
+              <Button onClick={savePlanChanges} disabled={savingPlan}>
+                {savingPlan ? "Salvando..." : "Salvar Configurações"}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+      )}
     </div>
   );
 }

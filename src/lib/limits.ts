@@ -11,6 +11,28 @@ const LABELS: Record<LimitKind, string> = {
   messages: "mensagens no período",
 };
 
+// Features padrão mapeadas por plano
+const PLAN_FEATURES: Record<string, string[]> = {
+  trial: ["support_whatsapp"],
+  basic: ["support_whatsapp"],
+  starter: ["campaigns_csv", "templates_unlimited"],
+  pro: [
+    "campaigns_csv",
+    "templates_unlimited",
+    "contact_extractor",
+    "export_csv_excel",
+    "advanced_automations_api",
+  ],
+  enterprise: [
+    "campaigns_csv",
+    "templates_unlimited",
+    "contact_extractor",
+    "export_csv_excel",
+    "advanced_automations_api",
+    "anti_ban",
+  ],
+};
+
 export function planLimits(planId?: string): PlanDef["limits"] {
   return (getPlan(planId ?? "trial") ?? getPlan("trial")!).limits;
 }
@@ -27,17 +49,46 @@ export interface LimitCheck {
   message?: string;
 }
 
+/** Verifica se um recurso (feature) está habilitado para o tenant. */
+export function checkFeature(tenant: any, feature: string): boolean {
+  if (!tenant) return false;
+  
+  // Verifica se a feature foi habilitada manualmente e individualmente nas configurações customizadas
+  if (Array.isArray(tenant.enabledFeatures)) {
+    if (tenant.enabledFeatures.includes(feature)) return true;
+  }
+
+  // Senão, recorre ao padrão do plano
+  const planId = tenant.plan ?? "trial";
+  const features = PLAN_FEATURES[planId] || [];
+  return features.includes(feature);
+}
+
 export function checkLimit(
   kind: LimitKind,
   current: number,
-  planId?: string,
+  planIdOrTenant?: string | any,
   bypass?: boolean,
 ): LimitCheck {
-  const limits = planLimits(planId);
-  const limit = limits[kind];
   if (bypass) {
     return { ok: true, limit: Infinity, current, remaining: Infinity };
   }
+
+  let planId = typeof planIdOrTenant === "string" ? planIdOrTenant : planIdOrTenant?.plan;
+  const limits = planLimits(planId);
+  let limit = limits[kind];
+
+  // Aplica override se o tenant possuir limite customizado
+  if (planIdOrTenant && typeof planIdOrTenant === "object") {
+    if (kind === "agents" && typeof planIdOrTenant.maxAgents === "number") {
+      limit = planIdOrTenant.maxAgents;
+    } else if (kind === "messages" && typeof planIdOrTenant.maxMessages === "number") {
+      limit = planIdOrTenant.maxMessages;
+    } else if (kind === "instances" && typeof planIdOrTenant.maxInstances === "number") {
+      limit = planIdOrTenant.maxInstances;
+    }
+  }
+
   const ok = current < limit;
   return {
     ok,
@@ -54,13 +105,14 @@ export function checkLimit(
  *  Use `bypass` (ex.: Master Admin) para ignorar limites. */
 export function ensureLimit(
   tenantId: string,
-  planId: string | undefined,
+  planIdOrTenant: string | any | undefined,
   kind: LimitKind,
   current: number,
   bypass?: boolean,
 ): LimitCheck {
-  const r = checkLimit(kind, current, planId, bypass);
+  const r = checkLimit(kind, current, planIdOrTenant, bypass);
   if (!r.ok) {
+    const planId = typeof planIdOrTenant === "string" ? planIdOrTenant : planIdOrTenant?.plan;
     notify(tenantId, {
       type: "limit_reached",
       severity: "warning",

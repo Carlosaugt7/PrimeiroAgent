@@ -3,7 +3,7 @@ import { createContext, useContext, useEffect, useMemo, useState, type ReactNode
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/lib/auth";
 import { logAudit, notify } from "@/lib/notifications";
-import { ensureLimit } from "@/lib/limits";
+import { ensureLimit, planLimits, planName } from "@/lib/limits";
 import { toast } from "sonner";
 
 export type AgentStatus = "online" | "offline" | "treinando";
@@ -147,7 +147,7 @@ export function AppStoreProvider({ children }: { readonly children: ReactNode })
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [knowledge, setKnowledge] = useState<KnowledgeDoc[]>([]);
   const [instances, setInstances] = useState<Instance[]>([]);
-  const [plan] = useState<AppPlan>(defaultPlan);
+  const [plan, setPlan] = useState<AppPlan>(defaultPlan);
   const [loading, setLoading] = useState(true);
 
   const [activeQrFor, setActiveQrFor] = useState<string | null>(null);
@@ -188,12 +188,16 @@ export function AppStoreProvider({ children }: { readonly children: ReactNode })
 
     const fetchInitial = async () => {
       try {
+        const date30dAgo = new Date();
+        date30dAgo.setDate(date30dAgo.getDate() - 30);
+
         const [
           { data: agentsData },
           { data: providersData },
           { data: convsData },
           { data: knowData },
           { data: instData },
+          msgCountRes,
         ] = await Promise.all([
           supabase.from("agents").select("*").eq("tenantId", tenantId),
           supabase.from("llm_providers").select("*").eq("tenantId", tenantId),
@@ -205,6 +209,12 @@ export function AppStoreProvider({ children }: { readonly children: ReactNode })
             .limit(50),
           supabase.from("knowledge").select("*").eq("tenantId", tenantId),
           supabase.from("instances").select("*").eq("tenantId", tenantId),
+          supabase
+            .from("messages")
+            .select("*", { count: "exact", head: true })
+            .eq("tenantId", tenantId)
+            .eq("fromMe", true)
+            .gt("createdAt", date30dAgo.toISOString()),
         ]);
 
         if (agentsData) setAgents(agentsData as Agent[]);
@@ -212,6 +222,19 @@ export function AppStoreProvider({ children }: { readonly children: ReactNode })
         if (convsData) setConversations(convsData as Conversation[]);
         if (knowData) setKnowledge(knowData as KnowledgeDoc[]);
         if (instData) setInstances(instData as Instance[]);
+
+        const messagesUsed = msgCountRes.count || 0;
+        const limitDef = tenant?.maxMessages ?? planLimits(tenant?.plan).messages;
+        let renewsAt = "—";
+        if (tenant?.planExpiresAt) {
+          renewsAt = new Date(tenant.planExpiresAt).toLocaleDateString("pt-BR");
+        }
+        setPlan({
+          name: planName(tenant?.plan),
+          messagesUsed,
+          messagesLimit: limitDef,
+          renewsAt,
+        });
       } catch (err) {
         console.error("Failed to fetch initial data", err);
       } finally {
@@ -302,8 +325,23 @@ export function AppStoreProvider({ children }: { readonly children: ReactNode })
       )
       .subscribe();
 
+    const messagesChannel = supabase
+      .channel(`tenant_${tenantId}_messages_count`)
+      .on(
+        "postgres_changes",
+        { event: "INSERT", schema: "public", table: "messages", filter: `tenantId=eq.${tenantId}` },
+        (payload: any) => {
+          const newMsg = payload.new;
+          if (newMsg && newMsg.fromMe) {
+            setPlan((prev) => ({ ...prev, messagesUsed: prev.messagesUsed + 1 }));
+          }
+        },
+      )
+      .subscribe();
+
     return () => {
       supabase.removeChannel(channel);
+      supabase.removeChannel(messagesChannel);
     };
   }, [tenantId, authLoading]);
 

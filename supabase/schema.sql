@@ -58,6 +58,12 @@ create table public.tenants (
   "evolutionApiKey" text,
   "lastPaymentAt" timestamptz,
   "billingProvider" text,
+  "planExpiresAt" timestamptz,
+  "maxAgents" integer default null,
+  "maxMessages" integer default null,
+  "maxInstances" integer default null,
+  "enabledFeatures" text[] default null,
+  "phone" text,
   updated_at timestamptz default now()
 );
 

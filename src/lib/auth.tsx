@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect, useState, type ReactNode } from "react";
+import { createContext, useContext, useEffect, useState, useRef, type ReactNode } from "react";
 import { type User, type Session } from "@supabase/supabase-js";
 import { supabase } from "@/integrations/supabase/client";
 import { isMasterEmail } from "@/lib/master";
@@ -19,10 +19,16 @@ export interface Tenant {
   id: string;
   name: string;
   ownerId: string;
-  plan: "trial" | "starter" | "pro" | "enterprise";
+  plan: "trial" | "basic" | "starter" | "pro" | "enterprise";
   status: "active" | "suspended";
   createdAt: string;
   onboardedAt?: string;
+  planExpiresAt?: string;
+  maxAgents?: number | null;
+  maxMessages?: number | null;
+  maxInstances?: number | null;
+  enabledFeatures?: string[] | null;
+  phone?: string | null;
 }
 
 interface AuthCtx {
@@ -39,9 +45,11 @@ interface AuthCtx {
     password: string,
     displayName: string,
     company: string,
+    phone?: string,
   ) => Promise<void>;
   signInGoogle: () => Promise<void>;
   signOut: () => Promise<void>;
+  resetPassword: (email: string) => Promise<void>;
 }
 
 const Ctx = createContext<AuthCtx | null>(null);
@@ -67,6 +75,7 @@ async function isMasterUser(user: User | null): Promise<boolean> {
 async function ensureTenantAndProfile(
   user: User,
   companyHint?: string,
+  phoneHint?: string,
 ): Promise<{ profile: UserProfile; tenant: Tenant }> {
   const { data: profileSnap } = await supabase
     .from("users")
@@ -84,7 +93,7 @@ async function ensureTenantAndProfile(
         .single();
 
       if (tenantSnap) {
-        let tenant = tenantSnap as Tenant;
+        const tenant = tenantSnap as Tenant;
         if (isMasterEmail(user.email) && tenant.plan !== "enterprise") {
           tenant.plan = "enterprise";
           await supabase.from("tenants").update({ plan: "enterprise" }).eq("id", tenant.id);
@@ -177,6 +186,7 @@ async function ensureTenantAndProfile(
 
   // Bootstrap: cria tenant + profile (novo owner)
   const tenantId = user.id;
+  const planExpiresAt = new Date(Date.now() + 14 * 24 * 60 * 60 * 1000).toISOString();
   tenant = {
     id: tenantId,
     name:
@@ -185,6 +195,8 @@ async function ensureTenantAndProfile(
     plan: isMasterEmail(user.email) ? "enterprise" : "trial",
     status: "active",
     createdAt: new Date().toISOString(),
+    planExpiresAt,
+    phone: phoneHint || null,
   };
   profile = {
     uid: user.id,
@@ -222,6 +234,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(true);
   const [isMaster, setIsMaster] = useState(false);
 
+  const stateRef = useRef({ user, profile, tenant });
+  stateRef.current = { user, profile, tenant };
+
   useEffect(() => {
     // Buscar sessão atual ao carregar
     supabase.auth.getSession().then(({ data: { session } }) => {
@@ -239,44 +254,56 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const handleAuthChange = async (session: Session | null) => {
-    setLoading(true);
+    const current = stateRef.current;
     const u = session?.user || null;
+
+    if (!u) {
+      setUser(null);
+      setIsMaster(false);
+      setProfile(null);
+      setTenant(null);
+      setLoading(false);
+      return;
+    }
+
+    if (current.user?.id === u.id && current.profile && current.tenant) {
+      // Já está carregado e é o mesmo usuário. Evita disparar loading e refazer chamadas de banco.
+      setUser(u);
+      setLoading(false);
+      return;
+    }
+
+    setLoading(true);
     setUser(u);
 
-    if (u) {
-      try {
-        const { profile, tenant } = await ensureTenantAndProfile(u);
-        const master = await isMasterUser(u);
-        setIsMaster(master);
-        setProfile(profile);
+    try {
+      const { profile, tenant } = await ensureTenantAndProfile(u);
+      const master = await isMasterUser(u);
+      setIsMaster(master);
+      setProfile(profile);
 
-        let activeTenant = tenant;
-        if (master) {
-          const saved =
-            typeof window !== "undefined" ? localStorage.getItem(ACTIVE_TENANT_KEY) : null;
-          if (saved && saved !== tenant.id) {
-            try {
-              const { data: ts } = await supabase
-                .from("tenants")
-                .select("*")
-                .eq("id", saved)
-                .single();
-              if (ts) {
-                activeTenant = ts as Tenant;
-              }
-            } catch (e) {
-              console.warn("[auth] failed to load active tenant:", e);
+      let activeTenant = tenant;
+      if (master) {
+        const saved =
+          typeof window !== "undefined" ? localStorage.getItem(ACTIVE_TENANT_KEY) : null;
+        if (saved && saved !== tenant.id) {
+          try {
+            const { data: ts } = await supabase
+              .from("tenants")
+              .select("*")
+              .eq("id", saved)
+              .single();
+            if (ts) {
+              activeTenant = ts as Tenant;
             }
+          } catch (e) {
+            console.warn("[auth] failed to load active tenant:", e);
           }
         }
-        setTenant(activeTenant);
-      } catch (e) {
-        console.error("[auth] bootstrap failed:", e);
-        setIsMaster(false);
-        setProfile(null);
-        setTenant(null);
       }
-    } else {
+      setTenant(activeTenant);
+    } catch (e) {
+      console.error("[auth] bootstrap failed:", e);
       setIsMaster(false);
       setProfile(null);
       setTenant(null);
@@ -318,7 +345,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const { error } = await supabase.auth.signInWithPassword({ email, password });
       if (error) throw error;
     },
-    signUpEmail: async (email, password, displayName, company) => {
+    signUpEmail: async (email, password, displayName, company, phone) => {
       const { data, error } = await supabase.auth.signUp({
         email,
         password,
@@ -328,7 +355,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       });
       if (error) throw error;
       if (data.user) {
-        await ensureTenantAndProfile(data.user, company);
+        await ensureTenantAndProfile(data.user, company, phone);
       }
     },
     signInGoogle: async () => {
@@ -338,6 +365,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     signOut: async () => {
       localStorage.removeItem(ACTIVE_TENANT_KEY);
       await supabase.auth.signOut();
+    },
+    resetPassword: async (email) => {
+      const { error } = await supabase.auth.resetPasswordForEmail(email, {
+        redirectTo: typeof window !== "undefined" ? `${window.location.origin}/` : undefined,
+      });
+      if (error) throw error;
     },
   };
 

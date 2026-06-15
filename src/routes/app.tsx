@@ -1,4 +1,4 @@
-import { createFileRoute, Outlet, useNavigate } from "@tanstack/react-router";
+import { createFileRoute, Outlet, useNavigate, useLocation } from "@tanstack/react-router";
 import { useEffect } from "react";
 import { AppSidebar } from "@/components/app/AppSidebar";
 import { AppStoreProvider, useAppStore } from "@/lib/app-store";
@@ -21,8 +21,9 @@ export const Route = createFileRoute("/app")({
 });
 
 function AppLayout() {
-  const { user, profile, tenant, loading, signOut } = useAuth();
+  const { user, profile, tenant, loading, signOut, isMaster } = useAuth();
   const navigate = useNavigate();
+  const routerLocation = useLocation();
 
   useEffect(() => {
     if (!loading && !user) navigate({ to: "/auth" });
@@ -49,7 +50,7 @@ function AppLayout() {
           </p>
           <div className="flex gap-2 justify-center">
             <button
-              onClick={() => location.reload()}
+              onClick={() => window.location.reload()}
               className="px-4 py-2 rounded-lg bg-secondary text-sm"
             >
               Recarregar
@@ -62,6 +63,52 @@ function AppLayout() {
               className="px-4 py-2 rounded-lg bg-destructive text-destructive-foreground text-sm"
             >
               Sair
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  const isExpired = tenant?.planExpiresAt ? new Date() > new Date(tenant.planExpiresAt) : false;
+  const isSuspended = (tenant?.status === "suspended" || isExpired) && !isMaster;
+  const isBillingRoute = routerLocation.pathname === "/app/billing";
+
+  if (isSuspended && !isBillingRoute) {
+    return (
+      <div className="min-h-screen flex flex-col items-center justify-center p-6 bg-gradient-to-br from-background to-card/50 text-center">
+        <div className="max-w-md w-full space-y-6 bg-card/40 border border-border p-8 rounded-2xl shadow-glow backdrop-blur-xl">
+          <div className="size-16 mx-auto rounded-full bg-destructive/10 grid place-items-center text-destructive">
+            <span className="text-3xl">⚠️</span>
+          </div>
+          <div className="space-y-2">
+            <h1 className="font-display text-2xl font-bold text-foreground">Workspace Bloqueada</h1>
+            <p className="text-sm text-muted-foreground">
+              {isExpired 
+                ? "O período de avaliação gratuita de 14 dias ou a sua assinatura expirou."
+                : "Este workspace foi suspenso devido a falta de confirmação de pagamento."}
+            </p>
+            <p className="text-xs text-muted-foreground/80 mt-1">
+              Para reativar a sua conta e continuar usando todas as automações e agentes inteligentes, realize o pagamento no faturamento ou entre em contato com nosso suporte.
+            </p>
+          </div>
+          <div className="flex flex-col gap-2 pt-2">
+            <Button variant="hero" onClick={() => navigate({ to: "/app/billing" })} className="w-full">
+              Ir para Faturamento & Planos
+            </Button>
+            <a href="https://wa.me/5581999999999" target="_blank" rel="noopener noreferrer" className="w-full text-left">
+              <Button variant="outline" className="w-full">
+                Falar com Suporte via WhatsApp
+              </Button>
+            </a>
+            <button
+              onClick={async () => {
+                await signOut();
+                navigate({ to: "/auth" });
+              }}
+              className="text-xs text-muted-foreground hover:text-foreground pt-4 underline bg-transparent border-0 cursor-pointer"
+            >
+              Sair da conta
             </button>
           </div>
         </div>

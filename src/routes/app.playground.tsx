@@ -1,5 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, useRef } from "react";
 import { useServerFn } from "@tanstack/react-start";
 import { useAuth } from "@/lib/auth";
 import { useAppStore } from "@/lib/app-store";
@@ -17,13 +17,18 @@ import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
-import { Loader2, Send, Sparkles, Trash2, Database, Pencil, Check, X, Bookmark } from "lucide-react";
+  Loader2,
+  Send,
+  Sparkles,
+  Trash2,
+  Database,
+  Pencil,
+  Check,
+  X,
+  Bookmark,
+} from "lucide-react";
 import { toast } from "sonner";
 
 export const Route = createFileRoute("/app/playground")({ component: PlaygroundPage });
@@ -113,6 +118,8 @@ function PlaygroundPage() {
   const chat = useServerFn(chatCompletion);
   const embed = useServerFn(embedTexts);
 
+  const messagesEndRef = useRef<HTMLDivElement>(null);
+
   const [agentId, setAgentId] = useState<string>("");
   const [msgs, setMsgs] = useState<Msg[]>([]);
   const [input, setInput] = useState("");
@@ -129,6 +136,11 @@ function PlaygroundPage() {
   const [knowDocs, setKnowDocs] = useState<KnowMeta[]>([]);
   const [chunks, setChunks] = useState<Chunk[]>([]);
   const [chunksLoading, setChunksLoading] = useState(false);
+
+  // Rola automaticamente para o final da conversa quando novas mensagens chegam ou quando o agente está digitando
+  useEffect(() => {
+    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [msgs, busy]);
 
   const agent = agents.find((a) => a.id === agentId);
   const provider = providers.find((p) => p.id === agent?.providerId);
@@ -483,9 +495,7 @@ function PlaygroundPage() {
                 className={`flex ${m.role === "user" ? "justify-end" : "justify-start"}`}
               >
                 {m.role === "user" ? (
-                  <div
-                    className="max-w-[75%] rounded-2xl px-4 py-2.5 text-sm whitespace-pre-wrap bg-gradient-primary text-primary-foreground"
-                  >
+                  <div className="max-w-[75%] rounded-2xl px-4 py-2.5 text-sm whitespace-pre-wrap bg-gradient-primary text-primary-foreground">
                     {m.content}
                   </div>
                 ) : editingIdx === i ? (
@@ -537,13 +547,12 @@ function PlaygroundPage() {
                       </button>
                       <button
                         onClick={() => {
-                          const prevUserMsg = i > 0 && msgs[i - 1].role === "user" ? msgs[i - 1].content : "";
+                          const prevUserMsg =
+                            i > 0 && msgs[i - 1].role === "user" ? msgs[i - 1].content : "";
                           setFaqQuestion(prevUserMsg);
                           setFaqAnswer(m.content);
                           setFaqTitle(
-                            prevUserMsg
-                              ? `FAQ: ${prevUserMsg.slice(0, 35)}...`
-                              : "FAQ do Agente"
+                            prevUserMsg ? `FAQ: ${prevUserMsg.slice(0, 35)}...` : "FAQ do Agente",
                           );
                           if (embedProviders.length > 0) {
                             const first = embedProviders[0];
@@ -577,6 +586,7 @@ function PlaygroundPage() {
                 </div>
               </div>
             )}
+            <div ref={messagesEndRef} />
           </div>
 
           <div className="p-3 border-t border-border flex gap-2">
@@ -670,21 +680,24 @@ function PlaygroundPage() {
                 placeholder="Ex: FAQ - Horário de Funcionamento"
               />
             </div>
-            
+
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1.5">
                 <Label className="text-xs font-semibold">Provedor de Embeddings</Label>
-                <Select value={faqProviderId} onValueChange={(val) => {
-                  setFaqProviderId(val);
-                  const p = providers.find((x) => x.id === val);
-                  if (p?.kind === "google") {
-                    setFaqEmbedModel("gemini-embedding-2");
-                  } else if (p?.kind === "openrouter") {
-                    setFaqEmbedModel("openai/text-embedding-3-small");
-                  } else {
-                    setFaqEmbedModel("text-embedding-3-small");
-                  }
-                }}>
+                <Select
+                  value={faqProviderId}
+                  onValueChange={(val) => {
+                    setFaqProviderId(val);
+                    const p = providers.find((x) => x.id === val);
+                    if (p?.kind === "google") {
+                      setFaqEmbedModel("gemini-embedding-2");
+                    } else if (p?.kind === "openrouter") {
+                      setFaqEmbedModel("openai/text-embedding-3-small");
+                    } else {
+                      setFaqEmbedModel("text-embedding-3-small");
+                    }
+                  }}
+                >
                   <SelectTrigger className="h-9">
                     <SelectValue placeholder="Selecione provedor..." />
                   </SelectTrigger>
@@ -746,7 +759,8 @@ function PlaygroundPage() {
 
             {embedProviders.length === 0 && (
               <p className="text-[10px] text-amber-500 text-center">
-                Você precisa cadastrar um provedor compatível com embeddings (Gemini ou OpenAI) para salvar FAQs.
+                Você precisa cadastrar um provedor compatível com embeddings (Gemini ou OpenAI) para
+                salvar FAQs.
               </p>
             )}
           </div>

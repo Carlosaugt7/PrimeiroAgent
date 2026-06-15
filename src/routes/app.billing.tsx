@@ -130,6 +130,21 @@ function BillingPage() {
           <p className="text-muted-foreground mt-1">
             Plano atual:{" "}
             <span className="capitalize font-semibold text-foreground">{currentPlan}</span>
+            {tenant?.planExpiresAt && (
+              <>
+                {" · "}Validade:{" "}
+                <span className="font-semibold text-foreground">
+                  {new Date(tenant.planExpiresAt).toLocaleDateString("pt-BR")}
+                  {(() => {
+                    const diff = new Date(tenant.planExpiresAt).getTime() - Date.now();
+                    const days = Math.ceil(diff / (1000 * 60 * 60 * 24));
+                    return days > 0 
+                      ? ` (${days} ${days === 1 ? 'dia restante' : 'dias restantes'})`
+                      : " (Expirado)";
+                  })()}
+                </span>
+              </>
+            )}
             {" · "}Total pago:{" "}
             <span className="font-semibold text-foreground">
               R$ {totalPaid.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}

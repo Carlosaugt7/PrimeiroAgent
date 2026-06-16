@@ -1,6 +1,6 @@
 import { createServerFn } from "@tanstack/react-start";
 
-type Kind = "openai" | "anthropic" | "google" | "groq" | "deepseek" | "openrouter" | "custom";
+type Kind = "openai" | "anthropic" | "google" | "groq" | "deepseek" | "openrouter" | "custom" | "ollama";
 
 interface DetectInput {
   kind: Kind;
@@ -21,6 +21,7 @@ const DEFAULT_BASE: Record<Kind, string> = {
   deepseek: "https://api.deepseek.com/v1",
   openrouter: "https://openrouter.ai/api/v1",
   custom: "",
+  ollama: "http://localhost:11434",
 };
 
 const STATIC_ANTHROPIC: ModelInfo[] = [
@@ -29,6 +30,30 @@ const STATIC_ANTHROPIC: ModelInfo[] = [
   { id: "claude-3-5-sonnet-20241022", contextWindow: 200000 },
   { id: "claude-3-5-haiku-20241022", contextWindow: 200000 },
 ];
+
+async function fetchOllama(baseUrl: string): Promise<ModelInfo[]> {
+  const clean = baseUrl.replace(/\/+$/, "");
+  if (!/^https?:\/\//i.test(clean)) {
+    throw new Error(`URL inválida: "${baseUrl}". Use uma URL absoluta começando com http:// ou https://`);
+  }
+  const url = `${clean}/api/tags`;
+  let r: Response;
+  try {
+    r = await fetch(url);
+  } catch (e) {
+    throw new Error(
+      `Falha de rede ao acessar ${url}: ${e instanceof Error ? e.message : String(e)}`,
+    );
+  }
+  if (!r.ok) {
+    const body = await r.text().catch(() => "");
+    throw new Error(`HTTP ${r.status} em ${url}: ${body.slice(0, 300)}`);
+  }
+  const data = (await r.json()) as {
+    models?: Array<{ name: string; details?: { parameter_size?: string } }>;
+  };
+  return (data.models ?? []).map((m) => ({ id: m.name }));
+}
 
 async function fetchOpenAICompatible(baseUrl: string, apiKey: string): Promise<ModelInfo[]> {
   const clean = baseUrl.replace(/\/+$/, "");
@@ -70,7 +95,7 @@ async function fetchGoogle(apiKey: string): Promise<ModelInfo[]> {
 
 export const detectModels = createServerFn({ method: "POST" })
   .inputValidator((d: DetectInput) => {
-    if (!d || typeof d.apiKey !== "string" || d.apiKey.length < 5)
+    if (!d || typeof d.apiKey !== "string" || (d.kind !== "ollama" && d.apiKey.length < 5))
       throw new Error("apiKey ausente");
     if (!d.kind) throw new Error("kind ausente");
     return d;
@@ -78,6 +103,7 @@ export const detectModels = createServerFn({ method: "POST" })
   .handler(async ({ data }) => {
     const base = data.baseUrl?.trim() || DEFAULT_BASE[data.kind] || "";
     try {
+      if (data.kind === "ollama") return { models: await fetchOllama(base) };
       if (data.kind === "anthropic") return { models: STATIC_ANTHROPIC };
       if (data.kind === "google") return { models: await fetchGoogle(data.apiKey) };
       // OpenAI-compatível: openai, groq, deepseek, openrouter, custom
@@ -104,12 +130,37 @@ interface ChatInput {
 export const chatCompletion = createServerFn({ method: "POST" })
   .inputValidator((d: ChatInput) => {
     if (!d?.model) throw new Error("model ausente");
-    if (!d?.apiKey) throw new Error("apiKey ausente");
+    if (d.kind !== "ollama" && !d?.apiKey) throw new Error("apiKey ausente");
     return d;
   })
   .handler(async ({ data }) => {
     const started = Date.now();
     const base = data.baseUrl?.trim() || DEFAULT_BASE[data.kind] || "";
+
+    if (data.kind === "ollama") {
+      const r = await fetch(`${base.replace(/\/$/, "")}/api/chat`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          model: data.model,
+          messages: [{ role: "system", content: data.systemPrompt }, ...data.messages],
+          stream: false,
+          options: { temperature: data.temperature ?? 0.5 },
+        }),
+      });
+      if (!r.ok) throw new Error(await r.text());
+      const j = (await r.json()) as {
+        message?: { content: string };
+        prompt_eval_count?: number;
+        eval_count?: number;
+      };
+      return {
+        text: j.message?.content ?? "",
+        inputTokens: j.prompt_eval_count ?? 0,
+        outputTokens: j.eval_count ?? 0,
+        durationMs: Date.now() - started,
+      };
+    }
 
     if (data.kind === "anthropic") {
       const r = await fetch(`${base.replace(/\/$/, "")}/messages`, {

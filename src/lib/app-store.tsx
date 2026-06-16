@@ -48,7 +48,7 @@ export interface LLMProvider {
   id: string;
   tenantId: string;
   name: string;
-  kind: "openai" | "anthropic" | "google" | "groq" | "deepseek" | "openrouter" | "custom";
+  kind: "openai" | "anthropic" | "google" | "groq" | "deepseek" | "openrouter" | "custom" | "ollama";
   baseUrl: string;
   apiKey: string; // stored as-is for now; Phase 5 will encrypt
   models: { id: string; contextWindow?: number }[];

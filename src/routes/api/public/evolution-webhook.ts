@@ -431,6 +431,32 @@ async function callOpenAICompat(
   return j.choices?.[0]?.message?.content ?? "";
 }
 
+async function callOllama(
+  provider: Record<string, unknown>,
+  agent: Record<string, unknown>,
+  systemPrompt: string,
+  userText: string,
+): Promise<string> {
+  const baseUrl = (provider.baseUrl as string)?.trim() || "http://localhost:11434";
+  const base = baseUrl.replace(/\/$/, "");
+  const r = await fetch(`${base}/api/chat`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      model: agent.model,
+      messages: [
+        { role: "system", content: systemPrompt },
+        { role: "user", content: userText },
+      ],
+      stream: false,
+      options: { temperature: agent.temperature ?? 0.5 },
+    }),
+  });
+  if (!r.ok) throw new Error(`Ollama ${r.status}: ${(await r.text()).slice(0, 300)}`);
+  const j = (await r.json()) as { message?: { content: string } };
+  return j.message?.content ?? "";
+}
+
 async function callLLM(
   provider: Record<string, unknown>,
   agent: Record<string, unknown>,
@@ -440,6 +466,7 @@ async function callLLM(
   const kind = provider.kind;
   if (kind === "anthropic") return callAnthropic(provider, agent, systemPrompt, userText);
   if (kind === "google") return callGoogle(provider, agent, systemPrompt, userText);
+  if (kind === "ollama") return callOllama(provider, agent, systemPrompt, userText);
   return callOpenAICompat(provider, agent, systemPrompt, userText);
 }
 

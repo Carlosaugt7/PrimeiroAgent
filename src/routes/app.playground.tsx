@@ -503,38 +503,6 @@ function PlaygroundPage() {
                   <div className="max-w-[75%] rounded-2xl px-4 py-2.5 text-sm whitespace-pre-wrap bg-gradient-primary text-primary-foreground">
                     {m.content}
                   </div>
-                ) : editingIdx === i ? (
-                  <div className="flex flex-col gap-2 w-full max-w-[75%] bg-secondary rounded-2xl p-3">
-                    <Textarea
-                      value={editContent}
-                      onChange={(e) => setEditContent(e.target.value)}
-                      className="text-xs min-h-[80px] bg-background text-foreground resize-none"
-                    />
-                    <div className="flex justify-end gap-2">
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        className="h-7 px-2 text-[10px]"
-                        onClick={() => setEditingIdx(null)}
-                      >
-                        <X className="size-3 mr-1" /> Cancelar
-                      </Button>
-                      <Button
-                        variant="hero"
-                        size="sm"
-                        className="h-7 px-2 text-[10px]"
-                        onClick={() => {
-                          const updated = [...msgs];
-                          updated[i] = { ...m, content: editContent };
-                          setMsgs(updated);
-                          setEditingIdx(null);
-                          toast.success("Resposta editada!");
-                        }}
-                      >
-                        <Check className="size-3 mr-1" /> Salvar
-                      </Button>
-                    </div>
-                  </div>
                 ) : (
                   <div className="group flex flex-col gap-1 max-w-[75%]">
                     <div className="bg-secondary rounded-2xl px-4 py-2.5 text-sm whitespace-pre-wrap">
@@ -670,6 +638,45 @@ function PlaygroundPage() {
           )}
         </div>
       </div>
+
+      {/* Modal de edição de resposta do agente */}
+      <Dialog open={editingIdx !== null} onOpenChange={(o) => { if (!o) setEditingIdx(null); }}>
+        <DialogContent className="max-w-2xl" aria-describedby={undefined}>
+          <DialogHeader>
+            <DialogTitle>Editar resposta do agente</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3 pt-1">
+            <Textarea
+              value={editContent}
+              onChange={(e) => setEditContent(e.target.value)}
+              className="text-sm min-h-[320px] bg-background text-foreground font-sans resize-y"
+              placeholder="Edite a resposta do agente..."
+              autoFocus
+            />
+            <p className="text-[11px] text-muted-foreground">
+              {editContent.length.toLocaleString()} caracteres
+            </p>
+            <div className="flex justify-end gap-2 pt-1">
+              <Button variant="outline" onClick={() => setEditingIdx(null)}>
+                <X className="size-4 mr-1.5" /> Cancelar
+              </Button>
+              <Button
+                variant="hero"
+                onClick={() => {
+                  if (editingIdx === null) return;
+                  const updated = [...msgs];
+                  updated[editingIdx] = { ...updated[editingIdx], content: editContent };
+                  setMsgs(updated);
+                  setEditingIdx(null);
+                  toast.success("Resposta editada!");
+                }}
+              >
+                <Check className="size-4 mr-1.5" /> Salvar
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
 
       <Dialog open={faqOpen} onOpenChange={setFaqOpen}>
         <DialogContent className="max-w-xl" aria-describedby={undefined}>

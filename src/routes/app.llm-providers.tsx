@@ -36,7 +36,6 @@ const KIND_LABEL: Record<LLMProvider["kind"], string> = {
   deepseek: "DeepSeek",
   openrouter: "OpenRouter",
   custom: "Custom (OpenAI-compatível)",
-  ollama: "Ollama (local / VPS)",
 };
 
 const DEFAULT_URLS: Record<LLMProvider["kind"], string> = {
@@ -47,7 +46,6 @@ const DEFAULT_URLS: Record<LLMProvider["kind"], string> = {
   deepseek: "https://api.deepseek.com/v1",
   openrouter: "https://openrouter.ai/api/v1",
   custom: "",
-  ollama: "http://localhost:11434",
 };
 
 function ProvidersPage() {
@@ -79,7 +77,7 @@ function ProvidersPage() {
     setForm({ ...form, kind: k, baseUrl: DEFAULT_URLS[k] });
 
   const handleDetect = async () => {
-    if (!form.apiKey && form.kind !== "ollama") {
+    if (!form.apiKey) {
       toast.error("Informe a API key");
       return;
     }
@@ -101,8 +99,8 @@ function ProvidersPage() {
   };
 
   const submit = async () => {
-    if (!form.name.trim() || (!form.apiKey && form.kind !== "ollama")) {
-      toast.error(form.kind === "ollama" ? "Nome obrigatório" : "Nome e API key obrigatórios");
+    if (!form.name.trim() || !form.apiKey) {
+      toast.error("Nome e API key obrigatórios");
       return;
     }
     setBusy(true);
@@ -277,17 +275,15 @@ function ProvidersPage() {
                 className="mt-1 font-mono text-xs"
               />
             </div>
-            {form.kind !== "ollama" && (
-              <div>
-                <Label>API Key</Label>
-                <Input
-                  type="password"
-                  value={form.apiKey}
-                  onChange={(e) => setForm({ ...form, apiKey: e.target.value })}
-                  className="mt-1 font-mono text-xs"
-                />
-              </div>
-            )}
+            <div>
+              <Label>API Key</Label>
+              <Input
+                type="password"
+                value={form.apiKey}
+                onChange={(e) => setForm({ ...form, apiKey: e.target.value })}
+                className="mt-1 font-mono text-xs"
+              />
+            </div>
 
             <Button variant="outline" onClick={handleDetect} disabled={busy} className="w-full">
               {busy ? (

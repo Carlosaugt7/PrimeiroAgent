@@ -431,47 +431,6 @@ async function callOpenAICompat(
   return j.choices?.[0]?.message?.content ?? "";
 }
 
-async function callOllama(
-  provider: Record<string, unknown>,
-  agent: Record<string, unknown>,
-  systemPrompt: string,
-  userText: string,
-): Promise<string> {
-  const baseUrl = (provider.baseUrl as string)?.trim() || "http://localhost:11434";
-  const base = baseUrl.replace(/\/+$/, "");
-  const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), 120000); // 2min timeout (modelos locais são lentos)
-  try {
-    const r = await fetch(`${base}/api/chat`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        model: agent.model,
-        messages: [
-          { role: "system", content: systemPrompt },
-          { role: "user", content: userText },
-        ],
-        stream: false,
-        options: { temperature: agent.temperature ?? 0.5 },
-      }),
-      signal: controller.signal,
-    });
-    clearTimeout(timeoutId);
-    if (!r.ok) {
-      const body = (await r.text().catch(() => "")).slice(0, 400);
-      throw new Error(`Ollama HTTP ${r.status}: ${body}`);
-    }
-    const j = (await r.json()) as { message?: { content: string } };
-    return j.message?.content ?? "";
-  } catch (e: unknown) {
-    clearTimeout(timeoutId);
-    if (e instanceof Error && e.name === "AbortError") {
-      throw new Error("Ollama timeout: o modelo demorou mais de 2 minutos para responder.");
-    }
-    throw e;
-  }
-}
-
 async function callLLM(
   provider: Record<string, unknown>,
   agent: Record<string, unknown>,
@@ -481,7 +440,6 @@ async function callLLM(
   const kind = provider.kind;
   if (kind === "anthropic") return callAnthropic(provider, agent, systemPrompt, userText);
   if (kind === "google") return callGoogle(provider, agent, systemPrompt, userText);
-  if (kind === "ollama") return callOllama(provider, agent, systemPrompt, userText);
   return callOpenAICompat(provider, agent, systemPrompt, userText);
 }
 
@@ -508,7 +466,7 @@ async function runBridge(
     .eq("id", agent.providerId)
     .eq("tenantId", tenantId)
     .single();
-  if (!provider?.apiKey && provider?.kind !== "ollama") return { skipped: "no-provider" };
+  if (!provider?.apiKey) return { skipped: "no-provider" };
 
   // 3) RAG opcional
   let systemPrompt: string = (agent.systemPrompt as string) ?? "Você é um assistente útil.";

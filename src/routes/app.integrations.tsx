@@ -2,21 +2,26 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useServerFn } from "@tanstack/react-start";
 import { useState, useEffect } from "react";
 import { useAuth } from "@/lib/auth";
-import { testEvolutionConnection } from "@/lib/evolution.functions";
+import {
+  testEvolutionConnection,
+  getGlobalEvolutionSettings,
+  updateGlobalEvolutionSettings,
+} from "@/lib/evolution.functions";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Loader2, Save, Wifi, WifiOff } from "lucide-react";
+import { Loader2, Lock, Save, Wifi, WifiOff, Crown } from "lucide-react";
 import { toast } from "sonner";
-import { supabase } from "@/integrations/supabase/client";
 
 export const Route = createFileRoute("/app/integrations")({ component: Page });
 
 function Page() {
-  const { tenant } = useAuth();
+  const { isMaster } = useAuth();
   const testConn = useServerFn(testEvolutionConnection);
+  const getGlobal = useServerFn(getGlobalEvolutionSettings);
+  const updateGlobal = useServerFn(updateGlobalEvolutionSettings);
 
   const [url, setUrl] = useState("");
   const [key, setKey] = useState("");
@@ -26,77 +31,44 @@ function Page() {
   const [testing, setTesting] = useState(false);
 
   useEffect(() => {
-    if (!tenant?.id) return;
-    const fetchConfig = async () => {
-      const { data } = await supabase
-        .from("tenants")
-        .select("evolutionApiUrl, evolutionApiKey")
-        .eq("id", tenant.id)
-        .single();
-
-      if (data) {
-        const dbUrl = data.evolutionApiUrl || "";
-        const dbKey = data.evolutionApiKey || "";
-        setUrl(dbUrl);
-        setKey(dbKey);
-        if (dbUrl && dbKey) {
-          try {
-            const res = await testConn({ data: { url: dbUrl, key: dbKey } });
-            if (res.ok) {
-              setStatus("connected");
-            } else {
-              setStatus("disconnected");
-            }
-          } catch {
-            setStatus("disconnected");
-          }
+    if (!isMaster) { setLoading(false); return; }
+    (async () => {
+      try {
+        const cfg = await getGlobal({});
+        setUrl(cfg.url);
+        setKey(cfg.key);
+        if (cfg.url && cfg.key) {
+          const res = await testConn({ data: { url: cfg.url, key: cfg.key } });
+          setStatus(res.ok ? "connected" : "disconnected");
         }
+      } catch {
+        setStatus("disconnected");
+      } finally {
+        setLoading(false);
       }
-      setLoading(false);
-    };
-    fetchConfig();
-  }, [tenant?.id]);
+    })();
+  }, [isMaster]);
 
   const handleTest = async () => {
-    if (!url || !key) {
-      toast.error("Preencha a URL e a API Key antes de testar.");
-      return;
-    }
+    if (!url || !key) { toast.error("Preencha a URL e a API Key antes de testar."); return; }
     setTesting(true);
     setStatus("unknown");
     try {
       const res = await testConn({ data: { url, key } });
-      if (res.ok) {
-        setStatus("connected");
-        toast.success("Conexão estabelecida com sucesso!");
-      } else {
-        setStatus("disconnected");
-        toast.error(`Falha na conexão: ${res.error}`);
-      }
-    } catch (e) {
-      setStatus("disconnected");
-      toast.error("Erro ao testar conexão.");
-    } finally {
-      setTesting(false);
-    }
+      if (res.ok) { setStatus("connected"); toast.success("Conexão estabelecida!"); }
+      else { setStatus("disconnected"); toast.error(`Falha: ${res.error}`); }
+    } catch { setStatus("disconnected"); toast.error("Erro ao testar conexão."); }
+    finally { setTesting(false); }
   };
 
   const handleSave = async () => {
-    if (!tenant?.id) return;
+    if (!url.trim() || !key.trim()) { toast.error("URL e API Key são obrigatórios."); return; }
     setSaving(true);
     try {
-      const { error } = await supabase
-        .from("tenants")
-        .update({
-          evolutionApiUrl: url.trim(),
-          evolutionApiKey: key.trim(),
-        })
-        .eq("id", tenant.id);
-
-      if (error) throw error;
-      toast.success("Configurações salvas com sucesso!");
-    } catch (e: any) {
-      toast.error(e?.message || "Erro ao salvar configurações.");
+      await updateGlobal({ data: { url: url.trim(), key: key.trim() } });
+      toast.success("Configuração global salva! Todos os clientes passarão a usar automaticamente.");
+    } catch (e: unknown) {
+      toast.error(e instanceof Error ? e.message : "Erro ao salvar.");
     } finally {
       setSaving(false);
     }
@@ -110,12 +82,53 @@ function Page() {
     );
   }
 
+  // Clientes normais veem apenas uma mensagem informativa
+  if (!isMaster) {
+    return (
+      <div className="space-y-6 max-w-4xl">
+        <div>
+          <h1 className="font-display text-3xl font-bold">Integrações</h1>
+          <p className="text-muted-foreground text-sm mt-1">
+            Integrações externas do seu workspace.
+          </p>
+        </div>
+        <Card className="bg-gradient-card border-border">
+          <CardHeader>
+            <div className="flex items-center gap-3">
+              <div className="size-10 rounded-xl bg-emerald-500/10 grid place-items-center">
+                <Wifi className="size-5 text-emerald-400" />
+              </div>
+              <div>
+                <CardTitle>Evolution API (WhatsApp)</CardTitle>
+                <CardDescription>Integração gerenciada pela plataforma.</CardDescription>
+              </div>
+              <Badge className="ml-auto bg-emerald-500/15 text-emerald-400 border-emerald-500/30 gap-1.5 py-1">
+                <Wifi className="size-3.5" /> Ativo
+              </Badge>
+            </div>
+          </CardHeader>
+          <CardContent>
+            <div className="flex items-start gap-3 rounded-xl border border-border bg-secondary/30 p-4">
+              <Lock className="size-4 mt-0.5 text-muted-foreground shrink-0" />
+              <p className="text-sm text-muted-foreground">
+                A integração com o Evolution API é configurada globalmente pelo administrador da
+                plataforma. Você não precisa fazer nada — basta criar suas instâncias WhatsApp
+                normalmente.
+              </p>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
+
+  // Master Admin vê o painel de configuração global
   return (
     <div className="space-y-6 max-w-4xl">
       <div>
         <h1 className="font-display text-3xl font-bold">Integrações</h1>
         <p className="text-muted-foreground text-sm mt-1">
-          Configure suas integrações externas e webhooks.
+          Configuração global da plataforma — aplicada automaticamente a todos os clientes.
         </p>
       </div>
 
@@ -123,10 +136,13 @@ function Page() {
         <CardHeader>
           <div className="flex items-center justify-between flex-wrap gap-2">
             <div>
-              <CardTitle>Evolution API (WhatsApp)</CardTitle>
+              <CardTitle className="flex items-center gap-2">
+                <Crown className="size-4 text-amber-400" />
+                Evolution API (WhatsApp) — Config Global
+              </CardTitle>
               <CardDescription>
-                Configure as credenciais do seu servidor Evolution API para conectar o WhatsApp de
-                forma Multi-Tenant.
+                Esta configuração é compartilhada com todos os tenants da plataforma. Nenhum
+                cliente precisa configurar individualmente.
               </CardDescription>
             </div>
             {status === "connected" && (
@@ -146,7 +162,7 @@ function Page() {
             <Label htmlFor="apiUrl">URL da Evolution API</Label>
             <Input
               id="apiUrl"
-              placeholder="https://evo.seudominio.com"
+              placeholder="https://evolution-api.seudominio.com"
               value={url}
               onChange={(e) => setUrl(e.target.value)}
             />
@@ -163,22 +179,17 @@ function Page() {
           </div>
           <div className="flex items-center gap-3 pt-2">
             <Button onClick={handleSave} disabled={saving}>
-              {saving ? (
-                <Loader2 className="size-4 animate-spin mr-1.5" />
-              ) : (
-                <Save className="size-4 mr-1.5" />
-              )}
-              Salvar Configuração
+              {saving ? <Loader2 className="size-4 animate-spin mr-1.5" /> : <Save className="size-4 mr-1.5" />}
+              Salvar para todos os clientes
             </Button>
             <Button variant="outline" onClick={handleTest} disabled={testing || !url || !key}>
-              {testing ? (
-                <Loader2 className="size-4 animate-spin mr-1.5" />
-              ) : (
-                <Wifi className="size-4 mr-1.5" />
-              )}
+              {testing ? <Loader2 className="size-4 animate-spin mr-1.5" /> : <Wifi className="size-4 mr-1.5" />}
               Testar Conexão
             </Button>
           </div>
+          <p className="text-xs text-muted-foreground pt-1">
+            Clientes com configuração própria continuam usando a deles. Os demais herdam esta configuração automaticamente.
+          </p>
         </CardContent>
       </Card>
     </div>

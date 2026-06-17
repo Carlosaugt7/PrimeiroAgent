@@ -5,6 +5,29 @@ import { getRequest } from "@tanstack/react-start/server";
 
 const EVO_BASE_FALLBACK = "https://evolution-api.rsconsultoria.pro";
 
+// Busca a configuração global da Evolution API (definida pelo Master Admin)
+async function getGlobalEvoConfig(): Promise<{ url: string; key: string | undefined }> {
+  try {
+    const { data } = await supabase
+      .from("global_settings")
+      .select("key, value")
+      .in("key", ["evolutionApiUrl", "evolutionApiKey"]);
+
+    if (data && data.length > 0) {
+      const map = Object.fromEntries(data.map((r: { key: string; value: string }) => [r.key, r.value]));
+      const url = map.evolutionApiUrl?.trim();
+      const key = map.evolutionApiKey?.trim();
+      if (url && key) return { url: url.replace(/\/$/, ""), key };
+    }
+  } catch {
+    // ignora falha e usa fallback de env
+  }
+  return {
+    url: EVO_BASE_FALLBACK,
+    key: process.env.EVOLUTION_API_KEY,
+  };
+}
+
 function getAuthSupabase() {
   const request = getRequest();
   const authHeader = request?.headers?.get("authorization");
@@ -32,28 +55,24 @@ function getAuthSupabase() {
 
 // Função para buscar as credenciais do tenant
 async function getTenantEvoConfig(tenantId?: string) {
-  if (!tenantId) {
-    return {
-      url: EVO_BASE_FALLBACK,
-      key: process.env.EVOLUTION_API_KEY,
-    };
+  // 1. Tenant tem config própria → usa ela
+  if (tenantId) {
+    const authClient = getAuthSupabase();
+    const { data: tenant } = await authClient
+      .from("tenants")
+      .select("evolutionApiUrl, evolutionApiKey")
+      .eq("id", tenantId)
+      .single();
+    if (tenant?.evolutionApiUrl && tenant?.evolutionApiKey) {
+      return {
+        url: tenant.evolutionApiUrl.replace(/\/$/, ""),
+        key: tenant.evolutionApiKey,
+      };
+    }
   }
-  const authClient = getAuthSupabase();
-  const { data: tenant } = await authClient
-    .from("tenants")
-    .select("evolutionApiUrl, evolutionApiKey")
-    .eq("id", tenantId)
-    .single();
-  if (tenant?.evolutionApiUrl && tenant?.evolutionApiKey) {
-    return {
-      url: tenant.evolutionApiUrl.replace(/\/$/, ""),
-      key: tenant.evolutionApiKey,
-    };
-  }
-  return {
-    url: EVO_BASE_FALLBACK,
-    key: process.env.EVOLUTION_API_KEY,
-  };
+
+  // 2. Sem config de tenant → usa a config global do Master Admin
+  return getGlobalEvoConfig();
 }
 
 async function authHeaders(tenantId?: string) {
@@ -79,6 +98,38 @@ async function evo<T = unknown>(path: string, tenantId?: string, init?: RequestI
     return text as unknown as T;
   }
 }
+
+export const updateGlobalEvolutionSettings = createServerFn({ method: "POST" })
+  .inputValidator((d: { url: string; key: string }) => d)
+  .handler(async ({ data }) => {
+    const { error: e1 } = await supabase
+      .from("global_settings")
+      .upsert({ key: "evolutionApiUrl", value: data.url.trim() }, { onConflict: "key" });
+    if (e1) throw new Error(e1.message);
+
+    const { error: e2 } = await supabase
+      .from("global_settings")
+      .upsert({ key: "evolutionApiKey", value: data.key.trim() }, { onConflict: "key" });
+    if (e2) throw new Error(e2.message);
+
+    return { ok: true };
+  });
+
+export const getGlobalEvolutionSettings = createServerFn({ method: "GET" })
+  .handler(async () => {
+    const { data } = await supabase
+      .from("global_settings")
+      .select("key, value")
+      .in("key", ["evolutionApiUrl", "evolutionApiKey"]);
+
+    const map = Object.fromEntries(
+      (data ?? []).map((r: { key: string; value: string }) => [r.key, r.value]),
+    );
+    return {
+      url: map.evolutionApiUrl ?? "",
+      key: map.evolutionApiKey ?? "",
+    };
+  });
 
 export const testEvolutionConnection = createServerFn({ method: "POST" })
   .inputValidator((d: { url: string; key: string }) => d)

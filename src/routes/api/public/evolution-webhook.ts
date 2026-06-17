@@ -3,10 +3,26 @@ import { supabaseAdmin as supabase } from "@/integrations/supabase/client.server
 
 const EVO_BASE_FALLBACK = "https://evolution-api.rsconsultoria.pro";
 
-async function evoSendText(tenantId: string, instanceName: string, number: string, text: string) {
-  let url = EVO_BASE_FALLBACK;
-  let key = process.env.EVOLUTION_API_KEY;
+// Busca config global da tabela global_settings
+async function getGlobalEvoConfig(): Promise<{ url: string; key: string | undefined }> {
+  try {
+    const { data } = await supabase
+      .from("global_settings")
+      .select("key, value")
+      .in("key", ["evolutionApiUrl", "evolutionApiKey"]);
 
+    if (data && data.length > 0) {
+      const map = Object.fromEntries(data.map((r: { key: string; value: string }) => [r.key, r.value]));
+      const u = map.evolutionApiUrl?.trim();
+      const k = map.evolutionApiKey?.trim();
+      if (u && k) return { url: u.replace(/\/$/, ""), key: k };
+    }
+  } catch { /* usa fallback */ }
+  return { url: EVO_BASE_FALLBACK, key: process.env.EVOLUTION_API_KEY };
+}
+
+async function evoSendText(tenantId: string, instanceName: string, number: string, text: string) {
+  // 1. Tenant tem config própria → usa ela
   if (tenantId) {
     const { data: tenant } = await supabase
       .from("tenants")
@@ -14,15 +30,24 @@ async function evoSendText(tenantId: string, instanceName: string, number: strin
       .eq("id", tenantId)
       .single();
     if (tenant?.evolutionApiUrl && tenant?.evolutionApiKey) {
-      url = tenant.evolutionApiUrl.replace(/\/$/, "");
-      key = tenant.evolutionApiKey;
+      const url = tenant.evolutionApiUrl.replace(/\/$/, "");
+      const key = tenant.evolutionApiKey;
+      const r = await fetch(`${url}/message/sendText/${encodeURIComponent(instanceName)}`, {
+        method: "POST",
+        headers: { apikey: key, "Content-Type": "application/json" },
+        body: JSON.stringify({ number, text }),
+      });
+      if (!r.ok) throw new Error(`sendText ${r.status}: ${(await r.text()).slice(0, 200)}`);
+      return;
     }
   }
 
-  if (!key) throw new Error("EVOLUTION_API_KEY ausente ou não configurada");
-  const r = await fetch(`${url}/message/sendText/${encodeURIComponent(instanceName)}`, {
+  // 2. Sem config de tenant → usa config global
+  const cfg = await getGlobalEvoConfig();
+  if (!cfg.key) throw new Error("EVOLUTION_API_KEY ausente ou não configurada");
+  const r = await fetch(`${cfg.url}/message/sendText/${encodeURIComponent(instanceName)}`, {
     method: "POST",
-    headers: { apikey: key, "Content-Type": "application/json" },
+    headers: { apikey: cfg.key, "Content-Type": "application/json" },
     body: JSON.stringify({ number, text }),
   });
   if (!r.ok) throw new Error(`sendText ${r.status}: ${(await r.text()).slice(0, 200)}`);

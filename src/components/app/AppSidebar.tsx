@@ -54,7 +54,6 @@ const groups: { title: string; items: NavItem[] }[] = [
       { to: "/app/llm-providers", label: "Provedores LLM", icon: Cpu },
       { to: "/app/knowledge", label: "Conhecimento", icon: Database },
       { to: "/app/whatsapp", label: "WhatsApp", icon: Smartphone },
-      { to: "/app/integrations", label: "Integrações", icon: Plug },
     ],
   },
   {
@@ -90,7 +89,10 @@ export function AppSidebar({ tenantName, planName }: { tenantName: string; planN
         ...baseGroups,
         {
           title: "Plataforma (Master)",
-          items: [{ to: "/app/master", label: "Master Admin", icon: Crown }],
+          items: [
+            { to: "/app/integrations", label: "Integrações", icon: Plug },
+            { to: "/app/master", label: "Master Admin", icon: Crown },
+          ],
         },
       ]
     : baseGroups;

@@ -399,7 +399,7 @@ function PlaygroundPage() {
               const context = topChunks
                 .map((x, i) => `[${i + 1}] (${x.c.docName})\n${x.c.text}`)
                 .join("\n\n---\n\n");
-              systemPrompt = `${agent.systemPrompt}\n\n## CONTEXTO RELEVANTE DA BASE DE CONHECIMENTO\nUse APENAS estas informações quando forem pertinentes. Se a resposta não estiver no contexto, diga que vai verificar.\n\n${context}`;
+              systemPrompt = `${agent.systemPrompt}\n\n## BASE DE CONHECIMENTO — FONTE ÚNICA DE VERDADE\nAbaixo estão as únicas informações que você deve usar para responder o usuário.\nREGRAS OBRIGATÓRIAS:\n1. Responda SOMENTE com base nas informações abaixo. Nunca invente, suponha ou complemente com conhecimento externo.\n2. Se a pergunta não for respondível com as informações abaixo, diga: "Vou verificar isso para você agora."\n3. Não crie listas de itens, preços ou funcionalidades que não estejam explicitamente descritos abaixo.\n\n${context}`;
               ragUsed = topChunks.length;
             }
           }

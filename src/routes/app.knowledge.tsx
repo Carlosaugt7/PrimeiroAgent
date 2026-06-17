@@ -24,8 +24,7 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
-import { Badge } from "@/components/ui/badge";
-import { Database, Upload, Loader2, Trash2, FileText, Globe } from "lucide-react";
+import { Database, Upload, Loader2, Trash2, FileText, Globe, Pencil, RefreshCw } from "lucide-react";
 import { toast } from "sonner";
 
 export const Route = createFileRoute("/app/knowledge")({ component: Page });
@@ -33,6 +32,7 @@ export const Route = createFileRoute("/app/knowledge")({ component: Page });
 interface KnowDoc {
   id: string;
   name: string;
+  sourceUrl?: string; // populated for URL-based docs
   source?: "texto" | "txt" | "md";
   chunks?: number;
   embedModel: string;
@@ -100,7 +100,16 @@ function Page() {
   const [ingesting, setIngesting] = useState(false);
   const [progress, setProgress] = useState("");
 
-  // Apenas provedores que REALMENTE possuem endpoint de embeddings
+  // Edit modal state
+  const [editDoc, setEditDoc] = useState<KnowDoc | null>(null);
+  const [editName, setEditName] = useState("");
+  const [editText, setEditText] = useState("");
+  const [editBusy, setEditBusy] = useState(false);
+  const [editProgress, setEditProgress] = useState("");
+
+  // Refresh (URL re-scrape) state
+  const [refreshDoc, setRefreshDoc] = useState<KnowDoc | null>(null);
+  const [refreshBusy, setRefreshBusy] = useState(false);
   // DeepSeek e Groq NÃO suportam embeddings via API direta
   const EMBED_CAPABLE_KINDS = ["openai", "openrouter", "google", "custom"];
   const embedProviders = providers.filter((p) =>
@@ -225,6 +234,7 @@ function Page() {
         name: finalDocName,
         embedModel,
         embedProviderId: providerId,
+        sourceUrl: activeTab === "url" ? url.trim() : null,
         createdAt: new Date().toISOString(),
       });
       if (docErr) throw docErr;
@@ -276,6 +286,160 @@ function Page() {
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : "Falha ao excluir";
       toast.error(msg);
+    }
+  };
+
+  // Abre o modal de edição carregando os chunks existentes para texto
+  const openEdit = async (d: KnowDoc) => {
+    setEditDoc(d);
+    setEditName(d.name);
+    setEditText("");
+    setEditProgress("Carregando conteúdo...");
+    try {
+      const { data: chunks } = await supabase
+        .from("knowledge_chunks")
+        .select("id, text")
+        .eq("knowledgeId", d.id)
+        .order("id", { ascending: true });
+      if (chunks && chunks.length > 0) {
+        setEditText(chunks.map((c: { text: string }) => c.text).join("\n\n"));
+      }
+    } catch {
+      // ignora erro ao carregar, usuário pode digitar manualmente
+    } finally {
+      setEditProgress("");
+    }
+  };
+
+  // Salva edição: renomeia e re-indexa os chunks com o novo texto
+  const saveEdit = async () => {
+    if (!tenant || !editDoc) return;
+    const provider = providers.find((p) => p.id === editDoc.embedProviderId);
+    if (!provider) {
+      toast.error("Provedor de embeddings do documento não encontrado");
+      return;
+    }
+    if (!editName.trim()) {
+      toast.error("Nome obrigatório");
+      return;
+    }
+    if (!editText.trim()) {
+      toast.error("Conteúdo obrigatório");
+      return;
+    }
+    setEditBusy(true);
+    try {
+      const chunks = chunkText(editText);
+      setEditProgress(`Gerando embeddings (${chunks.length} chunks)...`);
+
+      const vectors: number[][] = [];
+      const BATCH = 64;
+      for (let i = 0; i < chunks.length; i += BATCH) {
+        const slice = chunks.slice(i, i + BATCH);
+        const r = await embed({
+          data: {
+            kind: provider.kind,
+            baseUrl: provider.baseUrl,
+            apiKey: provider.apiKey,
+            model: editDoc.embedModel,
+            texts: slice,
+          },
+        });
+        vectors.push(...r.vectors);
+        setEditProgress(`Embeddings: ${Math.min(i + BATCH, chunks.length)}/${chunks.length}`);
+      }
+
+      setEditProgress("Atualizando banco...");
+
+      // Remove chunks antigos e insere os novos
+      await supabase.from("knowledge_chunks").delete().eq("knowledgeId", editDoc.id);
+
+      const chunkInserts = chunks.map((c, idx) => ({
+        id: `${editDoc.id}_${String(idx).padStart(5, "0")}`,
+        knowledgeId: editDoc.id,
+        text: c,
+        embedding: vectors[idx],
+      }));
+
+      for (let i = 0; i < chunkInserts.length; i += 200) {
+        const { error } = await supabase
+          .from("knowledge_chunks")
+          .insert(chunkInserts.slice(i, i + 200));
+        if (error) throw error;
+      }
+
+      // Atualiza o nome se mudou
+      await supabase
+        .from("knowledge")
+        .update({ name: editName.trim() })
+        .eq("id", editDoc.id);
+
+      toast.success(`"${editName}" atualizado (${chunks.length} chunks)`);
+      setEditDoc(null);
+    } catch (e: unknown) {
+      toast.error(e instanceof Error ? e.message : "Falha ao salvar");
+    } finally {
+      setEditBusy(false);
+      setEditProgress("");
+    }
+  };
+
+  // Atualiza um documento de URL: re-faz scraping e re-indexa
+  const runRefresh = async (d: KnowDoc) => {
+    if (!tenant) return;
+    const srcUrl = d.sourceUrl || (d.name.startsWith("http") ? d.name : null);
+    if (!srcUrl) return;
+    const provider = providers.find((p) => p.id === d.embedProviderId);
+    if (!provider) {
+      toast.error("Provedor de embeddings do documento não encontrado");
+      return;
+    }
+    setRefreshDoc(d);
+    setRefreshBusy(true);
+    try {
+      toast.info("Buscando página atualizada...");
+      const res = await fetchWebpage({ data: { url: srcUrl } });
+      const chunks = chunkText(res.text);
+
+      const vectors: number[][] = [];
+      const BATCH = 64;
+      for (let i = 0; i < chunks.length; i += BATCH) {
+        const slice = chunks.slice(i, i + BATCH);
+        const r = await embed({
+          data: {
+            kind: provider.kind,
+            baseUrl: provider.baseUrl,
+            apiKey: provider.apiKey,
+            model: d.embedModel,
+            texts: slice,
+          },
+        });
+        vectors.push(...r.vectors);
+      }
+
+      // Substitui todos os chunks
+      await supabase.from("knowledge_chunks").delete().eq("knowledgeId", d.id);
+
+      const chunkInserts = chunks.map((c, idx) => ({
+        id: `${d.id}_${String(idx).padStart(5, "0")}`,
+        knowledgeId: d.id,
+        text: c,
+        embedding: vectors[idx],
+      }));
+
+      for (let i = 0; i < chunkInserts.length; i += 200) {
+        const { error } = await supabase
+          .from("knowledge_chunks")
+          .insert(chunkInserts.slice(i, i + 200));
+        if (error) throw error;
+      }
+
+      toast.success(`"${d.name}" sincronizado (${chunks.length} chunks)`);
+    } catch (e: unknown) {
+      toast.error(e instanceof Error ? e.message : "Falha ao atualizar");
+    } finally {
+      setRefreshBusy(false);
+      setRefreshDoc(null);
     }
   };
 
@@ -454,29 +618,103 @@ function Page() {
         </div>
       ) : (
         <ul className="grid md:grid-cols-2 gap-3">
-          {docs.map((d) => (
-            <li
-              key={d.id}
-              className="rounded-2xl border border-border bg-gradient-card p-4 flex items-start justify-between gap-3"
-            >
-              <div className="min-w-0">
-                <p className="font-semibold text-sm truncate flex items-center gap-2">
-                  {d.name.startsWith("http://") || d.name.startsWith("https://") ? (
-                    <Globe className="size-4 text-primary" />
-                  ) : (
-                    <FileText className="size-4 text-muted-foreground" />
+          {docs.map((d) => {
+            const isUrl = !!(d.sourceUrl || d.name.startsWith("http://") || d.name.startsWith("https://"));
+            const isRefreshing = refreshDoc?.id === d.id && refreshBusy;
+            return (
+              <li
+                key={d.id}
+                className="rounded-2xl border border-border bg-gradient-card p-4 flex items-start justify-between gap-3"
+              >
+                <div className="min-w-0 flex-1">
+                  <p className="font-semibold text-sm truncate flex items-center gap-2">
+                    {isUrl ? (
+                      <Globe className="size-4 shrink-0 text-primary" />
+                    ) : (
+                      <FileText className="size-4 shrink-0 text-muted-foreground" />
+                    )}
+                    {d.name}
+                  </p>
+                  <p className="text-xs text-muted-foreground mt-1">{d.embedModel}</p>
+                </div>
+                <div className="flex items-center gap-1 shrink-0">
+                  {isUrl && (
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      title="Sincronizar com a página"
+                      disabled={isRefreshing}
+                      onClick={() => runRefresh(d)}
+                    >
+                      <RefreshCw className={`size-4 text-primary ${isRefreshing ? "animate-spin" : ""}`} />
+                    </Button>
                   )}
-                  {d.name}
-                </p>
-                <p className="text-xs text-muted-foreground mt-1">{d.embedModel}</p>
-              </div>
-              <Button variant="ghost" size="icon" onClick={() => remove(d)}>
-                <Trash2 className="size-4 text-destructive" />
-              </Button>
-            </li>
-          ))}
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    title="Editar"
+                    onClick={() => openEdit(d)}
+                  >
+                    <Pencil className="size-4 text-muted-foreground" />
+                  </Button>
+                  <Button variant="ghost" size="icon" title="Excluir" onClick={() => remove(d)}>
+                    <Trash2 className="size-4 text-destructive" />
+                  </Button>
+                </div>
+              </li>
+            );
+          })}
         </ul>
       )}
+
+      {/* Edit Document Dialog */}
+      <Dialog open={!!editDoc} onOpenChange={(o) => { if (!o) setEditDoc(null); }}>
+        <DialogContent className="max-w-2xl" aria-describedby={undefined}>
+          <DialogHeader>
+            <DialogTitle>Editar documento</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3 pt-2">
+            <div className="space-y-1.5">
+              <Label>Nome</Label>
+              <Input
+                value={editName}
+                onChange={(e) => setEditName(e.target.value)}
+                placeholder="Nome do documento"
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label>Conteúdo</Label>
+              {editProgress && !editBusy ? (
+                <p className="text-xs text-muted-foreground py-2">{editProgress}</p>
+              ) : (
+                <Textarea
+                  value={editText}
+                  onChange={(e) => setEditText(e.target.value)}
+                  rows={12}
+                  placeholder="Conteúdo do documento..."
+                  className="font-mono text-xs"
+                />
+              )}
+              <p className="text-[10px] text-muted-foreground">
+                {editText.length.toLocaleString()} chars · ~{Math.max(1, Math.ceil(editText.length / 800))} chunks
+              </p>
+            </div>
+            {editBusy && editProgress && (
+              <p className="text-xs text-muted-foreground flex items-center gap-2">
+                <Loader2 className="size-3 animate-spin" /> {editProgress}
+              </p>
+            )}
+            <div className="flex gap-2 justify-end">
+              <Button variant="outline" onClick={() => setEditDoc(null)} disabled={editBusy}>
+                Cancelar
+              </Button>
+              <Button variant="hero" onClick={saveEdit} disabled={editBusy || !editText.trim()}>
+                {editBusy ? <><Loader2 className="size-4 animate-spin" /> Salvando...</> : "Salvar alterações"}
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

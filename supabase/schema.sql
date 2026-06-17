@@ -194,6 +194,7 @@ create table public.knowledge (
   "embedProviderId" text,
   "embedModel" text,
   name text,
+  "sourceUrl" text,
   "createdAt" timestamptz default now()
 );
 

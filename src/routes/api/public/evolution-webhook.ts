@@ -473,12 +473,16 @@ async function runBridge(
   try {
     const ragCtx = await buildRagContext(tenantId, userText);
     if (ragCtx) {
-      systemPrompt = `${systemPrompt}\n\n## CONTEXTO RELEVANTE DA BASE DE CONHECIMENTO (FONTE ÚNICA DE VERDADE)\n` +
-        `Use ESTRITAMENTE as informações fornecidas abaixo para responder à pergunta do usuário. Nunca utilize seu conhecimento prévio externo para inventar dados que não estejam descritos explicitamente aqui (como listas de canais, novos planos, preços, etc.).\n` +
-        `Se o assunto da pergunta do usuário não estiver detalhado abaixo nem nas suas regras comportamentais, responda amigavelmente: "Vou verificar isso para você agora."\n\n${ragCtx}`;
+      systemPrompt = `${systemPrompt}\n\n## BASE DE CONHECIMENTO — FONTE ÚNICA DE VERDADE\n` +
+        `Abaixo estão as únicas informações que você deve usar para responder o usuário.\n` +
+        `REGRAS OBRIGATÓRIAS:\n` +
+        `1. Responda SOMENTE com base nas informações abaixo. Nunca invente, suponha ou complemente com conhecimento externo.\n` +
+        `2. Se a pergunta do usuário não for respondível com as informações abaixo, diga exatamente: "Vou verificar isso para você agora."\n` +
+        `3. Não mencione que está consultando uma base de conhecimento ou documentos.\n` +
+        `4. Não crie listas de itens, preços, planos ou funcionalidades que não estejam explicitamente descritos abaixo.\n\n${ragCtx}`;
     } else {
       systemPrompt = `${systemPrompt}\n\n## DIRETRIZ DE CONHECIMENTO LIMITADO\n` +
-        `Se o usuário perguntar sobre detalhes específicos de planos, preços, canais ou suporte técnico que não estejam no seu prompt básico, você não deve inventar. Responda amigavelmente informando: "Vou verificar isso para você agora."`;
+        `Se o usuário perguntar sobre detalhes específicos (planos, preços, canais, funcionalidades) que não estejam no seu prompt, responda: "Vou verificar isso para você agora." Nunca invente informações.`;
     }
   } catch (e) {
     console.warn("[bridge] RAG falhou:", e);

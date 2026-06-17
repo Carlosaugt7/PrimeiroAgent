@@ -2,6 +2,28 @@ import { createServerFn } from "@tanstack/react-start";
 
 type Kind = "openai" | "anthropic" | "google" | "groq" | "deepseek" | "openrouter" | "custom";
 
+// Retry com backoff exponencial para erros transitórios (503, 429, 502)
+async function withRetry<T>(
+  fn: () => Promise<T>,
+  maxAttempts = 3,
+  baseDelayMs = 1500,
+): Promise<T> {
+  let lastError: unknown;
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    try {
+      return await fn();
+    } catch (e) {
+      lastError = e;
+      const msg = e instanceof Error ? e.message : String(e);
+      const isTransient = /503|502|429|UNAVAILABLE|high demand|overloaded|rate.?limit/i.test(msg);
+      if (!isTransient || attempt === maxAttempts) throw e;
+      const delay = baseDelayMs * Math.pow(2, attempt - 1); // 1.5s, 3s, 6s
+      await new Promise((r) => setTimeout(r, delay));
+    }
+  }
+  throw lastError;
+}
+
 interface DetectInput {
   kind: Kind;
   baseUrl: string;
@@ -142,52 +164,56 @@ export const chatCompletion = createServerFn({ method: "POST" })
 
     if (data.kind === "google") {
       const url = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(data.model)}:generateContent?key=${encodeURIComponent(data.apiKey)}`;
-      const r = await fetch(url, {
+      return await withRetry(async () => {
+        const r = await fetch(url, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            systemInstruction: { parts: [{ text: data.systemPrompt }] },
+            contents: data.messages.map((m) => ({
+              role: m.role === "assistant" ? "model" : "user",
+              parts: [{ text: m.content }],
+            })),
+            generationConfig: { temperature: data.temperature ?? 0.5 },
+          }),
+        });
+        if (!r.ok) throw new Error(await r.text());
+        const j = (await r.json()) as {
+          candidates?: Array<{ content: { parts: Array<{ text: string }> } }>;
+          usageMetadata?: { promptTokenCount: number; candidatesTokenCount: number };
+        };
+        return {
+          text: j.candidates?.[0]?.content?.parts?.[0]?.text ?? "",
+          inputTokens: j.usageMetadata?.promptTokenCount ?? 0,
+          outputTokens: j.usageMetadata?.candidatesTokenCount ?? 0,
+          durationMs: Date.now() - started,
+        };
+      });
+    }
+
+    // OpenAI-compatível
+    return await withRetry(async () => {
+      const r = await fetch(`${base.replace(/\/$/, "")}/chat/completions`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${data.apiKey}` },
         body: JSON.stringify({
-          systemInstruction: { parts: [{ text: data.systemPrompt }] },
-          contents: data.messages.map((m) => ({
-            role: m.role === "assistant" ? "model" : "user",
-            parts: [{ text: m.content }],
-          })),
-          generationConfig: { temperature: data.temperature ?? 0.5 },
+          model: data.model,
+          messages: [{ role: "system", content: data.systemPrompt }, ...data.messages],
+          temperature: data.temperature ?? 0.5,
         }),
       });
       if (!r.ok) throw new Error(await r.text());
       const j = (await r.json()) as {
-        candidates?: Array<{ content: { parts: Array<{ text: string }> } }>;
-        usageMetadata?: { promptTokenCount: number; candidatesTokenCount: number };
+        choices: Array<{ message: { content: string } }>;
+        usage?: { prompt_tokens: number; completion_tokens: number };
       };
       return {
-        text: j.candidates?.[0]?.content?.parts?.[0]?.text ?? "",
-        inputTokens: j.usageMetadata?.promptTokenCount ?? 0,
-        outputTokens: j.usageMetadata?.candidatesTokenCount ?? 0,
+        text: j.choices?.[0]?.message?.content ?? "",
+        inputTokens: j.usage?.prompt_tokens ?? 0,
+        outputTokens: j.usage?.completion_tokens ?? 0,
         durationMs: Date.now() - started,
       };
-    }
-
-    // OpenAI-compatível
-    const r = await fetch(`${base.replace(/\/$/, "")}/chat/completions`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json", Authorization: `Bearer ${data.apiKey}` },
-      body: JSON.stringify({
-        model: data.model,
-        messages: [{ role: "system", content: data.systemPrompt }, ...data.messages],
-        temperature: data.temperature ?? 0.5,
-      }),
     });
-    if (!r.ok) throw new Error(await r.text());
-    const j = (await r.json()) as {
-      choices: Array<{ message: { content: string } }>;
-      usage?: { prompt_tokens: number; completion_tokens: number };
-    };
-    return {
-      text: j.choices?.[0]?.message?.content ?? "",
-      inputTokens: j.usage?.prompt_tokens ?? 0,
-      outputTokens: j.usage?.completion_tokens ?? 0,
-      durationMs: Date.now() - started,
-    };
   });
 
 // ============== Embeddings (OpenAI-compatível) ==============

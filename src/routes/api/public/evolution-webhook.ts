@@ -380,6 +380,21 @@ async function cancelAppointment(tenantId: string, patientPhone: string): Promis
 
 // ===== LLM callers =====
 
+// Retry com backoff exponencial para erros transitórios (503, 429, 502)
+async function withRetry<T>(fn: () => Promise<T>, maxAttempts = 3, baseDelayMs = 1500): Promise<T> {
+  let lastError: unknown;
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    try { return await fn(); } catch (e) {
+      lastError = e;
+      const msg = e instanceof Error ? e.message : String(e);
+      const isTransient = /503|502|429|UNAVAILABLE|high demand|overloaded|rate.?limit/i.test(msg);
+      if (!isTransient || attempt === maxAttempts) throw e;
+      await new Promise((r) => setTimeout(r, baseDelayMs * Math.pow(2, attempt - 1)));
+    }
+  }
+  throw lastError;
+}
+
 async function callAnthropic(
   provider: Record<string, unknown>,
   agent: Record<string, unknown>,
@@ -415,20 +430,22 @@ async function callGoogle(
   userText: string,
 ): Promise<string> {
   const url = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(agent.model as string)}:generateContent?key=${encodeURIComponent(provider.apiKey as string)}`;
-  const r = await fetch(url, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      systemInstruction: { parts: [{ text: systemPrompt }] },
-      contents: [{ role: "user", parts: [{ text: userText }] }],
-      generationConfig: { temperature: agent.temperature ?? 0.5 },
-    }),
+  return withRetry(async () => {
+    const r = await fetch(url, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        systemInstruction: { parts: [{ text: systemPrompt }] },
+        contents: [{ role: "user", parts: [{ text: userText }] }],
+        generationConfig: { temperature: agent.temperature ?? 0.5 },
+      }),
+    });
+    if (!r.ok) throw new Error(`LLM ${r.status}: ${(await r.text()).slice(0, 300)}`);
+    const j = (await r.json()) as {
+      candidates?: Array<{ content: { parts: Array<{ text: string }> } }>;
+    };
+    return j.candidates?.[0]?.content?.parts?.[0]?.text ?? "";
   });
-  if (!r.ok) throw new Error(`LLM ${r.status}: ${(await r.text()).slice(0, 300)}`);
-  const j = (await r.json()) as {
-    candidates?: Array<{ content: { parts: Array<{ text: string }> } }>;
-  };
-  return j.candidates?.[0]?.content?.parts?.[0]?.text ?? "";
 }
 
 async function callOpenAICompat(
@@ -439,21 +456,23 @@ async function callOpenAICompat(
 ): Promise<string> {
   const baseUrl = (provider.baseUrl as string)?.trim() || "";
   const base = (baseUrl || "https://api.openai.com/v1").replace(/\/$/, "");
-  const r = await fetch(`${base}/chat/completions`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json", Authorization: `Bearer ${provider.apiKey}` },
-    body: JSON.stringify({
-      model: agent.model,
-      messages: [
-        { role: "system", content: systemPrompt },
-        { role: "user", content: userText },
-      ],
-      temperature: agent.temperature ?? 0.5,
-    }),
+  return withRetry(async () => {
+    const r = await fetch(`${base}/chat/completions`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${provider.apiKey}` },
+      body: JSON.stringify({
+        model: agent.model,
+        messages: [
+          { role: "system", content: systemPrompt },
+          { role: "user", content: userText },
+        ],
+        temperature: agent.temperature ?? 0.5,
+      }),
+    });
+    if (!r.ok) throw new Error(`LLM ${r.status}: ${(await r.text()).slice(0, 300)}`);
+    const j = (await r.json()) as { choices: Array<{ message: { content: string } }> };
+    return j.choices?.[0]?.message?.content ?? "";
   });
-  if (!r.ok) throw new Error(`LLM ${r.status}: ${(await r.text()).slice(0, 300)}`);
-  const j = (await r.json()) as { choices: Array<{ message: { content: string } }> };
-  return j.choices?.[0]?.message?.content ?? "";
 }
 
 async function callLLM(

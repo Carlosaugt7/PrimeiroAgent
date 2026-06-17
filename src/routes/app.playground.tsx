@@ -119,6 +119,7 @@ function PlaygroundPage() {
   const embed = useServerFn(embedTexts);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const messagesContainerRef = useRef<HTMLDivElement>(null);
 
   const [agentId, setAgentId] = useState<string>("");
   const [msgs, setMsgs] = useState<Msg[]>([]);
@@ -139,7 +140,10 @@ function PlaygroundPage() {
 
   // Rola automaticamente para o final da conversa quando novas mensagens chegam ou quando o agente está digitando
   useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+    const container = messagesContainerRef.current;
+    if (container) {
+      container.scrollTop = container.scrollHeight;
+    }
   }, [msgs, busy]);
 
   const agent = agents.find((a) => a.id === agentId);
@@ -404,6 +408,83 @@ function PlaygroundPage() {
         }
       }
 
+      const t0 = Date.now();
+
+      // Ollama: streaming direto do browser para dar feedback em tempo real
+      if (provider.kind === "ollama") {
+        const base = (provider.baseUrl || "http://localhost:11434").replace(/\/+$/, "");
+        const streamMsgs = [
+          { role: "system", content: systemPrompt },
+          ...newMsgs,
+        ];
+
+        const r = await fetch(`${base}/api/chat`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            model: agent.model,
+            messages: streamMsgs,
+            stream: true,
+            options: { temperature: agent.temperature ?? 0.5 },
+          }),
+        });
+
+        if (!r.ok || !r.body) {
+          const body = (await r.text().catch(() => "")).slice(0, 400);
+          throw new Error(`Ollama HTTP ${r.status}: ${body}`);
+        }
+
+        // Adiciona mensagem vazia do assistente que será preenchida ao vivo
+        setMsgs([...newMsgs, { role: "assistant", content: "" }]);
+        setBusy(false); // remove o spinner, o texto já aparece
+
+        const reader = r.body.getReader();
+        const decoder = new TextDecoder();
+        let accumulated = "";
+        let inputTokens = 0;
+        let outputTokens = 0;
+
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+
+          const chunk = decoder.decode(value, { stream: true });
+          const lines = chunk.split("\n").filter(Boolean);
+
+          for (const line of lines) {
+            try {
+              const json = JSON.parse(line) as {
+                message?: { content: string };
+                done?: boolean;
+                prompt_eval_count?: number;
+                eval_count?: number;
+              };
+
+              if (json.message?.content) {
+                accumulated += json.message.content;
+                setMsgs([...newMsgs, { role: "assistant", content: accumulated }]);
+              }
+
+              if (json.done) {
+                inputTokens = json.prompt_eval_count ?? 0;
+                outputTokens = json.eval_count ?? 0;
+              }
+            } catch {
+              // linha incompleta, ignora
+            }
+          }
+        }
+
+        setStats({
+          tokensIn: inputTokens,
+          tokensOut: outputTokens,
+          ms: Date.now() - t0,
+          ragUsed,
+        });
+        return;
+      }
+
+      // Outros provedores: chamada via server function
       const r = await chat({
         data: {
           kind: provider.kind,
@@ -466,7 +547,7 @@ function PlaygroundPage() {
             </Button>
           </div>
 
-          <div className="flex-1 overflow-y-auto p-4 space-y-3">
+          <div ref={messagesContainerRef} className="flex-1 overflow-y-auto p-4 space-y-3">
             {msgs.length === 0 && (
               <div className="h-full grid place-items-center text-center">
                 <div>

@@ -138,28 +138,43 @@ export const chatCompletion = createServerFn({ method: "POST" })
     const base = data.baseUrl?.trim() || DEFAULT_BASE[data.kind] || "";
 
     if (data.kind === "ollama") {
-      const r = await fetch(`${base.replace(/\/$/, "")}/api/chat`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          model: data.model,
-          messages: [{ role: "system", content: data.systemPrompt }, ...data.messages],
-          stream: false,
-          options: { temperature: data.temperature ?? 0.5 },
-        }),
-      });
-      if (!r.ok) throw new Error(await r.text());
-      const j = (await r.json()) as {
-        message?: { content: string };
-        prompt_eval_count?: number;
-        eval_count?: number;
-      };
-      return {
-        text: j.message?.content ?? "",
-        inputTokens: j.prompt_eval_count ?? 0,
-        outputTokens: j.eval_count ?? 0,
-        durationMs: Date.now() - started,
-      };
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 120000); // 2min
+      try {
+        const r = await fetch(`${base.replace(/\/+$/, "")}/api/chat`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            model: data.model,
+            messages: [{ role: "system", content: data.systemPrompt }, ...data.messages],
+            stream: false,
+            options: { temperature: data.temperature ?? 0.5 },
+          }),
+          signal: controller.signal,
+        });
+        clearTimeout(timeoutId);
+        if (!r.ok) {
+          const body = (await r.text().catch(() => "")).slice(0, 400);
+          throw new Error(`Ollama HTTP ${r.status}: ${body}`);
+        }
+        const j = (await r.json()) as {
+          message?: { content: string };
+          prompt_eval_count?: number;
+          eval_count?: number;
+        };
+        return {
+          text: j.message?.content ?? "",
+          inputTokens: j.prompt_eval_count ?? 0,
+          outputTokens: j.eval_count ?? 0,
+          durationMs: Date.now() - started,
+        };
+      } catch (e: unknown) {
+        clearTimeout(timeoutId);
+        if (e instanceof Error && e.name === "AbortError") {
+          throw new Error("Ollama timeout: o modelo demorou mais de 2 minutos para responder.");
+        }
+        throw e;
+      }
     }
 
     if (data.kind === "anthropic") {

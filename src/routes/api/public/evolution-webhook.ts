@@ -53,6 +53,54 @@ async function evoSendText(tenantId: string, instanceName: string, number: strin
   if (!r.ok) throw new Error(`sendText ${r.status}: ${(await r.text()).slice(0, 200)}`);
 }
 
+async function evoDeleteMessage(
+  tenantId: string,
+  instanceName: string,
+  remoteJid: string,
+  messageId: string,
+) {
+  try {
+    let url = "";
+    let key = "";
+    if (tenantId) {
+      const { data: tenant } = await supabase
+        .from("tenants")
+        .select("evolutionApiUrl, evolutionApiKey")
+        .eq("id", tenantId)
+        .single();
+      if (tenant?.evolutionApiUrl && tenant?.evolutionApiKey) {
+        url = tenant.evolutionApiUrl.replace(/\/$/, "");
+        key = tenant.evolutionApiKey;
+      }
+    }
+
+    if (!url || !key) {
+      const cfg = await getGlobalEvoConfig();
+      if (!cfg.key) return;
+      url = cfg.url;
+      key = cfg.key;
+    }
+
+    const r = await fetch(
+      `${url}/chat/deleteMessageForEveryone/${encodeURIComponent(instanceName)}`,
+      {
+        method: "DELETE",
+        headers: { apikey: key, "Content-Type": "application/json" },
+        body: JSON.stringify({
+          remoteJid,
+          fromMe: true,
+          id: messageId,
+        }),
+      },
+    );
+    if (!r.ok) {
+      console.warn(`[evoDeleteMessage] falhou ao deletar no WhatsApp: ${r.status}`);
+    }
+  } catch (e) {
+    console.error("[evoDeleteMessage] erro:", e);
+  }
+}
+
 // ===== Motor de Automações =====
 type AutoAction = { type: "addTag" | "pauseBot" | "reply" | "setStatus"; value: string };
 interface AutoRule {
@@ -739,6 +787,8 @@ async function handleMessage(
           .update({ botPaused: false, updatedAt: new Date().toISOString() })
           .eq("id", convId)
           .eq("tenantId", tenantId);
+        
+        await evoDeleteMessage(tenantId, instanceName, remoteJid, messageId);
       } else {
         await supabase
           .from("conversations")

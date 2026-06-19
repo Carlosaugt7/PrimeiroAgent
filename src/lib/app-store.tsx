@@ -65,7 +65,7 @@ export interface Conversation {
   lastMessage: string;
   unread: number;
   updatedAt: string;
-  status: "aberta" | "resolvida" | "handoff";
+  status: "aberta" | "em_atendimento" | "resolvida" | "handoff";
   botPaused?: boolean;
   tags?: string[];
 }

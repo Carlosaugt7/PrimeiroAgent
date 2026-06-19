@@ -18,11 +18,19 @@ import {
   Plus,
   CheckCircle2,
   MessageSquareText,
+  Trash2,
 } from "lucide-react";
 import { toast } from "sonner";
 import type { Template } from "@/routes/app.templates";
 
-export const Route = createFileRoute("/app/inbox")({ component: Inbox });
+export const Route = createFileRoute("/app/inbox")({
+  validateSearch: (search: Record<string, unknown>) => {
+    return {
+      id: (search.id as string) || undefined,
+    };
+  },
+  component: Inbox,
+});
 
 interface Conv {
   id: string;
@@ -33,7 +41,7 @@ interface Conv {
   lastMessage: string;
   updatedAt: string;
   unread?: number;
-  status?: "aberta" | "resolvida" | "handoff";
+  status?: "aberta" | "em_atendimento" | "resolvida" | "handoff";
   botPaused?: boolean;
   tags?: string[];
 }
@@ -47,9 +55,17 @@ interface Msg {
 function Inbox() {
   const { tenant } = useAuth();
   const sendFn = useServerFn(sendText);
+  const search = Route.useSearch();
 
   const [convs, setConvs] = useState<Conv[]>([]);
   const [activeId, setActiveId] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (search.id) {
+      setActiveId(search.id);
+    }
+  }, [search.id]);
+
   const [messages, setMessages] = useState<Msg[]>([]);
   const [draft, setDraft] = useState("");
   const [sending, setSending] = useState(false);
@@ -146,6 +162,70 @@ function Inbox() {
       .update({ tags: newTags })
       .eq("id", activeId);
     if (error) toast.error(error.message);
+  };
+
+  const clearHistory = async () => {
+    if (!tenant || !activeId) return;
+    if (
+      !confirm(
+        "Tem certeza que deseja apagar definitivamente todo o histórico de mensagens local desta conversa? Esta ação NÃO apagará as mensagens no aparelho celular do cliente."
+      )
+    ) {
+      return;
+    }
+
+    try {
+      const { error: errorMsgs } = await supabase
+        .from("messages")
+        .delete()
+        .eq("conversationId", activeId);
+
+      if (errorMsgs) throw errorMsgs;
+
+      const { error: errorConv } = await supabase
+        .from("conversations")
+        .update({ lastMessage: null })
+        .eq("id", activeId);
+
+      if (errorConv) throw errorConv;
+
+      toast.success("Histórico de mensagens limpo com sucesso!");
+      setActiveId(null);
+    } catch (e: any) {
+      toast.error(e?.message ?? "Erro ao limpar histórico");
+    }
+  };
+
+  const clearAllHistory = async () => {
+    if (!tenant?.id) return;
+    if (
+      !confirm(
+        "ATENÇÃO: Tem certeza que deseja apagar permanentemente todo o histórico de mensagens local de TODAS as conversas? Esta ação NÃO apagará as mensagens nos aparelhos celulares dos clientes."
+      )
+    ) {
+      return;
+    }
+
+    try {
+      const { error: errorMsgs } = await supabase
+        .from("messages")
+        .delete()
+        .eq("tenantId", tenant.id);
+
+      if (errorMsgs) throw errorMsgs;
+
+      const { error: errorConv } = await supabase
+        .from("conversations")
+        .update({ lastMessage: null })
+        .eq("tenantId", tenant.id);
+
+      if (errorConv) throw errorConv;
+
+      toast.success("Histórico de todas as conversas limpo com sucesso!");
+      setActiveId(null);
+    } catch (e: any) {
+      toast.error(e?.message ?? "Erro ao limpar conversas");
+    }
   };
 
   useEffect(() => {
@@ -246,6 +326,10 @@ function Inbox() {
 
   const active = useMemo(() => convs.find((c) => c.id === activeId) ?? null, [convs, activeId]);
 
+  const visibleConvs = useMemo(() => {
+    return convs.filter((c) => c.lastMessage && c.lastMessage.trim() !== "");
+  }, [convs]);
+
   const handleSend = async () => {
     if (!draft.trim() || !active?.instanceName || !active.remoteJid || !tenant?.id) return;
     setSending(true);
@@ -298,9 +382,21 @@ function Inbox() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="font-display text-3xl font-bold">Inbox</h1>
-        <p className="text-muted-foreground mt-1">Central de conversas em tempo real.</p>
+      <div className="flex items-end justify-between flex-wrap gap-4">
+        <div>
+          <h1 className="font-display text-3xl font-bold">Inbox</h1>
+          <p className="text-muted-foreground mt-1">Central de conversas em tempo real.</p>
+        </div>
+        {convs.length > 0 && (
+          <Button
+            variant="outline"
+            size="sm"
+            className="text-muted-foreground hover:text-destructive hover:bg-destructive/10"
+            onClick={clearAllHistory}
+          >
+            <Trash2 className="size-4 mr-2" /> Limpar Todas
+          </Button>
+        )}
       </div>
 
       {convs.length === 0 ? (
@@ -316,7 +412,7 @@ function Inbox() {
           {/* Lista */}
           <div className="rounded-2xl border border-border bg-card/30 overflow-y-auto">
             <ul className="divide-y divide-border">
-              {convs.map((c) => (
+              {visibleConvs.map((c) => (
                 <li key={c.id}>
                   <button
                     onClick={() => setActiveId(c.id)}
@@ -367,6 +463,11 @@ function Inbox() {
                       {active.status === "handoff" && (
                         <Badge variant="outline">Handoff humano</Badge>
                       )}
+                      {active.status === "em_atendimento" && (
+                        <Badge variant="outline" className="bg-amber-500/10 text-amber-500 border-amber-500/20">
+                          Em Atendimento
+                        </Badge>
+                      )}
                     </div>
                     <p className="text-xs text-muted-foreground truncate">
                       {active.contactPhone} · {active.instanceName}
@@ -391,6 +492,15 @@ function Inbox() {
                         Resolver
                       </Button>
                     )}
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      className="text-muted-foreground hover:text-destructive hover:bg-destructive/10"
+                      onClick={clearHistory}
+                    >
+                      <Trash2 className="size-4 mr-1" />
+                      Limpar
+                    </Button>
                   </div>
                 </div>
 

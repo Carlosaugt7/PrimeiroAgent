@@ -34,8 +34,10 @@ import {
   RefreshCw,
   Search,
   CheckCircle,
+  Trash2,
 } from "lucide-react";
 import { toast } from "sonner";
+import * as XLSX from "xlsx";
 
 // Explicit import for Button
 import { Button as UIButton } from "@/components/ui/button";
@@ -98,6 +100,20 @@ interface GroupCampaign {
   maxDelay: number;
   createdAt: string;
   recipients?: GroupRecipient[];
+}
+
+function formatDuration(ms: number) {
+  if (ms < 0) return "0s";
+  const totalSeconds = Math.floor(ms / 1000);
+  const hours = Math.floor(totalSeconds / 3600);
+  const minutes = Math.floor((totalSeconds % 3600) / 60);
+  const seconds = totalSeconds % 60;
+
+  const parts = [];
+  if (hours > 0) parts.push(`${hours}h`);
+  if (minutes > 0) parts.push(`${minutes}m`);
+  if (seconds > 0 || parts.length === 0) parts.push(`${seconds}s`);
+  return parts.join(" ");
 }
 
 function CampaignsPage() {
@@ -179,7 +195,7 @@ function CampaignsPage() {
       // Load campaign history
       const { data: camps, error } = await supabase
         .from("campaigns")
-        .select("*")
+        .select("*, recipients:campaign_recipients(*)")
         .eq("tenantId", tenantId)
         .order("createdAt", { ascending: false });
 
@@ -189,7 +205,7 @@ function CampaignsPage() {
       // Load group campaign history
       const { data: groupCamps, error: gcErr } = await supabase
         .from("group_campaigns")
-        .select("*")
+        .select("*, recipients:group_campaign_recipients(*)")
         .eq("tenantId", tenantId)
         .order("createdAt", { ascending: false });
 
@@ -202,6 +218,21 @@ function CampaignsPage() {
       setLoadingInstances(false);
       setLoadingHistory(false);
       setLoadingGroupHistory(false);
+    }
+  };
+
+  const handleDeleteCampaign = async (id: string, type: "contacts" | "groups", e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (!confirm("Deseja realmente excluir esta campanha e todo o seu histórico?")) return;
+    try {
+      const table = type === "contacts" ? "campaigns" : "group_campaigns";
+      const { error } = await supabase.from(table).delete().eq("id", id);
+      if (error) throw error;
+      toast.success("Campanha excluída com sucesso!");
+      loadInitialData();
+    } catch (err) {
+      console.error(err);
+      toast.error("Erro ao excluir campanha");
     }
   };
 
@@ -290,7 +321,7 @@ function CampaignsPage() {
     }
   };
 
-  // Parse inputs (manual textarea / uploaded CSV)
+  // Parse inputs (manual textarea / uploaded CSV / XLSX)
   const parseRecipients = (): Recipient[] => {
     const list: Recipient[] = [];
 
@@ -301,8 +332,15 @@ function CampaignsPage() {
 
         // Split by comma, semicolon or tab
         const parts = line.split(/[;,]/);
-        const numberRaw = parts[0]?.trim();
-        const nameRaw = parts[1]?.trim() || "";
+        let numberRaw = parts[0]?.trim() || "";
+        let nameRaw = parts[1]?.trim() || "";
+
+        // Remove surrounding quotes and formula syntax if any
+        if (numberRaw.startsWith("=")) {
+          numberRaw = numberRaw.slice(1).trim();
+        }
+        numberRaw = numberRaw.replace(/^["']|["']$/g, "").trim();
+        nameRaw = nameRaw.replace(/^["']|["']$/g, "").trim();
 
         if (numberRaw) {
           // Clean number to keep only digits
@@ -850,20 +888,64 @@ function CampaignsPage() {
     }
   };
 
-  // Parse a local CSV file
-  const handleCsvImport = (e: React.ChangeEvent<HTMLInputElement>) => {
+  // Parse a local CSV or Excel file
+  const handleFileImport = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
-    const reader = new FileReader();
-    reader.onload = (event) => {
-      const text = event.target?.result as string;
-      if (text) {
-        setManualContactsText(text);
-        toast.success("Contatos importados do CSV para a área de texto abaixo!");
-      }
-    };
-    reader.readAsText(file);
+    const fileExt = file.name.split(".").pop()?.toLowerCase();
+
+    if (fileExt === "xlsx" || fileExt === "xls") {
+      const reader = new FileReader();
+      reader.onload = (event) => {
+        try {
+          const data = new Uint8Array(event.target?.result as ArrayBuffer);
+          const workbook = XLSX.read(data, { type: "array" });
+          const firstSheetName = workbook.SheetNames[0];
+          const worksheet = workbook.Sheets[firstSheetName];
+          const rows = XLSX.utils.sheet_to_json(worksheet, { header: 1 }) as any[][];
+
+          const lines: string[] = [];
+          for (const row of rows) {
+            const col1 = String(row[0] || "").trim();
+            const col2 = String(row[1] || "").trim();
+            if (!col1) continue;
+
+            // Ignora cabeçalhos comuns
+            if (
+              /^(n[uú]mero|number|telefone|phone|id)$/i.test(col1) &&
+              /^(nome|name|label)?$/i.test(col2)
+            ) {
+              continue;
+            }
+
+            if (col2) {
+              lines.push(`${col1}, ${col2}`);
+            } else {
+              lines.push(col1);
+            }
+          }
+
+          setManualContactsText(lines.join("\n"));
+          toast.success("Contatos importados do Excel (.xlsx) com sucesso!");
+        } catch (err) {
+          console.error(err);
+          toast.error("Erro ao processar o arquivo Excel.");
+        }
+      };
+      reader.readAsArrayBuffer(file);
+    } else {
+      // Trata como CSV
+      const reader = new FileReader();
+      reader.onload = (event) => {
+        const text = event.target?.result as string;
+        if (text) {
+          setManualContactsText(text);
+          toast.success("Contatos importados do CSV com sucesso!");
+        }
+      };
+      reader.readAsText(file);
+    }
   };
 
   // Filter groups search
@@ -969,33 +1051,59 @@ function CampaignsPage() {
                       </div>
                     ) : (
                       <div className="divide-y divide-border/40">
-                        {history.map((c) => (
-                          <div
-                            key={c.id}
-                            onClick={() => {
-                              setActiveTab("contacts");
-                              viewCampaignMonitor(c);
-                            }}
-                            className="p-4 hover:bg-secondary/20 transition-colors cursor-pointer flex items-center justify-between"
-                          >
-                            <div className="space-y-1 min-w-0">
-                              <p className="font-semibold text-sm truncate">{c.name}</p>
-                              <div className="flex flex-wrap gap-2 text-xs text-muted-foreground">
-                                <span>Instância: <strong>{c.instanceName}</strong></span>
-                                <span>·</span>
-                                <span>{new Date(c.createdAt).toLocaleDateString("pt-BR")}</span>
+                        {history.map((c) => {
+                          const success = c.recipients?.filter((r) => r.status === "sent").length ?? 0;
+                          const failed = c.recipients?.filter((r) => r.status === "failed").length ?? 0;
+                          const times = (c.recipients || []).filter((r) => r.sentAt).map((r) => new Date(r.sentAt!).getTime());
+                          let durationStr = "—";
+                          if (times.length > 0) {
+                            const minTime = Math.min(...times);
+                            const maxTime = c.status === "sending" ? Date.now() : Math.max(...times);
+                            durationStr = formatDuration(maxTime - minTime);
+                          }
+
+                          return (
+                            <div
+                              key={c.id}
+                              onClick={() => {
+                                setActiveTab("contacts");
+                                viewCampaignMonitor(c);
+                              }}
+                              className="p-4 hover:bg-secondary/20 transition-colors cursor-pointer flex items-center justify-between"
+                            >
+                              <div className="space-y-1.5 min-w-0 flex-1 mr-4">
+                                <p className="font-semibold text-sm truncate">{c.name}</p>
+                                <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-[11px] text-muted-foreground">
+                                  <span>Instância: <strong>{c.instanceName}</strong></span>
+                                  <span>·</span>
+                                  <span>{new Date(c.createdAt).toLocaleDateString("pt-BR")}</span>
+                                  <span>·</span>
+                                  <span className="text-emerald-500">Sucesso: <strong>{success}</strong></span>
+                                  <span>·</span>
+                                  <span className="text-rose-500">Falhas: <strong>{failed}</strong></span>
+                                  <span>·</span>
+                                  <span>Duração: <strong>{durationStr}</strong></span>
+                                </div>
+                              </div>
+                              <div className="flex items-center gap-3 shrink-0">
+                                <Badge
+                                  variant={c.status === "sending" ? "default" : c.status === "cancelled" ? "destructive" : "secondary"}
+                                  className={c.status === "completed" ? "bg-success/20 text-success border-success/30 capitalize" : c.status === "paused" ? "bg-amber-500/20 text-amber-400 border-amber-500/30 capitalize" : "capitalize"}
+                                >
+                                  {c.status === "completed" ? "concluída" : c.status === "sending" ? "enviando" : c.status === "paused" ? "pausada" : "cancelada"}
+                                </Badge>
+                                <UIButton
+                                  variant="ghost"
+                                  size="icon"
+                                  className="size-8 text-muted-foreground hover:text-destructive hover:bg-destructive/10"
+                                  onClick={(e) => handleDeleteCampaign(c.id, "contacts", e)}
+                                >
+                                  <Trash2 className="size-4" />
+                                </UIButton>
                               </div>
                             </div>
-                            <div className="flex items-center gap-3">
-                              <Badge
-                                variant={c.status === "sending" ? "default" : c.status === "cancelled" ? "destructive" : "secondary"}
-                                className={c.status === "completed" ? "bg-success/20 text-success border-success/30 capitalize" : c.status === "paused" ? "bg-amber-500/20 text-amber-400 border-amber-500/30 capitalize" : "capitalize"}
-                              >
-                                {c.status === "completed" ? "concluída" : c.status === "sending" ? "enviando" : c.status === "paused" ? "pausada" : "cancelada"}
-                              </Badge>
-                            </div>
-                          </div>
-                        ))}
+                          );
+                        })}
                       </div>
                     )}
                   </CardContent>
@@ -1049,33 +1157,59 @@ function CampaignsPage() {
                       </div>
                     ) : (
                       <div className="divide-y divide-border/40">
-                        {groupHistory.map((c) => (
-                          <div
-                            key={c.id}
-                            onClick={() => {
-                              setActiveTab("groups");
-                              viewGroupCampaignMonitor(c);
-                            }}
-                            className="p-4 hover:bg-secondary/20 transition-colors cursor-pointer flex items-center justify-between"
-                          >
-                            <div className="space-y-1 min-w-0">
-                              <p className="font-semibold text-sm truncate">{c.name}</p>
-                              <div className="flex flex-wrap gap-2 text-xs text-muted-foreground">
-                                <span>Instância: <strong>{c.instanceName}</strong></span>
-                                <span>·</span>
-                                <span>{new Date(c.createdAt).toLocaleDateString("pt-BR")}</span>
+                        {groupHistory.map((c) => {
+                          const success = c.recipients?.filter((r) => r.status === "sent").length ?? 0;
+                          const failed = c.recipients?.filter((r) => r.status === "failed").length ?? 0;
+                          const times = (c.recipients || []).filter((r) => r.sentAt).map((r) => new Date(r.sentAt!).getTime());
+                          let durationStr = "—";
+                          if (times.length > 0) {
+                            const minTime = Math.min(...times);
+                            const maxTime = c.status === "sending" ? Date.now() : Math.max(...times);
+                            durationStr = formatDuration(maxTime - minTime);
+                          }
+
+                          return (
+                            <div
+                              key={c.id}
+                              onClick={() => {
+                                setActiveTab("groups");
+                                viewGroupCampaignMonitor(c);
+                              }}
+                              className="p-4 hover:bg-secondary/20 transition-colors cursor-pointer flex items-center justify-between"
+                            >
+                              <div className="space-y-1.5 min-w-0 flex-1 mr-4">
+                                <p className="font-semibold text-sm truncate">{c.name}</p>
+                                <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-[11px] text-muted-foreground">
+                                  <span>Instância: <strong>{c.instanceName}</strong></span>
+                                  <span>·</span>
+                                  <span>{new Date(c.createdAt).toLocaleDateString("pt-BR")}</span>
+                                  <span>·</span>
+                                  <span className="text-emerald-500">Sucesso: <strong>{success}</strong></span>
+                                  <span>·</span>
+                                  <span className="text-rose-500">Falhas: <strong>{failed}</strong></span>
+                                  <span>·</span>
+                                  <span>Duração: <strong>{durationStr}</strong></span>
+                                </div>
+                              </div>
+                              <div className="flex items-center gap-3 shrink-0">
+                                <Badge
+                                  variant={c.status === "sending" ? "default" : c.status === "cancelled" ? "destructive" : "secondary"}
+                                  className={c.status === "completed" ? "bg-success/20 text-success border-success/30 capitalize" : c.status === "paused" ? "bg-amber-500/20 text-amber-400 border-amber-500/30 capitalize" : "capitalize"}
+                                >
+                                  {c.status === "completed" ? "concluída" : c.status === "sending" ? "enviando" : c.status === "paused" ? "pausada" : "cancelada"}
+                                </Badge>
+                                <UIButton
+                                  variant="ghost"
+                                  size="icon"
+                                  className="size-8 text-muted-foreground hover:text-destructive hover:bg-destructive/10"
+                                  onClick={(e) => handleDeleteCampaign(c.id, "groups", e)}
+                                >
+                                  <Trash2 className="size-4" />
+                                </UIButton>
                               </div>
                             </div>
-                            <div className="flex items-center gap-3">
-                              <Badge
-                                variant={c.status === "sending" ? "default" : c.status === "cancelled" ? "destructive" : "secondary"}
-                                className={c.status === "completed" ? "bg-success/20 text-success border-success/30 capitalize" : c.status === "paused" ? "bg-amber-500/20 text-amber-400 border-amber-500/30 capitalize" : "capitalize"}
-                              >
-                                {c.status === "completed" ? "concluída" : c.status === "sending" ? "enviando" : c.status === "paused" ? "pausada" : "cancelada"}
-                              </Badge>
-                            </div>
-                          </div>
-                        ))}
+                          );
+                        })}
                       </div>
                     )}
                   </CardContent>
@@ -1165,16 +1299,16 @@ function CampaignsPage() {
                     <div className="space-y-1">
                       <p className="text-sm font-medium">Importar arquivo de contatos</p>
                       <p className="text-xs text-muted-foreground">
-                        Aceita arquivos .CSV com separação por vírgula ou ponto-e-vírgula (ex: número, nome).
+                        Aceita arquivos .CSV ou .XLSX (Excel) contendo número e nome.
                       </p>
                     </div>
                     <UIButton variant="outline" size="sm" className="relative cursor-pointer">
-                      <Upload className="size-4 mr-2" /> Importar CSV
+                      <Upload className="size-4 mr-2" /> Importar CSV / Excel
                       <input
                         type="file"
-                        accept=".csv"
+                        accept=".csv,.xlsx,.xls"
                         className="absolute inset-0 opacity-0 cursor-pointer"
-                        onChange={handleCsvImport}
+                        onChange={handleFileImport}
                       />
                     </UIButton>
                   </div>

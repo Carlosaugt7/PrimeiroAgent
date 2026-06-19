@@ -347,7 +347,7 @@ export const fetchInstanceContacts = createServerFn({ method: "POST" })
       );
       const arr = Array.isArray(res) ? res : [];
       return arr.map((c: any) => ({
-        id: c?.id ?? c?.jid ?? "",
+        id: c?.remoteJid ?? c?.jid ?? c?.id ?? "",
         name: c?.name ?? null,
         pushName: c?.pushName ?? c?.pushname ?? null,
         verifiedName: c?.verifiedName ?? null,
@@ -368,7 +368,7 @@ export const fetchGroupParticipants = createServerFn({ method: "POST" })
       );
       const participants = Array.isArray(res) ? res : (res?.participants || []);
       return participants.map((p: any) => ({
-        id: p?.id ?? p?.jid ?? p?.number ?? "",
+        id: p?.phoneNumber ?? p?.id ?? p?.jid ?? p?.number ?? "",
         name: p?.name ?? null,
         pushName: p?.pushName ?? p?.pushname ?? null,
         verifiedName: p?.verifiedName ?? null,

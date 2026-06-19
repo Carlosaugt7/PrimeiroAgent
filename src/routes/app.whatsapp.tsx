@@ -168,7 +168,8 @@ function Page() {
     }
     setCreating(true);
     try {
-      const webhookUrl = `${globalThis.location.origin}/api/public/evolution-webhook`;
+      const publicUrl = import.meta.env.VITE_PUBLIC_URL || globalThis.location.origin;
+      const webhookUrl = `${publicUrl}/api/public/evolution-webhook`;
       await create({ data: { tenantId: tenant.id, instanceName: newName, webhookUrl } });
 
       const { error: idxErr } = await supabase.from("instance_index").insert({

@@ -203,6 +203,22 @@ function ExtractorPage() {
     setLoadingContacts(true);
     setContacts([]);
     try {
+      // 1. Busca todos os contatos da agenda primeiro para servir como um dicionário de nomes salvos
+      const agendaRes = await fetchInstanceContacts({
+        data: { tenantId, instanceName: selectedInstance },
+      });
+      const namesMap = new Map<string, string>();
+      if (Array.isArray(agendaRes)) {
+        agendaRes.forEach((c) => {
+          const num = cleanNumber(c.id);
+          const resolvedName = resolveName(c, num);
+          if (resolvedName) {
+            namesMap.set(num, resolvedName);
+          }
+        });
+      }
+
+      // 2. Busca participantes do grupo
       const res = await fetchGroupParticipants({
         data: { tenantId, instanceName: selectedInstance, groupJid: selectedGroup },
       });
@@ -211,9 +227,14 @@ function ExtractorPage() {
         .filter((c) => isValidContact(c.id))
         .map((c) => {
           const num = cleanNumber(c.id);
+          let name = resolveName(c, num);
+          if (!name && namesMap.has(num)) {
+            name = namesMap.get(num)!;
+          }
+
           return {
             id: c.id,
-            name: resolveName(c, num),
+            name,
             number: num,
             origin: "Grupo",
             selected: true,
@@ -259,7 +280,7 @@ function ExtractorPage() {
     // Formato amigável pro Excel (UTF-8 com BOM e delimitador ;)
     const headers = "Número;Nome\n";
     const rows = targets
-      .map((c) => `"${c.number}";"${c.name.replace(/"/g, '""')}"`)
+      .map((c) => `="${c.number}";"${c.name.replace(/"/g, '""')}"`)
       .join("\n");
     
     const blob = new Blob(["\ufeff" + headers + rows], { type: "text/csv;charset=utf-8;" });
@@ -289,7 +310,19 @@ function ExtractorPage() {
       "Nome": c.name,
     }));
 
-    const worksheet = XLSX.utils.json_to_sheet(worksheetData);
+    const worksheet = XLSX.utils.json_to_sheet(worksheetData, { raw: true } as any);
+
+    // Forçar coluna A (Número) a ser tratada como texto para evitar notação científica no Excel
+    Object.keys(worksheet).forEach((key) => {
+      if (/^A\d+$/.test(key) && key !== "A1") {
+        if (worksheet[key]) {
+          worksheet[key].t = "s"; // Tipo: String
+          worksheet[key].v = String(worksheet[key].v); // Garante que o valor é string
+          worksheet[key].z = "@"; // Formato no Excel: Texto
+        }
+      }
+    });
+
     const workbook = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(workbook, worksheet, "Contatos");
     
@@ -505,12 +538,25 @@ function ExtractorPage() {
                         onChange={(e) => setSearchQuery(e.target.value)}
                       />
                     </div>
-                    <div className="text-xs text-muted-foreground flex items-center gap-2">
-                      <CheckCircle className="size-4 text-success" />
-                      <span>
-                        <strong>{selectedCount}</strong> contatos selecionados de{" "}
-                        <strong>{contacts.length}</strong> encontrados
-                      </span>
+                    <div className="flex items-center gap-3">
+                      <UIButton
+                        variant="outline"
+                        size="sm"
+                        className="h-8 text-[11px] font-medium"
+                        onClick={() => {
+                          const allSelected = selectedCount === contacts.length;
+                          handleToggleSelectAll(!allSelected);
+                        }}
+                      >
+                        {selectedCount === contacts.length ? "Desmarcar Todos" : "Selecionar Todos"}
+                      </UIButton>
+                      <div className="text-xs text-muted-foreground flex items-center gap-2">
+                        <CheckCircle className="size-4 text-success" />
+                        <span>
+                          <strong>{selectedCount}</strong> contatos selecionados de{" "}
+                          <strong>{contacts.length}</strong> encontrados
+                        </span>
+                      </div>
                     </div>
                   </div>
 

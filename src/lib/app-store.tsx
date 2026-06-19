@@ -42,6 +42,9 @@ export interface Agent {
   createdAt: string;
   whatsappInstanceId?: string;
   autoReply?: boolean;
+  elevenlabsVoiceId?: string;
+  elevenlabsVoiceGender?: string;
+  voiceResponseMode?: "text_only" | "audio_only_on_audio" | "always_audio";
 }
 
 export interface LLMProvider {
@@ -382,6 +385,9 @@ export function AppStoreProvider({ children }: { readonly children: ReactNode })
           conversions30d: 0,
           createdAt: new Date().toISOString(),
           autoReply: a.autoReply ?? true,
+          elevenlabsVoiceId: a.elevenlabsVoiceId ?? "",
+          elevenlabsVoiceGender: a.elevenlabsVoiceGender ?? "",
+          voiceResponseMode: a.voiceResponseMode ?? "audio_only_on_audio",
           _createdBy: profile?.uid ?? "",
         };
 

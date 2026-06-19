@@ -101,6 +101,174 @@ async function evoDeleteMessage(
   }
 }
 
+async function getEvoConfig(tenantId: string) {
+  if (tenantId) {
+    const { data: tenant } = await supabase
+      .from("tenants")
+      .select("evolutionApiUrl, evolutionApiKey")
+      .eq("id", tenantId)
+      .single();
+    if (tenant?.evolutionApiUrl && tenant?.evolutionApiKey) {
+      return { url: tenant.evolutionApiUrl.replace(/\/$/, ""), key: tenant.evolutionApiKey };
+    }
+  }
+  const cfg = await getGlobalEvoConfig();
+  return { url: cfg.url, key: cfg.key };
+}
+
+async function evoGetBase64Media(tenantId: string, instanceName: string, messageId: string) {
+  try {
+    const cfg = await getEvoConfig(tenantId);
+    if (!cfg.key) return null;
+
+    const r = await fetch(`${cfg.url}/chat/getBase64FromMedia/${encodeURIComponent(instanceName)}`, {
+      method: "POST",
+      headers: { apikey: cfg.key, "Content-Type": "application/json" },
+      body: JSON.stringify({
+        message: {
+          key: {
+            id: messageId
+          }
+        },
+        convertToMp3: true
+      }),
+    });
+    if (!r.ok) {
+      console.warn(`[evoGetBase64Media] falhou: ${r.status}`);
+      return null;
+    }
+    const res = await r.json() as { base64?: string };
+    return res.base64 ?? null;
+  } catch (e) {
+    console.error("[evoGetBase64Media] erro:", e);
+    return null;
+  }
+}
+
+async function transcribeAudioWithOpenAI(apiKey: string, base64Data: string): Promise<string | null> {
+  try {
+    const base64Clean = base64Data.includes("base64,") ? base64Data.split("base64,")[1] : base64Data;
+    const buffer = Buffer.from(base64Clean, "base64");
+    
+    const blob = new Blob([buffer], { type: "audio/mp3" });
+    const formData = new FormData();
+    formData.append("file", blob, "audio.mp3");
+    formData.append("model", "whisper-1");
+    formData.append("language", "pt");
+
+    const r = await fetch("https://api.openai.com/v1/audio/transcriptions", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${apiKey}`
+      },
+      body: formData
+    });
+
+    if (!r.ok) {
+      console.warn(`[Whisper] erro: ${r.status} - ${await r.text()}`);
+      return null;
+    }
+
+    const j = await r.json() as { text: string };
+    return j.text || null;
+  } catch (e) {
+    console.error("[Whisper] erro:", e);
+    return null;
+  }
+}
+
+async function getOpenAiApiKey(tenantId: string, agentProviderId?: string): Promise<string | null> {
+  try {
+    if (agentProviderId) {
+      const { data: prov } = await supabase
+        .from("llm_providers")
+        .select("apiKey, kind")
+        .eq("id", agentProviderId)
+        .eq("tenantId", tenantId)
+        .single();
+      if (prov?.kind === "openai" && prov.apiKey) return prov.apiKey;
+    }
+    
+    const { data: provs } = await supabase
+      .from("llm_providers")
+      .select("apiKey")
+      .eq("tenantId", tenantId)
+      .eq("kind", "openai")
+      .limit(1);
+    if (provs && provs.length > 0 && provs[0].apiKey) return provs[0].apiKey;
+
+    return process.env.OPENAI_API_KEY ?? null;
+  } catch {
+    return process.env.OPENAI_API_KEY ?? null;
+  }
+}
+
+async function generateElevenLabsAudio(
+  tenantId: string,
+  apiKey: string,
+  voiceId: string,
+  text: string,
+): Promise<string | null> {
+  try {
+    const response = await fetch(`https://api.elevenlabs.io/v1/text-to-speech/${encodeURIComponent(voiceId)}`, {
+      method: "POST",
+      headers: {
+        "xi-api-key": apiKey,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        text,
+        model_id: "eleven_multilingual_v2",
+        voice_settings: {
+          stability: 0.5,
+          similarity_boost: 0.75,
+        },
+      }),
+    });
+
+    if (!response.ok) {
+      console.error(`[ElevenLabs] Erro ao gerar áudio: ${response.status} - ${await response.text()}`);
+      return null;
+    }
+
+    const audioArrayBuffer = await response.arrayBuffer();
+    const audioBuffer = Buffer.from(audioArrayBuffer);
+
+    const bucketName = "campaigns";
+    const fileName = `voice-replies/${tenantId}/${Date.now()}.mp3`;
+
+    const { error: uploadError } = await supabase.storage
+      .from(bucketName)
+      .upload(fileName, audioBuffer, {
+        contentType: "audio/mpeg",
+        upsert: true,
+      });
+
+    if (uploadError) {
+      console.error(`[Storage] Erro ao fazer upload do áudio:`, uploadError);
+      return null;
+    }
+
+    const { data: urlData } = supabase.storage.from(bucketName).getPublicUrl(fileName);
+    return urlData.publicUrl ?? null;
+  } catch (e) {
+    console.error("[ElevenLabs] Erro na síntese/upload:", e);
+    return null;
+  }
+}
+
+async function evoSendAudio(tenantId: string, instanceName: string, number: string, audioUrl: string) {
+  const cfg = await getEvoConfig(tenantId);
+  if (!cfg.key) throw new Error("EVOLUTION_API_KEY ausente ou não configurada");
+
+  const r = await fetch(`${cfg.url}/message/sendAudio/${encodeURIComponent(instanceName)}`, {
+    method: "POST",
+    headers: { apikey: cfg.key, "Content-Type": "application/json" },
+    body: JSON.stringify({ number, audio: audioUrl }),
+  });
+  if (!r.ok) throw new Error(`sendAudio ${r.status}: ${(await r.text()).slice(0, 200)}`);
+}
+
 // ===== Motor de Automações =====
 type AutoAction = { type: "addTag" | "pauseBot" | "reply" | "setStatus"; value: string };
 interface AutoRule {
@@ -543,6 +711,7 @@ async function runBridge(
   remoteJid: string,
   userText: string,
   convId: string,
+  isAudioInput = false,
 ) {
   // 1) Encontrar agente vinculado a esta instância
   const { data: agents } = await supabase.from("agents").select("*").eq("tenantId", tenantId);
@@ -686,9 +855,44 @@ async function runBridge(
   if (llmError) return { error: llmError, latencyMs };
   if (!reply) return { skipped: "empty-reply", latencyMs };
 
-  // 6) Enviar via WhatsApp
+  // 6) Enviar via WhatsApp ou Voz
   const number = remoteJid.split("@")[0];
-  await evoSendText(tenantId, instanceName, number, reply);
+  let sentAudioUrl: string | null = null;
+
+  const { data: tenant } = await supabase
+    .from("tenants")
+    .select("elevenlabsApiKey")
+    .eq("id", tenantId)
+    .single();
+
+  const shouldRespondVoice =
+    (isAudioInput && agent.voiceResponseMode === "audio_only_on_audio") ||
+    agent.voiceResponseMode === "always_audio";
+
+  if (shouldRespondVoice && tenant?.elevenlabsApiKey && agent.elevenlabsVoiceId) {
+    console.log(`[bridge] Gerando resposta de voz via ElevenLabs para voiceId=${agent.elevenlabsVoiceId}`);
+    try {
+      const audioUrl = await generateElevenLabsAudio(
+        tenantId,
+        tenant.elevenlabsApiKey,
+        agent.elevenlabsVoiceId,
+        reply
+      );
+      if (audioUrl) {
+        sentAudioUrl = audioUrl;
+        console.log(`[bridge] Áudio gerado: ${audioUrl}. Enviando ao WhatsApp...`);
+        await evoSendAudio(tenantId, instanceName, number, audioUrl);
+      } else {
+        console.warn("[bridge] Falha na geração do áudio. Usando texto de fallback.");
+        await evoSendText(tenantId, instanceName, number, reply);
+      }
+    } catch (e) {
+      console.error("[bridge] Erro ao enviar áudio. Usando texto de fallback:", e);
+      await evoSendText(tenantId, instanceName, number, reply);
+    }
+  } else {
+    await evoSendText(tenantId, instanceName, number, reply);
+  }
 
   // 7) Registrar resposta do bot no Supabase
   const replyId = `bot_${Date.now()}`;
@@ -696,7 +900,7 @@ async function runBridge(
     id: replyId,
     tenantId,
     conversationId: convId,
-    text: reply,
+    text: sentAudioUrl ? `[áudio] ${reply}` : reply,
     fromMe: true,
     bot: true,
     agentId: agent.id,
@@ -737,13 +941,50 @@ async function handleMessage(
   const fromMe: boolean = !!key.fromMe;
   const messageId: string = (key.id as string) ?? `${Date.now()}`;
   const msgData = m?.message as Record<string, unknown> | undefined;
-  const text: string =
+  const isAudio = !!msgData?.audioMessage;
+  let text: string =
     (msgData?.conversation as string) ??
     ((msgData?.extendedTextMessage as Record<string, unknown>)?.text as string) ??
     (m?.text as string) ??
-    "[mídia]";
+    (isAudio ? "[áudio]" : "[mídia]");
   const pushName: string = (m?.pushName as string) ?? remoteJid.split("@")[0];
   const convId = remoteJid.replace(/[^a-zA-Z0-9_-]/g, "_");
+
+  // Transcrição de áudio recebido do cliente
+  if (isAudio && !fromMe) {
+    console.log(`[webhook] Detectado áudio recebido. Tentando obter transcrição...`);
+    // 1. Tentar pegar transcrição nativa da Evolution API se estiver disponível
+    let audioText = (msgData?.audioMessage as any)?.text || (m as any)?.text;
+    if (audioText && audioText !== "[áudio]" && audioText !== "[mídia]") {
+      text = audioText;
+      console.log(`[webhook] Transcrição nativa da Evolution API obtida: "${text}"`);
+    } else {
+      // 2. Transcrição ativa baixando mídia e enviando ao Whisper
+      try {
+        const base64Audio = await evoGetBase64Media(tenantId, instanceName, messageId);
+        if (base64Audio) {
+          const { data: agents } = await supabase.from("agents").select("*").eq("tenantId", tenantId);
+          const agent = (agents || []).find((a: any) => a.whatsappInstanceId === instanceName);
+          const openAiKey = await getOpenAiApiKey(tenantId, agent?.providerId);
+          if (openAiKey) {
+            const transcribed = await transcribeAudioWithOpenAI(openAiKey, base64Audio);
+            if (transcribed) {
+              text = transcribed;
+              console.log(`[webhook] Transcrição bem-sucedida do Whisper: "${text}"`);
+            } else {
+              console.warn(`[webhook] Whisper retornou transcrição nula ou vazia.`);
+            }
+          } else {
+            console.warn(`[webhook] OpenAI API key não localizada para o tenant ${tenantId}`);
+          }
+        } else {
+          console.warn(`[webhook] Falha ao baixar áudio da Evolution API.`);
+        }
+      } catch (err) {
+        console.error("[webhook] Erro ao obter áudio/transcrição:", err);
+      }
+    }
+  }
 
   // Fetch current conversation
   const { data: conv } = await supabase
@@ -777,7 +1018,7 @@ async function handleMessage(
 
   // Lógica de controle do Bot via WhatsApp (atendente interage pelo celular)
   if (fromMe) {
-    if (text && text !== "[mídia]") {
+    if (text && text !== "[mídia]" && text !== "[áudio]") {
       const cleanText = text.trim().toLowerCase();
       const isActivationCommand = ["#ia", "#voltar", "/ia", "/voltar"].includes(cleanText);
 
@@ -800,8 +1041,8 @@ async function handleMessage(
     return Response.json({ ok: true });
   }
 
-  // Automações + Bridge IA: só para mensagens recebidas com texto
-  if (!text || text === "[mídia]") {
+  // Automações + Bridge IA: só para mensagens recebidas com texto transcrito/válido
+  if (!text || text === "[mídia]" || text === "[áudio]") {
     return Response.json({ ok: true });
   }
 
@@ -810,7 +1051,7 @@ async function handleMessage(
     if (conv?.botPaused === true || auto.pauseBot) {
       return Response.json({ ok: true, automations: auto, bridge: { skipped: "bot-paused" } });
     }
-    const bridge = await runBridge(tenantId, instanceName, remoteJid, text, convId);
+    const bridge = await runBridge(tenantId, instanceName, remoteJid, text, convId, isAudio);
     return Response.json({ ok: true, automations: auto, bridge });
   } catch (e) {
     console.error("[bridge] erro:", e);

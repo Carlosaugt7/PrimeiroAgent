@@ -159,9 +159,10 @@ function AgentDetailForm({ agent, providers, instances, updateAgent, deleteAgent
       </div>
 
       <Tabs defaultValue="basic">
-        <TabsList className="grid w-full grid-cols-4">
+        <TabsList className="grid w-full grid-cols-5">
           <TabsTrigger value="basic">Básico</TabsTrigger>
           <TabsTrigger value="persona">Persona</TabsTrigger>
+          <TabsTrigger value="voice">Voz / Áudio</TabsTrigger>
           <TabsTrigger value="prompt">Prompt</TabsTrigger>
           <TabsTrigger value="model">Modelo</TabsTrigger>
         </TabsList>
@@ -315,6 +316,57 @@ function AgentDetailForm({ agent, providers, instances, updateAgent, deleteAgent
                 className="mt-1"
               />
             </div>
+          </div>
+        </TabsContent>
+
+        <TabsContent value="voice" className="space-y-4 pt-4">
+          <div>
+            <Label>Modo de Resposta de Voz</Label>
+            <Select
+              value={form.voiceResponseMode ?? "audio_only_on_audio"}
+              onValueChange={(v: any) => setForm({ ...form, voiceResponseMode: v })}
+            >
+              <SelectTrigger className="mt-1">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="text_only">Apenas Texto</SelectItem>
+                <SelectItem value="audio_only_on_audio">Responder com áudio apenas quando receber áudio</SelectItem>
+                <SelectItem value="always_audio">Responder sempre com áudio</SelectItem>
+              </SelectContent>
+            </Select>
+            <p className="text-xs text-muted-foreground mt-1">
+              Determina se o agente responderá por texto ou por mensagem de áudio gravada no WhatsApp.
+            </p>
+          </div>
+
+          <div>
+            <Label>Gênero da Voz</Label>
+            <Select
+              value={form.elevenlabsVoiceGender ?? "female"}
+              onValueChange={(v) => setForm({ ...form, elevenlabsVoiceGender: v })}
+            >
+              <SelectTrigger className="mt-1">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="female">Feminino (Mulher)</SelectItem>
+                <SelectItem value="male">Masculino (Homem)</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+
+          <div>
+            <Label>Voice ID do ElevenLabs</Label>
+            <Input
+              value={form.elevenlabsVoiceId ?? ""}
+              onChange={(e) => setForm({ ...form, elevenlabsVoiceId: e.target.value })}
+              placeholder="ex: 21m00Tcm4TlvDq8ikWAM (Rachel)"
+              className="mt-1"
+            />
+            <p className="text-xs text-muted-foreground mt-1">
+              Insira o ID da voz do ElevenLabs que o agente usará. Você pode escolher vozes pré-fabricadas ou clonadas no painel do ElevenLabs.
+            </p>
           </div>
         </TabsContent>
 

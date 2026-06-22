@@ -222,7 +222,11 @@ function Page() {
   const handleDelete = async (name: string) => {
     if (!confirm(`Excluir definitivamente ${name}?`)) return;
     try {
-      await del({ data: { tenantId: tenant?.id || "", instanceName: name } });
+      try {
+        await del({ data: { tenantId: tenant?.id || "", instanceName: name } });
+      } catch (evoError) {
+        console.warn("Falha ao deletar instância no Evolution API:", evoError);
+      }
       if (tenant) {
         await supabase.from("instance_index").delete().eq("instanceName", name);
         await supabase.from("instances").delete().eq("id", name).eq("tenantId", tenant.id);

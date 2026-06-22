@@ -158,16 +158,37 @@ function Page() {
 
   const onPickFile = async (file: File) => {
     if (file.size > 5 * 1024 * 1024) {
-      toast.error("Máx 5 MB (use TXT/MD por enquanto)");
+      toast.error("Máx 5 MB");
       return;
     }
     const ext = file.name.split(".").pop()?.toLowerCase();
-    if (!["txt", "md"].includes(ext ?? "")) {
-      toast.error("Apenas .txt e .md no MVP");
+    if (!["txt", "md", "xlsx"].includes(ext ?? "")) {
+      toast.error("Apenas .txt, .md e .xlsx");
       return;
     }
-    setText(await file.text());
-    if (!name) setName(file.name.replace(/\.[^.]+$/, ""));
+    if (ext === "xlsx") {
+      try {
+        const { read, utils } = await import("xlsx");
+        const ab = await file.arrayBuffer();
+        const wb = read(ab, { type: "array" });
+        let textVal = "";
+        wb.SheetNames.forEach((sheetName) => {
+          const ws = wb.Sheets[sheetName];
+          const csv = utils.sheet_to_csv(ws);
+          if (csv.trim()) {
+            textVal += `Planilha: ${sheetName}\n${csv}\n\n`;
+          }
+        });
+        setText(textVal);
+        if (!name) setName(file.name.replace(/\.[^.]+$/, ""));
+      } catch (err) {
+        toast.error("Erro ao ler planilha Excel");
+        console.error(err);
+      }
+    } else {
+      setText(await file.text());
+      if (!name) setName(file.name.replace(/\.[^.]+$/, ""));
+    }
   };
 
   const ingest = async () => {
@@ -534,10 +555,10 @@ function Page() {
 
                 <TabsContent value="file" className="space-y-3 pt-3">
                   <div className="space-y-1.5">
-                    <Label>Arquivo (.txt / .md) ou cole o texto</Label>
+                    <Label>Arquivo (.txt / .md / .xlsx) ou cole o texto</Label>
                     <input
                       type="file"
-                      accept=".txt,.md"
+                      accept=".txt,.md,.xlsx"
                       onChange={(e) => e.target.files?.[0] && onPickFile(e.target.files[0])}
                       className="text-xs file:mr-3 file:px-3 file:py-1.5 file:rounded-lg file:border-0 file:bg-secondary file:text-foreground"
                     />

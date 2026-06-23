@@ -749,8 +749,34 @@ async function runBridge(
     console.warn("[bridge] RAG falhou:", e);
   }
 
+  // 3.5) Buscar histórico de mensagens recentes (últimas 8 mensagens)
+  let historyContext = "";
+  try {
+    const { data: hist } = await supabase
+      .from("messages")
+      .select("text, fromMe, bot")
+      .eq("conversationId", convId)
+      .order("createdAt", { ascending: false })
+      .limit(8);
+
+    if (hist && hist.length > 0) {
+      // Reverter para ordem cronológica
+      const sortedHist = [...hist].reverse();
+      const formattedLines = sortedHist.map((m) => {
+        const sender = m.fromMe ? "Helena" : "Cliente";
+        return `[${sender}]: ${m.text}`;
+      });
+      historyContext = `## HISTÓRICO RECENTE DA CONVERSA\n` +
+        `Use o histórico abaixo para saber o que já foi conversado, evitar repetir as mesmas perguntas ou saudações e manter a fluidez:\n\n` +
+        formattedLines.join("\n") + "\n\n";
+    }
+  } catch (e) {
+    console.warn("[bridge] falhou ao carregar histórico:", e);
+  }
+
   // 4) Chamar LLM com instruções de Agendamento Clínico acopladas no prompt
   const systemPromptComAgendamento = `${systemPrompt}\n\n` +
+    (historyContext ? `${historyContext}` : "") +
     `## AGENDAMENTO INTELIGENTE (SUPERPODERES)\n` +
     `Você é integrado em tempo real ao banco de dados da clínica. Sempre que precisar consultar vagas, criar ou cancelar agendamentos, emita a tag correspondente EXATAMENTE no final da sua resposta, e o sistema executará a ação:\n` +
     `1. Consultar horários livres para uma especialidade e data:\n` +
@@ -907,12 +933,23 @@ async function runBridge(
     createdAt: new Date().toISOString(),
   });
 
+  // Verifica se a resposta da IA indica transferência para suporte especializado
+  const isHandoff = /encaminhar seu atendimento|equipe especializada|suporte especializado/i.test(reply);
+
+  const convUpdatePayload: Record<string, any> = {
+    lastMessage: reply.slice(0, 200),
+    updatedAt: new Date().toISOString(),
+  };
+
+  if (isHandoff) {
+    console.log(`[bridge] Resposta da IA contêm gatilho de handoff. Pausando bot para a conversa ${convId}.`);
+    convUpdatePayload.botPaused = true;
+    convUpdatePayload.status = "handoff";
+  }
+
   await supabase
     .from("conversations")
-    .update({
-      lastMessage: reply.slice(0, 200),
-      updatedAt: new Date().toISOString(),
-    })
+    .update(convUpdatePayload)
     .eq("id", convId)
     .eq("tenantId", tenantId);
 
@@ -1044,6 +1081,49 @@ async function handleMessage(
   // Automações + Bridge IA: só para mensagens recebidas com texto transcrito/válido
   if (!text || text === "[mídia]" || text === "[áudio]") {
     return Response.json({ ok: true });
+  }
+
+  // Interceptar palavras-chave de handoff (como "instalei", "baixei")
+  const cleanText = text.trim().toLowerCase();
+  const hasHandoffKeyword = cleanText.includes("instalei") || cleanText.includes("baixei");
+
+  if (hasHandoffKeyword) {
+    console.log(`[webhook] Detectada palavra-chave de handoff ("instalei" ou "baixei"). Pausando bot e transferindo...`);
+
+    // 1. Pausa o bot e atualiza o status para handoff
+    await supabase
+      .from("conversations")
+      .update({
+        botPaused: true,
+        status: "handoff",
+        lastMessage: text.slice(0, 200),
+        updatedAt: new Date().toISOString(),
+      })
+      .eq("id", convId)
+      .eq("tenantId", tenantId);
+
+    // 2. Envia a mensagem de transferência padrão
+    const transferMsg = "Perfeito. Vou encaminhar seu atendimento para nossa equipe especializada. Um momento, por favor.";
+    const number = remoteJid.split("@")[0];
+    await evoSendText(tenantId, instanceName, number, transferMsg);
+
+    // 3. Salva a mensagem no banco
+    const replyId = `bot_handoff_${Date.now()}`;
+    await supabase.from("messages").upsert({
+      id: replyId,
+      tenantId,
+      conversationId: convId,
+      text: transferMsg,
+      fromMe: true,
+      bot: true,
+      createdAt: new Date().toISOString(),
+    });
+
+    return Response.json({
+      ok: true,
+      handoffTriggered: true,
+      message: "bot-paused-by-handoff-keyword",
+    });
   }
 
   try {

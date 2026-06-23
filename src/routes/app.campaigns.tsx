@@ -173,8 +173,11 @@ function CampaignsPage() {
 
   // References for sending loop control
   const isSendingRef = useRef(false);
+  const isSendingGroupRef = useRef(false);
   const pausedRef = useRef(false);
+  const pausedGroupRef = useRef(false);
   const cancelledRef = useRef(false);
+  const cancelledGroupRef = useRef(false);
 
   // Load instances and history
   useEffect(() => {
@@ -271,11 +274,18 @@ function CampaignsPage() {
     return parsed;
   };
 
-  // Replace variable {{nome}} / {{name}}
+  // Replace variable {{nome}} / {{name}} / <nome> / <name> / {nome} / {name} / [nome] / [name]
   const parseVariables = (text: string, contactName?: string): string => {
     let parsed = text;
-    parsed = parsed.replace(/\{\{nome\}\}/gi, contactName || "");
-    parsed = parsed.replace(/\{\{name\}\}/gi, contactName || "");
+    const name = contactName?.trim() || "";
+    parsed = parsed.replace(/\{\{nome\}\}/gi, name);
+    parsed = parsed.replace(/\{\{name\}\}/gi, name);
+    parsed = parsed.replace(/<nome>/gi, name);
+    parsed = parsed.replace(/<name>/gi, name);
+    parsed = parsed.replace(/\{nome\}/gi, name);
+    parsed = parsed.replace(/\{name\}/gi, name);
+    parsed = parsed.replace(/\[nome\]/gi, name);
+    parsed = parsed.replace(/\[name\]/gi, name);
     return parsed;
   };
 
@@ -443,11 +453,13 @@ function CampaignsPage() {
       const table = activeTab === "contacts" ? "campaigns" : "group_campaigns";
       await supabase.from(table).update({ status: "paused" }).eq("id", activeCamp.id);
 
-      setPaused(true);
-      pausedRef.current = true;
       if (activeTab === "contacts") {
+        setPaused(true);
+        pausedRef.current = true;
         setActiveCampaign((prev) => (prev ? { ...prev, status: "paused" } : null));
       } else {
+        setPausedGroup(true);
+        pausedGroupRef.current = true;
         setActiveGroupCampaign((prev) => (prev ? { ...prev, status: "paused" } : null));
       }
       toast.info("Campanha pausada");
@@ -464,11 +476,13 @@ function CampaignsPage() {
       const table = activeTab === "contacts" ? "campaigns" : "group_campaigns";
       await supabase.from(table).update({ status: "sending" }).eq("id", activeCamp.id);
 
-      setPaused(false);
-      pausedRef.current = false;
       if (activeTab === "contacts") {
+        setPaused(false);
+        pausedRef.current = false;
         setActiveCampaign((prev) => (prev ? { ...prev, status: "sending" } : null));
       } else {
+        setPausedGroup(false);
+        pausedGroupRef.current = false;
         setActiveGroupCampaign((prev) => (prev ? { ...prev, status: "sending" } : null));
       }
       toast.success("Campanha retomada");
@@ -485,12 +499,13 @@ function CampaignsPage() {
       const table = activeTab === "contacts" ? "campaigns" : "group_campaigns";
       await supabase.from(table).update({ status: "cancelled" }).eq("id", activeCamp.id);
 
-      cancelledRef.current = true;
-      setIsSending(false);
-      setIsSendingGroup(false);
       if (activeTab === "contacts") {
+        cancelledRef.current = true;
+        setIsSending(false);
         setActiveCampaign((prev) => (prev ? { ...prev, status: "cancelled" } : null));
       } else {
+        cancelledGroupRef.current = true;
+        setIsSendingGroup(false);
         setActiveGroupCampaign((prev) => (prev ? { ...prev, status: "cancelled" } : null));
       }
       toast.warning("Campanha cancelada pelo usuário");
@@ -501,6 +516,7 @@ function CampaignsPage() {
 
   // Background sending loop
   const startSendingLoop = async (camp: Campaign, list: Recipient[]) => {
+    if (isSendingRef.current) return;
     isSendingRef.current = true;
     pausedRef.current = false;
     cancelledRef.current = false;
@@ -698,23 +714,24 @@ function CampaignsPage() {
 
   // Background group sending loop
   const startGroupSendingLoop = async (camp: GroupCampaign, list: GroupRecipient[]) => {
-    isSendingRef.current = true;
-    pausedRef.current = false;
-    cancelledRef.current = false;
+    if (isSendingGroupRef.current) return;
+    isSendingGroupRef.current = true;
+    pausedGroupRef.current = false;
+    cancelledGroupRef.current = false;
     setIsSendingGroup(true);
     setPausedGroup(false);
 
     let currentList = [...list];
 
     for (let i = 0; i < currentList.length; i++) {
-      if (cancelledRef.current) break;
+      if (cancelledGroupRef.current) break;
 
-      while (pausedRef.current) {
-        if (cancelledRef.current) break;
+      while (pausedGroupRef.current) {
+        if (cancelledGroupRef.current) break;
         await new Promise((r) => setTimeout(r, 1000));
       }
 
-      if (cancelledRef.current) break;
+      if (cancelledGroupRef.current) break;
 
       const recipient = currentList[i];
       if (recipient.status !== "pending") continue;
@@ -802,9 +819,9 @@ function CampaignsPage() {
       const delay = Math.floor(Math.random() * (camp.maxDelay - camp.minDelay + 1)) + camp.minDelay;
 
       for (let s = delay; s > 0; s--) {
-        if (cancelledRef.current) break;
-        while (pausedRef.current) {
-          if (cancelledRef.current) break;
+        if (cancelledGroupRef.current) break;
+        while (pausedGroupRef.current) {
+          if (cancelledGroupRef.current) break;
           await new Promise((r) => setTimeout(r, 1000));
         }
         setSecondsLeftGroup(s);
@@ -814,9 +831,9 @@ function CampaignsPage() {
     }
 
     setIsSendingGroup(false);
-    isSendingRef.current = false;
+    isSendingGroupRef.current = false;
 
-    const finalStatus = cancelledRef.current ? "cancelled" : "completed";
+    const finalStatus = cancelledGroupRef.current ? "cancelled" : "completed";
     try {
       await supabase.from("group_campaigns").update({ status: finalStatus }).eq("id", camp.id);
       setActiveGroupCampaign((prev) => (prev ? { ...prev, status: finalStatus } : null));
@@ -846,8 +863,8 @@ function CampaignsPage() {
       if (camp.status === "sending") {
         startGroupSendingLoop(camp, recs as GroupRecipient[]);
       } else if (camp.status === "paused") {
-        setPaused(true);
-        pausedRef.current = true;
+        setPausedGroup(true);
+        pausedGroupRef.current = true;
       }
     } catch (e) {
       toast.error("Erro ao carregar detalhes dos grupos");

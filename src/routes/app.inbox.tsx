@@ -44,6 +44,7 @@ interface Conv {
   status?: "aberta" | "em_atendimento" | "resolvida" | "handoff";
   botPaused?: boolean;
   tags?: string[];
+  isFrustrated?: boolean | null;
 }
 interface Msg {
   id: string;
@@ -168,7 +169,7 @@ function Inbox() {
     if (!tenant || !activeId) return;
     if (
       !confirm(
-        "Tem certeza que deseja apagar definitivamente todo o histórico de mensagens local desta conversa? Esta ação NÃO apagará as mensagens no aparelho celular do cliente."
+        "Tem certeza que deseja apagar definitivamente todo o histórico de mensagens local desta conversa? Esta ação NÃO apagará as mensagens no aparelho celular do cliente.",
       )
     ) {
       return;
@@ -191,8 +192,8 @@ function Inbox() {
 
       toast.success("Histórico de mensagens limpo com sucesso!");
       setActiveId(null);
-    } catch (e: any) {
-      toast.error(e?.message ?? "Erro ao limpar histórico");
+    } catch (e: unknown) {
+      toast.error(e instanceof Error ? e.message : "Erro ao limpar histórico");
     }
   };
 
@@ -200,7 +201,7 @@ function Inbox() {
     if (!tenant?.id) return;
     if (
       !confirm(
-        "ATENÇÃO: Tem certeza que deseja apagar permanentemente todo o histórico de mensagens local de TODAS as conversas? Esta ação NÃO apagará as mensagens nos aparelhos celulares dos clientes."
+        "ATENÇÃO: Tem certeza que deseja apagar permanentemente todo o histórico de mensagens local de TODAS as conversas? Esta ação NÃO apagará as mensagens nos aparelhos celulares dos clientes.",
       )
     ) {
       return;
@@ -223,8 +224,8 @@ function Inbox() {
 
       toast.success("Histórico de todas as conversas limpo com sucesso!");
       setActiveId(null);
-    } catch (e: any) {
-      toast.error(e?.message ?? "Erro ao limpar conversas");
+    } catch (e: unknown) {
+      toast.error(e instanceof Error ? e.message : "Erro ao limpar conversas");
     }
   };
 
@@ -344,8 +345,8 @@ function Inbox() {
         },
       });
       setDraft("");
-    } catch (e: any) {
-      toast.error(e?.message ?? "Falha ao enviar");
+    } catch (e: unknown) {
+      toast.error(e instanceof Error ? e.message : "Falha ao enviar");
     } finally {
       setSending(false);
     }
@@ -419,7 +420,25 @@ function Inbox() {
                     className={`w-full text-left p-3 hover:bg-secondary/40 transition ${activeId === c.id ? "bg-secondary/60" : ""}`}
                   >
                     <div className="flex items-center justify-between gap-2">
-                      <p className="font-medium text-sm truncate">{c.contactName}</p>
+                      <p className="font-medium text-sm truncate flex items-center gap-1.5">
+                        {c.contactName}
+                        {c.isFrustrated && (
+                          <span
+                            className="text-[10px] text-red-500 font-bold bg-red-500/10 border border-red-500/20 px-1.5 py-0.5 rounded shrink-0 flex items-center gap-0.5 animate-pulse"
+                            title="Cliente irritado ou frustrado!"
+                          >
+                            ⚠️ Frustrado
+                          </span>
+                        )}
+                        {c.leadScore && (
+                          <span
+                            className="text-[10px] text-amber-500 font-bold bg-amber-500/10 px-1 py-0.5 rounded shrink-0 flex items-center gap-0.5"
+                            title={`Lead Score: ${c.leadScore}/5`}
+                          >
+                            ★ {c.leadScore}
+                          </span>
+                        )}
+                      </p>
                       <div className="flex items-center gap-1 shrink-0">
                         {c.botPaused && <BotOff className="size-3 text-muted-foreground" />}
                         {c.unread ? (
@@ -447,162 +466,218 @@ function Inbox() {
           </div>
 
           {/* Painel */}
-          <div className="rounded-2xl border border-border bg-card/30 flex flex-col overflow-hidden">
+          <div className="rounded-2xl border border-border bg-card/30 grid grid-cols-1 lg:grid-cols-[1fr_260px] overflow-hidden">
             {active ? (
               <>
-                <div className="border-b border-border px-4 py-3 flex items-start justify-between gap-3 flex-wrap">
-                  <div className="min-w-0">
-                    <div className="flex items-center gap-2">
-                      <p className="font-semibold text-sm truncate">{active.contactName}</p>
-                      {active.status === "resolvida" && (
-                        <Badge variant="secondary" className="gap-1">
-                          <CheckCircle2 className="size-3" />
-                          Resolvida
-                        </Badge>
-                      )}
-                      {active.status === "handoff" && (
-                        <Badge variant="outline">Handoff humano</Badge>
-                      )}
-                      {active.status === "em_atendimento" && (
-                        <Badge variant="outline" className="bg-amber-500/10 text-amber-500 border-amber-500/20">
-                          Em Atendimento
-                        </Badge>
-                      )}
+                <div className="flex flex-col border-r border-border h-full overflow-hidden">
+                  <div className="border-b border-border px-4 py-3 flex items-start justify-between gap-3 flex-wrap">
+                    <div className="min-w-0">
+                      <div className="flex items-center gap-2">
+                        <p className="font-semibold text-sm truncate">{active.contactName}</p>
+                        {active.status === "resolvida" && (
+                          <Badge variant="secondary" className="gap-1">
+                            <CheckCircle2 className="size-3" />
+                            Resolvida
+                          </Badge>
+                        )}
+                        {active.status === "handoff" && (
+                          <Badge variant="outline">Handoff humano</Badge>
+                        )}
+                        {active.status === "em_atendimento" && (
+                          <Badge
+                            variant="outline"
+                            className="bg-amber-500/10 text-amber-500 border-amber-500/20"
+                          >
+                            Em Atendimento
+                          </Badge>
+                        )}
+                      </div>
+                      <p className="text-xs text-muted-foreground truncate">
+                        {active.contactPhone} · {active.instanceName}
+                      </p>
                     </div>
-                    <p className="text-xs text-muted-foreground truncate">
-                      {active.contactPhone} · {active.instanceName}
-                    </p>
-                  </div>
-                  <div className="flex items-center gap-3">
-                    <label className="flex items-center gap-2 text-xs select-none cursor-pointer">
-                      {active.botPaused ? (
-                        <BotOff className="size-4 text-muted-foreground" />
+                    <div className="flex items-center gap-3">
+                      <label className="flex items-center gap-2 text-xs select-none cursor-pointer">
+                        {active.botPaused ? (
+                          <BotOff className="size-4 text-muted-foreground" />
+                        ) : (
+                          <Bot className="size-4 text-primary" />
+                        )}
+                        <span>{active.botPaused ? "IA pausada" : "IA ativa"}</span>
+                        <Switch
+                          checked={!active.botPaused}
+                          onCheckedChange={(v) => toggleBot(!v)}
+                        />
+                      </label>
+                      {active.status === "resolvida" ? (
+                        <Button size="sm" variant="outline" onClick={() => setStatus("aberta")}>
+                          Reabrir
+                        </Button>
                       ) : (
-                        <Bot className="size-4 text-primary" />
+                        <Button size="sm" variant="outline" onClick={() => setStatus("resolvida")}>
+                          Resolver
+                        </Button>
                       )}
-                      <span>{active.botPaused ? "IA pausada" : "IA ativa"}</span>
-                      <Switch checked={!active.botPaused} onCheckedChange={(v) => toggleBot(!v)} />
-                    </label>
-                    {active.status === "resolvida" ? (
-                      <Button size="sm" variant="outline" onClick={() => setStatus("aberta")}>
-                        Reabrir
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        className="text-muted-foreground hover:text-destructive hover:bg-destructive/10"
+                        onClick={clearHistory}
+                      >
+                        <Trash2 className="size-4 mr-1" />
+                        Limpar
                       </Button>
-                    ) : (
-                      <Button size="sm" variant="outline" onClick={() => setStatus("resolvida")}>
-                        Resolver
+                    </div>
+                  </div>
+
+                  {/* Tags */}
+                  <div className="border-b border-border px-4 py-2 flex items-center gap-2 flex-wrap">
+                    {(active.tags ?? []).map((t) => (
+                      <Badge key={t} variant="secondary" className="gap-1 pr-1">
+                        {t}
+                        <button
+                          onClick={() => removeTag(t)}
+                          className="hover:text-destructive ml-1"
+                        >
+                          <X className="size-3" />
+                        </button>
+                      </Badge>
+                    ))}
+                    <div className="flex items-center gap-1">
+                      <Input
+                        value={tagInput}
+                        onChange={(e) => setTagInput(e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter") {
+                            e.preventDefault();
+                            addTag();
+                          }
+                        }}
+                        placeholder="Adicionar tag"
+                        className="h-7 w-32 text-xs"
+                      />
+                      <Button size="icon" variant="ghost" className="size-7" onClick={addTag}>
+                        <Plus className="size-3" />
                       </Button>
+                    </div>
+                  </div>
+
+                  {/* Mensagens */}
+                  <div className="flex-1 overflow-y-auto p-4 space-y-2">
+                    {messages.map((m) => (
+                      <div
+                        key={m.id}
+                        className={`flex ${m.fromMe ? "justify-end" : "justify-start"}`}
+                      >
+                        <div
+                          className={`max-w-[75%] rounded-2xl px-3 py-2 text-sm ${m.fromMe ? "bg-primary text-primary-foreground" : "bg-secondary"}`}
+                        >
+                          <p className="whitespace-pre-wrap break-words">{m.text}</p>
+                          <p className="text-[10px] opacity-70 mt-1">
+                            {new Date(m.createdAt).toLocaleTimeString()}
+                          </p>
+                        </div>
+                      </div>
+                    ))}
+                    <div ref={bottomRef} />
+                  </div>
+
+                  {/* Digitação */}
+                  <div className="border-t border-border p-3 relative">
+                    {tplOpen && tplMatches.length > 0 && (
+                      <div className="absolute bottom-full left-3 right-3 mb-2 rounded-xl border border-border bg-popover shadow-lg overflow-hidden z-10">
+                        <div className="px-3 py-1.5 text-[10px] uppercase tracking-wider text-muted-foreground border-b border-border flex items-center gap-1.5">
+                          <MessageSquareText className="size-3" /> Templates · ↑↓ navegar · Enter
+                          aplicar · Esc fechar
+                        </div>
+                        <ul>
+                          {tplMatches.map((t, i) => (
+                            <li key={t.id}>
+                              <button
+                                onMouseEnter={() => setTplIdx(i)}
+                                onClick={() => applyTemplate(t)}
+                                className={`w-full text-left px-3 py-2 text-sm flex items-center gap-2 ${i === tplIdx ? "bg-secondary" : "hover:bg-secondary/60"}`}
+                              >
+                                <Badge variant="outline" className="font-mono shrink-0">
+                                  /{t.shortcut}
+                                </Badge>
+                                <span className="font-medium truncate">{t.title}</span>
+                                <span className="text-xs text-muted-foreground truncate">
+                                  — {t.body}
+                                </span>
+                              </button>
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
                     )}
-                    <Button
-                      size="sm"
-                      variant="ghost"
-                      className="text-muted-foreground hover:text-destructive hover:bg-destructive/10"
-                      onClick={clearHistory}
-                    >
-                      <Trash2 className="size-4 mr-1" />
-                      Limpar
-                    </Button>
+                    <div className="flex gap-2">
+                      <Input
+                        value={draft}
+                        onChange={(e) => {
+                          const v = e.target.value;
+                          setDraft(v);
+                          setTplOpen(v.startsWith("/"));
+                          setTplIdx(0);
+                        }}
+                        placeholder="Digite uma mensagem ou /atalho para templates..."
+                        onKeyDown={handleDraftKeyDown}
+                        disabled={sending}
+                      />
+                      <Button onClick={handleSend} disabled={sending || !draft.trim()}>
+                        {sending ? (
+                          <Loader2 className="size-4 animate-spin" />
+                        ) : (
+                          <Send className="size-4" />
+                        )}
+                      </Button>
+                    </div>
                   </div>
                 </div>
 
-                {/* Tags */}
-                <div className="border-b border-border px-4 py-2 flex items-center gap-2 flex-wrap">
-                  {(active.tags ?? []).map((t) => (
-                    <Badge key={t} variant="secondary" className="gap-1 pr-1">
-                      {t}
-                      <button onClick={() => removeTag(t)} className="hover:text-destructive ml-1">
-                        <X className="size-3" />
-                      </button>
-                    </Badge>
-                  ))}
-                  <div className="flex items-center gap-1">
-                    <Input
-                      value={tagInput}
-                      onChange={(e) => setTagInput(e.target.value)}
-                      onKeyDown={(e) => {
-                        if (e.key === "Enter") {
-                          e.preventDefault();
-                          addTag();
-                        }
-                      }}
-                      placeholder="Adicionar tag"
-                      className="h-7 w-32 text-xs"
-                    />
-                    <Button size="icon" variant="ghost" className="size-7" onClick={addTag}>
-                      <Plus className="size-3" />
-                    </Button>
-                  </div>
-                </div>
-                <div className="flex-1 overflow-y-auto p-4 space-y-2">
-                  {messages.map((m) => (
-                    <div
-                      key={m.id}
-                      className={`flex ${m.fromMe ? "justify-end" : "justify-start"}`}
-                    >
-                      <div
-                        className={`max-w-[75%] rounded-2xl px-3 py-2 text-sm ${m.fromMe ? "bg-primary text-primary-foreground" : "bg-secondary"}`}
-                      >
-                        <p className="whitespace-pre-wrap break-words">{m.text}</p>
-                        <p className="text-[10px] opacity-70 mt-1">
-                          {new Date(m.createdAt).toLocaleTimeString()}
-                        </p>
-                      </div>
-                    </div>
-                  ))}
-                  <div ref={bottomRef} />
-                </div>
-                <div className="border-t border-border p-3 relative">
-                  {tplOpen && tplMatches.length > 0 && (
-                    <div className="absolute bottom-full left-3 right-3 mb-2 rounded-xl border border-border bg-popover shadow-lg overflow-hidden z-10">
-                      <div className="px-3 py-1.5 text-[10px] uppercase tracking-wider text-muted-foreground border-b border-border flex items-center gap-1.5">
-                        <MessageSquareText className="size-3" /> Templates · ↑↓ navegar · Enter
-                        aplicar · Esc fechar
-                      </div>
-                      <ul>
-                        {tplMatches.map((t, i) => (
-                          <li key={t.id}>
-                            <button
-                              onMouseEnter={() => setTplIdx(i)}
-                              onClick={() => applyTemplate(t)}
-                              className={`w-full text-left px-3 py-2 text-sm flex items-center gap-2 ${i === tplIdx ? "bg-secondary" : "hover:bg-secondary/60"}`}
-                            >
-                              <Badge variant="outline" className="font-mono shrink-0">
-                                /{t.shortcut}
-                              </Badge>
-                              <span className="font-medium truncate">{t.title}</span>
-                              <span className="text-xs text-muted-foreground truncate">
-                                — {t.body}
-                              </span>
-                            </button>
-                          </li>
-                        ))}
-                      </ul>
-                    </div>
-                  )}
-                  <div className="flex gap-2">
-                    <Input
-                      value={draft}
-                      onChange={(e) => {
-                        const v = e.target.value;
-                        setDraft(v);
-                        setTplOpen(v.startsWith("/"));
-                        setTplIdx(0);
-                      }}
-                      placeholder="Digite uma mensagem ou /atalho para templates..."
-                      onKeyDown={handleDraftKeyDown}
-                      disabled={sending}
-                    />
-                    <Button onClick={handleSend} disabled={sending || !draft.trim()}>
-                      {sending ? (
-                        <Loader2 className="size-4 animate-spin" />
+                {/* Coluna Direita: Perfil do Cliente */}
+                <div className="hidden lg:flex flex-col bg-secondary/5 p-4 space-y-4 overflow-y-auto h-full">
+                  <div>
+                    <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+                      Perfil do Cliente
+                    </h4>
+                    <div className="mt-2 p-3 rounded-lg border border-border bg-secondary/20 text-xs text-foreground space-y-2 leading-relaxed whitespace-pre-wrap">
+                      {active.profileNotes ? (
+                        active.profileNotes
                       ) : (
-                        <Send className="size-4" />
+                        <p className="text-muted-foreground italic">
+                          Nenhum perfil gerado ainda. O bot criará um resumo após interações.
+                        </p>
                       )}
-                    </Button>
+                    </div>
+                  </div>
+
+                  <div>
+                    <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+                      Classificação (Score)
+                    </h4>
+                    <div className="mt-2 flex items-center gap-0.5">
+                      {[1, 2, 3, 4, 5].map((star) => (
+                        <span
+                          key={star}
+                          className={`text-lg transition-colors ${
+                            star <= (active.leadScore || 0)
+                              ? "text-amber-500"
+                              : "text-muted-foreground opacity-30"
+                          }`}
+                        >
+                          ★
+                        </span>
+                      ))}
+                      <span className="text-xs text-muted-foreground ml-2">
+                        {active.leadScore ? `${active.leadScore}/5` : "Sem nota"}
+                      </span>
+                    </div>
                   </div>
                 </div>
               </>
             ) : (
-              <div className="flex-1 grid place-items-center text-sm text-muted-foreground">
+              <div className="col-span-full flex-1 grid place-items-center text-sm text-muted-foreground">
                 Selecione uma conversa
               </div>
             )}

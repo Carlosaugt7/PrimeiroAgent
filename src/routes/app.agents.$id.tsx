@@ -70,17 +70,27 @@ function AgentDetail() {
 
 interface AgentFormProps {
   agent: Agent;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   providers: any[];
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   instances: any[];
   updateAgent: (id: string, patch: Partial<Agent>) => Promise<void>;
   deleteAgent: (id: string) => Promise<void>;
   navigate: ReturnType<typeof useNavigate>;
 }
 
-function AgentDetailForm({ agent, providers, instances, updateAgent, deleteAgent, navigate }: AgentFormProps) {
+function AgentDetailForm({
+  agent,
+  providers,
+  instances,
+  updateAgent,
+  deleteAgent,
+  navigate,
+}: AgentFormProps) {
   const id = agent.id;
   const [form, setForm] = useState<Partial<Agent>>(agent);
   const [busy, setBusy] = useState(false);
+  const [newQuestion, setNewQuestion] = useState("");
 
   const provider = providers.find((p) => p.id === form.providerId);
 
@@ -92,7 +102,14 @@ function AgentDetailForm({ agent, providers, instances, updateAgent, deleteAgent
     setBusy(true);
     try {
       // Cria uma cópia limpa do patch sem id e sem tenantId para evitar erros de restrição no Supabase
-      const { id: _, tenantId: __, createdAt: ___, messages30d: ____, conversions30d: _____, ...cleanPatch } = form;
+      const {
+        id: _,
+        tenantId: __,
+        createdAt: ___,
+        messages30d: ____,
+        conversions30d: _____,
+        ...cleanPatch
+      } = form;
       await updateAgent(id, cleanPatch);
       toast.success("Agente atualizado");
     } catch (e: unknown) {
@@ -134,7 +151,9 @@ function AgentDetailForm({ agent, providers, instances, updateAgent, deleteAgent
           <div>
             <h1 className="font-display text-2xl font-bold">{agent.name}</h1>
             <div className="flex items-center gap-2 mt-1">
-              <span className={`text-[10px] px-2 py-0.5 rounded-full ${statusClass(currentStatus)}`}>
+              <span
+                className={`text-[10px] px-2 py-0.5 rounded-full ${statusClass(currentStatus)}`}
+              >
                 {currentStatus}
               </span>
               <Badge variant="outline" className="text-[10px]">
@@ -159,12 +178,13 @@ function AgentDetailForm({ agent, providers, instances, updateAgent, deleteAgent
       </div>
 
       <Tabs defaultValue="basic">
-        <TabsList className="grid w-full grid-cols-5">
+        <TabsList className="grid w-full grid-cols-6">
           <TabsTrigger value="basic">Básico</TabsTrigger>
           <TabsTrigger value="persona">Persona</TabsTrigger>
           <TabsTrigger value="voice">Voz / Áudio</TabsTrigger>
           <TabsTrigger value="prompt">Prompt</TabsTrigger>
           <TabsTrigger value="model">Modelo</TabsTrigger>
+          <TabsTrigger value="triage">Triagem</TabsTrigger>
         </TabsList>
 
         <TabsContent value="basic" className="space-y-4 pt-4">
@@ -246,13 +266,29 @@ function AgentDetailForm({ agent, providers, instances, updateAgent, deleteAgent
             <div className="space-y-0.5">
               <Label className="text-sm font-semibold">Respostas Automáticas (IA)</Label>
               <p className="text-xs text-muted-foreground">
-                Habilite ou desabilite as respostas automáticas do agente na instância do WhatsApp vinculada.
+                Habilite ou desabilite as respostas automáticas do agente na instância do WhatsApp
+                vinculada.
               </p>
             </div>
             <Switch
               checked={form.autoReply !== false}
               onCheckedChange={(checked) => setForm({ ...form, autoReply: checked })}
             />
+          </div>
+          <div className="space-y-2">
+            <Label>Mensagem / Aviso de Ausência</Label>
+            <Textarea
+              value={form.awayMessage ?? ""}
+              onChange={(e) => setForm({ ...form, awayMessage: e.target.value })}
+              placeholder="Ex: Não posso atender no momento pois estou em reunião, mas assim que possível responderei..."
+              rows={3}
+              className="mt-1"
+            />
+            <p className="text-xs text-muted-foreground">
+              Esta mensagem será enviada automaticamente para o cliente quando o bot for pausado ou
+              transferir para atendimento humano (handoff). Pode ser definida também via Linha
+              Direta enviando uma mensagem/áudio para si mesmo.
+            </p>
           </div>
         </TabsContent>
 
@@ -324,19 +360,24 @@ function AgentDetailForm({ agent, providers, instances, updateAgent, deleteAgent
             <Label>Modo de Resposta de Voz</Label>
             <Select
               value={form.voiceResponseMode ?? "audio_only_on_audio"}
-              onValueChange={(v: any) => setForm({ ...form, voiceResponseMode: v })}
+              onValueChange={(v: "text_only" | "audio_only_on_audio" | "always_audio") =>
+                setForm({ ...form, voiceResponseMode: v })
+              }
             >
               <SelectTrigger className="mt-1">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="text_only">Apenas Texto</SelectItem>
-                <SelectItem value="audio_only_on_audio">Responder com áudio apenas quando receber áudio</SelectItem>
+                <SelectItem value="audio_only_on_audio">
+                  Responder com áudio apenas quando receber áudio
+                </SelectItem>
                 <SelectItem value="always_audio">Responder sempre com áudio</SelectItem>
               </SelectContent>
             </Select>
             <p className="text-xs text-muted-foreground mt-1">
-              Determina se o agente responderá por texto ou por mensagem de áudio gravada no WhatsApp.
+              Determina se o agente responderá por texto ou por mensagem de áudio gravada no
+              WhatsApp.
             </p>
           </div>
 
@@ -365,7 +406,8 @@ function AgentDetailForm({ agent, providers, instances, updateAgent, deleteAgent
               className="mt-1"
             />
             <p className="text-xs text-muted-foreground mt-1">
-              Insira o ID da voz do ElevenLabs que o agente usará. Você pode escolher vozes pré-fabricadas ou clonadas no painel do ElevenLabs.
+              Insira o ID da voz do ElevenLabs que o agente usará. Você pode escolher vozes
+              pré-fabricadas ou clonadas no painel do ElevenLabs.
             </p>
           </div>
         </TabsContent>
@@ -477,6 +519,94 @@ function AgentDetailForm({ agent, providers, instances, updateAgent, deleteAgent
                 </div>
               </div>
             </>
+          )}
+        </TabsContent>
+
+        <TabsContent value="triage" className="space-y-6 pt-4">
+          <div className="flex items-center justify-between p-4 rounded-xl border border-border bg-secondary/10">
+            <div>
+              <h3 className="font-semibold text-sm">Ativar fluxo de triagem</h3>
+              <p className="text-xs text-muted-foreground mt-0.5">
+                Faça perguntas obrigatórias ao cliente antes de liberar a conversa para a IA.
+              </p>
+            </div>
+            <Switch
+              checked={form.triageEnabled ?? false}
+              onCheckedChange={(val) => setForm({ ...form, triageEnabled: val })}
+            />
+          </div>
+
+          {form.triageEnabled && (
+            <div className="space-y-4">
+              <div className="space-y-2">
+                <Label>Perguntas de triagem (em ordem de envio)</Label>
+                <div className="flex gap-2">
+                  <Input
+                    value={newQuestion}
+                    onChange={(e) => setNewQuestion(e.target.value)}
+                    placeholder="Ex: Qual o seu nome completo?"
+                    className="flex-1"
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") {
+                        e.preventDefault();
+                        const q = newQuestion.trim();
+                        if (q) {
+                          const currentQs = form.triageQuestions || [];
+                          setForm({ ...form, triageQuestions: [...currentQs, q] });
+                          setNewQuestion("");
+                        }
+                      }
+                    }}
+                  />
+                  <Button
+                    type="button"
+                    onClick={() => {
+                      const q = newQuestion.trim();
+                      if (q) {
+                        const currentQs = form.triageQuestions || [];
+                        setForm({ ...form, triageQuestions: [...currentQs, q] });
+                        setNewQuestion("");
+                      }
+                    }}
+                  >
+                    Adicionar
+                  </Button>
+                </div>
+              </div>
+
+              {(form.triageQuestions ?? []).length === 0 ? (
+                <p className="text-xs text-muted-foreground italic text-center py-6">
+                  Nenhuma pergunta adicionada ainda. Adicione perguntas acima.
+                </p>
+              ) : (
+                <ul className="space-y-2">
+                  {(form.triageQuestions ?? []).map((q, index) => (
+                    <li
+                      key={index}
+                      className="flex items-center justify-between p-3 rounded-lg border border-border bg-card text-sm"
+                    >
+                      <span className="font-medium">
+                        {index + 1}. {q}
+                      </span>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="size-7 text-destructive hover:bg-destructive/10"
+                        onClick={() => {
+                          const currentQs = form.triageQuestions || [];
+                          setForm({
+                            ...form,
+                            triageQuestions: currentQs.filter((_, idx) => idx !== index),
+                          });
+                        }}
+                      >
+                        <Trash2 className="size-4" />
+                      </Button>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
           )}
         </TabsContent>
       </Tabs>

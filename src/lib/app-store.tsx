@@ -42,9 +42,12 @@ export interface Agent {
   createdAt: string;
   whatsappInstanceId?: string;
   autoReply?: boolean;
+  awayMessage?: string | null;
   elevenlabsVoiceId?: string;
   elevenlabsVoiceGender?: string;
   voiceResponseMode?: "text_only" | "audio_only_on_audio" | "always_audio";
+  triageEnabled?: boolean;
+  triageQuestions?: string[];
 }
 
 export interface LLMProvider {
@@ -71,6 +74,25 @@ export interface Conversation {
   status: "aberta" | "em_atendimento" | "resolvida" | "handoff";
   botPaused?: boolean;
   tags?: string[];
+  profileNotes?: string | null;
+  leadScore?: number | null;
+  isFrustrated?: boolean | null;
+  convertedValue?: number | null;
+  triageAnswers?: Record<string, string> | null;
+  triageCurrentIndex?: number | null;
+}
+
+export interface Product {
+  id: string;
+  tenantId: string;
+  name: string;
+  description?: string | null;
+  price: number;
+  imageUrl?: string | null;
+  linkUrl?: string | null;
+  sku?: string | null;
+  isActive?: boolean;
+  createdAt?: string;
 }
 
 export interface KnowledgeDoc {

@@ -1,5 +1,15 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
+/* eslint-disable no-useless-escape */
 import { createFileRoute } from "@tanstack/react-router";
 import { supabaseAdmin as supabase } from "@/integrations/supabase/client.server";
+import {
+  googleCalendarGetAvailableSlots,
+  googleCalendarCreateEvent,
+  googleCalendarCancelEvent,
+  googleCalendarListEvents,
+  googleSheetsSearch,
+  googleSheetsAppendRow,
+} from "@/lib/google-integrations";
 
 const EVO_BASE_FALLBACK = "https://evolution-api.rsconsultoria.pro";
 
@@ -12,12 +22,16 @@ async function getGlobalEvoConfig(): Promise<{ url: string; key: string | undefi
       .in("key", ["evolutionApiUrl", "evolutionApiKey"]);
 
     if (data && data.length > 0) {
-      const map = Object.fromEntries(data.map((r: { key: string; value: string }) => [r.key, r.value]));
+      const map = Object.fromEntries(
+        data.map((r: { key: string; value: string }) => [r.key, r.value]),
+      );
       const u = map.evolutionApiUrl?.trim();
       const k = map.evolutionApiKey?.trim();
       if (u && k) return { url: u.replace(/\/$/, ""), key: k };
     }
-  } catch { /* usa fallback */ }
+  } catch {
+    /* usa fallback */
+  }
   return { url: EVO_BASE_FALLBACK, key: process.env.EVOLUTION_API_KEY };
 }
 
@@ -121,23 +135,26 @@ async function evoGetBase64Media(tenantId: string, instanceName: string, message
     const cfg = await getEvoConfig(tenantId);
     if (!cfg.key) return null;
 
-    const r = await fetch(`${cfg.url}/chat/getBase64FromMedia/${encodeURIComponent(instanceName)}`, {
-      method: "POST",
-      headers: { apikey: cfg.key, "Content-Type": "application/json" },
-      body: JSON.stringify({
-        message: {
-          key: {
-            id: messageId
-          }
-        },
-        convertToMp3: true
-      }),
-    });
+    const r = await fetch(
+      `${cfg.url}/chat/getBase64FromMedia/${encodeURIComponent(instanceName)}`,
+      {
+        method: "POST",
+        headers: { apikey: cfg.key, "Content-Type": "application/json" },
+        body: JSON.stringify({
+          message: {
+            key: {
+              id: messageId,
+            },
+          },
+          convertToMp3: true,
+        }),
+      },
+    );
     if (!r.ok) {
       console.warn(`[evoGetBase64Media] falhou: ${r.status}`);
       return null;
     }
-    const res = await r.json() as { base64?: string };
+    const res = (await r.json()) as { base64?: string };
     return res.base64 ?? null;
   } catch (e) {
     console.error("[evoGetBase64Media] erro:", e);
@@ -145,11 +162,16 @@ async function evoGetBase64Media(tenantId: string, instanceName: string, message
   }
 }
 
-async function transcribeAudioWithOpenAI(apiKey: string, base64Data: string): Promise<string | null> {
+async function transcribeAudioWithOpenAI(
+  apiKey: string,
+  base64Data: string,
+): Promise<string | null> {
   try {
-    const base64Clean = base64Data.includes("base64,") ? base64Data.split("base64,")[1] : base64Data;
+    const base64Clean = base64Data.includes("base64,")
+      ? base64Data.split("base64,")[1]
+      : base64Data;
     const buffer = Buffer.from(base64Clean, "base64");
-    
+
     const blob = new Blob([buffer], { type: "audio/mp3" });
     const formData = new FormData();
     formData.append("file", blob, "audio.mp3");
@@ -159,9 +181,9 @@ async function transcribeAudioWithOpenAI(apiKey: string, base64Data: string): Pr
     const r = await fetch("https://api.openai.com/v1/audio/transcriptions", {
       method: "POST",
       headers: {
-        Authorization: `Bearer ${apiKey}`
+        Authorization: `Bearer ${apiKey}`,
       },
-      body: formData
+      body: formData,
     });
 
     if (!r.ok) {
@@ -169,7 +191,7 @@ async function transcribeAudioWithOpenAI(apiKey: string, base64Data: string): Pr
       return null;
     }
 
-    const j = await r.json() as { text: string };
+    const j = (await r.json()) as { text: string };
     return j.text || null;
   } catch (e) {
     console.error("[Whisper] erro:", e);
@@ -188,7 +210,7 @@ async function getOpenAiApiKey(tenantId: string, agentProviderId?: string): Prom
         .single();
       if (prov?.kind === "openai" && prov.apiKey) return prov.apiKey;
     }
-    
+
     const { data: provs } = await supabase
       .from("llm_providers")
       .select("apiKey")
@@ -210,24 +232,46 @@ async function generateElevenLabsAudio(
   text: string,
 ): Promise<string | null> {
   try {
-    const response = await fetch(`https://api.elevenlabs.io/v1/text-to-speech/${encodeURIComponent(voiceId)}`, {
-      method: "POST",
-      headers: {
-        "xi-api-key": apiKey,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        text,
-        model_id: "eleven_multilingual_v2",
-        voice_settings: {
-          stability: 0.5,
-          similarity_boost: 0.75,
+    const textHash = await getSHA256Hash(text);
+
+    // 1. Verificar cache
+    const { data: cached } = await supabase
+      .from("voice_cache")
+      .select("audioUrl")
+      .eq("tenantId", tenantId)
+      .eq("voiceId", voiceId)
+      .eq("textHash", textHash)
+      .maybeSingle();
+
+    if (cached?.audioUrl) {
+      console.log(`[ElevenLabs Cache] HIT: Usando áudio em cache para hash=${textHash}`);
+      return cached.audioUrl;
+    }
+
+    console.log(`[ElevenLabs Cache] MISS: Chamando ElevenLabs para hash=${textHash}`);
+    const response = await fetch(
+      `https://api.elevenlabs.io/v1/text-to-speech/${encodeURIComponent(voiceId)}`,
+      {
+        method: "POST",
+        headers: {
+          "xi-api-key": apiKey,
+          "Content-Type": "application/json",
         },
-      }),
-    });
+        body: JSON.stringify({
+          text,
+          model_id: "eleven_multilingual_v2",
+          voice_settings: {
+            stability: 0.5,
+            similarity_boost: 0.75,
+          },
+        }),
+      },
+    );
 
     if (!response.ok) {
-      console.error(`[ElevenLabs] Erro ao gerar áudio: ${response.status} - ${await response.text()}`);
+      console.error(
+        `[ElevenLabs] Erro ao gerar áudio: ${response.status} - ${await response.text()}`,
+      );
       return null;
     }
 
@@ -250,14 +294,36 @@ async function generateElevenLabsAudio(
     }
 
     const { data: urlData } = supabase.storage.from(bucketName).getPublicUrl(fileName);
-    return urlData.publicUrl ?? null;
+    const audioUrl = urlData.publicUrl;
+
+    if (audioUrl) {
+      // Registrar no cache em background
+      supabase
+        .from("voice_cache")
+        .upsert(
+          { tenantId, voiceId, textHash, audioUrl },
+          { onConflict: "tenantId,voiceId,textHash" },
+        )
+        .then(({ error }) => {
+          if (error) console.error("[ElevenLabs Cache] Falha ao gravar cache:", error);
+          else console.log("[ElevenLabs Cache] Áudio gravado no cache com sucesso.");
+        });
+
+      return audioUrl;
+    }
+    return null;
   } catch (e) {
     console.error("[ElevenLabs] Erro na síntese/upload:", e);
     return null;
   }
 }
 
-async function evoSendAudio(tenantId: string, instanceName: string, number: string, audioUrl: string) {
+async function evoSendAudio(
+  tenantId: string,
+  instanceName: string,
+  number: string,
+  audioUrl: string,
+) {
   const cfg = await getEvoConfig(tenantId);
   if (!cfg.key) throw new Error("EVOLUTION_API_KEY ausente ou não configurada");
 
@@ -267,6 +333,73 @@ async function evoSendAudio(tenantId: string, instanceName: string, number: stri
     body: JSON.stringify({ number, audio: audioUrl }),
   });
   if (!r.ok) throw new Error(`sendAudio ${r.status}: ${(await r.text()).slice(0, 200)}`);
+}
+
+async function evoSendPresence(
+  tenantId: string,
+  instanceName: string,
+  number: string,
+  presence: "composing" | "recording" | "paused",
+) {
+  try {
+    const cfg = await getEvoConfig(tenantId);
+    if (!cfg.key) return;
+    await fetch(`${cfg.url}/chat/sendPresence/${encodeURIComponent(instanceName)}`, {
+      method: "POST",
+      headers: { apikey: cfg.key, "Content-Type": "application/json" },
+      body: JSON.stringify({ number, presence }),
+    });
+  } catch (e) {
+    console.warn("[evoSendPresence] erro:", e);
+  }
+}
+
+async function evoSendButtons(
+  tenantId: string,
+  instanceName: string,
+  number: string,
+  text: string,
+  buttons: string[],
+) {
+  try {
+    const cfg = await getEvoConfig(tenantId);
+    if (!cfg.key) throw new Error("EVOLUTION_API_KEY ausente ou não configurada");
+
+    const r = await fetch(`${cfg.url}/message/sendButtons/${encodeURIComponent(instanceName)}`, {
+      method: "POST",
+      headers: { apikey: cfg.key, "Content-Type": "application/json" },
+      body: JSON.stringify({
+        number,
+        title: "Opções disponíveis",
+        description: text,
+        footerText: "AgentFlow IA",
+        buttons: buttons.map((btn, index) => ({
+          text: btn,
+          id: `btn_${index}_${Date.now()}`,
+        })),
+      }),
+    });
+
+    if (!r.ok) {
+      const errText = await r.text();
+      console.warn("[EvoButtons] Erro ao enviar botões nativos:", errText);
+      // Fallback: enviar como texto comum formatado
+      await evoSendText(
+        tenantId,
+        instanceName,
+        number,
+        `${text}\n\n*Escolha uma opção:*\n${buttons.map((b) => `👉 *${b}*`).join("\n")}`,
+      );
+    }
+  } catch (e) {
+    console.error("[EvoButtons] erro no envio, usando fallback de texto:", e);
+    await evoSendText(
+      tenantId,
+      instanceName,
+      number,
+      `${text}\n\n*Escolha uma opção:*\n${buttons.map((b) => `👉 *${b}*`).join("\n")}`,
+    );
+  }
 }
 
 // ===== Motor de Automações =====
@@ -422,7 +555,7 @@ async function embedQuery(
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           model: modelName,
-          content: { parts: [{ text }] }
+          content: { parts: [{ text }] },
         }),
       });
       if (!r.ok) return null;
@@ -448,10 +581,7 @@ async function embedQuery(
   }
 }
 
-async function buildRagContext(
-  tenantId: string,
-  userText: string,
-): Promise<string | null> {
+async function buildRagContext(tenantId: string, userText: string): Promise<string | null> {
   const { data: docs } = await supabase.from("knowledge").select("*").eq("tenantId", tenantId);
   if (!docs || docs.length === 0) return null;
 
@@ -522,9 +652,23 @@ async function buildRagContext(
 
 // ===== Funções de Agenda Clínica (Supabase) =====
 
-const WORK_HOURS = ["08:00", "09:00", "10:00", "11:00", "13:00", "14:00", "15:00", "16:00", "17:00"];
+const WORK_HOURS = [
+  "08:00",
+  "09:00",
+  "10:00",
+  "11:00",
+  "13:00",
+  "14:00",
+  "15:00",
+  "16:00",
+  "17:00",
+];
 
-async function getAvailableSlots(tenantId: string, specialty: string, date: string): Promise<string[]> {
+async function getAvailableSlots(
+  tenantId: string,
+  specialty: string,
+  date: string,
+): Promise<string[]> {
   try {
     const { data: booked } = await supabase
       .from("appointments")
@@ -600,7 +744,9 @@ async function cancelAppointment(tenantId: string, patientPhone: string): Promis
 async function withRetry<T>(fn: () => Promise<T>, maxAttempts = 3, baseDelayMs = 1500): Promise<T> {
   let lastError: unknown;
   for (let attempt = 1; attempt <= maxAttempts; attempt++) {
-    try { return await fn(); } catch (e) {
+    try {
+      return await fn();
+    } catch (e) {
       lastError = e;
       const msg = e instanceof Error ? e.message : String(e);
       const isTransient = /503|502|429|UNAVAILABLE|high demand|overloaded|rate.?limit/i.test(msg);
@@ -611,14 +757,178 @@ async function withRetry<T>(fn: () => Promise<T>, maxAttempts = 3, baseDelayMs =
   throw lastError;
 }
 
+async function getSHA256Hash(text: string): Promise<string> {
+  const msgUint8 = new TextEncoder().encode(text);
+  const hashBuffer = await crypto.subtle.digest("SHA-256", msgUint8);
+  const hashArray = Array.from(new Uint8Array(hashBuffer));
+  return hashArray.map((b) => b.toString(16).padStart(2, "0")).join("");
+}
+
+async function getEvoMediaBase64(
+  tenantId: string,
+  instanceName: string,
+  messageKeyId: string,
+): Promise<string | null> {
+  try {
+    const cfg = await getEvoConfig(tenantId);
+    if (!cfg.key) return null;
+    const r = await fetch(
+      `${cfg.url}/chat/getBase64FromMediaMessage/${encodeURIComponent(instanceName)}`,
+      {
+        method: "POST",
+        headers: { apikey: cfg.key, "Content-Type": "application/json" },
+        body: JSON.stringify({
+          message: {
+            key: {
+              id: messageKeyId,
+            },
+          },
+        }),
+      },
+    );
+    if (!r.ok) {
+      console.warn("[getEvoMediaBase64] falhou na API:", await r.text());
+      return null;
+    }
+    const j = (await r.json()) as { base64?: string };
+    return j.base64 || null;
+  } catch (e) {
+    console.warn("[getEvoMediaBase64] erro:", e);
+    return null;
+  }
+}
+
+async function searchProducts(tenantId: string, query: string): Promise<any[]> {
+  try {
+    const { data, error } = await supabase
+      .from("products")
+      .select("*")
+      .eq("tenantId", tenantId)
+      .eq("isActive", true)
+      .ilike("name", `%${query}%`)
+      .limit(8);
+    if (error) throw error;
+    return data || [];
+  } catch (e) {
+    console.error("[searchProducts] erro:", e);
+    return [];
+  }
+}
+
+async function updateConversationProfile(tenantId: string, convId: string) {
+  try {
+    console.log(
+      `[profileUpdate] Iniciando atualização de perfil em background para conversa: ${convId}`,
+    );
+    const { data: messages } = await supabase
+      .from("messages")
+      .select("text, fromMe, bot")
+      .eq("conversationId", convId)
+      .order("createdAt", { ascending: false })
+      .limit(15);
+
+    if (!messages || messages.length === 0) return;
+
+    const sortedMsg = [...messages].reverse();
+    const chatLog = sortedMsg
+      .map((m) => {
+        const sender = m.fromMe ? (m.bot ? "Assistente" : "Atendente") : "Cliente";
+        return `${sender}: ${m.text}`;
+      })
+      .join("\n");
+
+    const { data: conv } = await supabase
+      .from("conversations")
+      .select("instanceName")
+      .eq("id", convId)
+      .single();
+    if (!conv?.instanceName) return;
+
+    const { data: agents } = await supabase.from("agents").select("*").eq("tenantId", tenantId);
+    const agent = (agents || []).find((a: any) => a.whatsappInstanceId === conv.instanceName);
+    if (!agent?.providerId || !agent?.model) return;
+
+    const { data: provider } = await supabase
+      .from("llm_providers")
+      .select("*")
+      .eq("id", agent.providerId)
+      .single();
+    if (!provider?.apiKey) return;
+
+    const summaryPrompt = `Você é um analisador de conversas de CRM. Analise o histórico do chat abaixo e retorne exatamente um objeto JSON (e NADA mais, sem blocos de código Markdown ou caracteres extras) contendo:
+- "notes": Um perfil ultra-conciso (máximo 2 parágrafos) do cliente, contendo nome (se informado), necessidades principais, interesses ou planos discutidos e detalhes importantes.
+- "score": Uma nota de 1 a 5 (número inteiro) que representa o nível de interesse do cliente (Lead Scoring):
+  1 = Sem interesse / Spam.
+  2 = Apenas tirando dúvidas casuais.
+  3 = Demonstrando interesse genuíno nos produtos/serviços.
+  4 = Altamente interessado, perguntando sobre preços, formas de pagamento ou agendamento.
+  5 = Decidido a contratar / Agendamento confirmado / Venda fechada.
+
+Histórico do Chat:\n${chatLog}`;
+
+    const res = await callLLM(
+      provider,
+      agent,
+      "Você é um classificador de leads que responde apenas em JSON válido.",
+      summaryPrompt,
+    );
+
+    let notes = "";
+    let score = 3; // valor padrão de fallback
+
+    try {
+      const cleanJson = res.text.replace(/```json|```/g, "").trim();
+      const parsed = JSON.parse(cleanJson);
+      notes = parsed.notes || "";
+      score = typeof parsed.score === "number" ? parsed.score : parseInt(parsed.score) || 3;
+    } catch {
+      notes = res.text;
+      score = 3;
+    }
+
+    if (notes && notes.trim()) {
+      const { error } = await supabase
+        .from("conversations")
+        .update({
+          profileNotes: notes.trim(),
+          leadScore: score,
+        })
+        .eq("id", convId)
+        .eq("tenantId", tenantId);
+      if (error) throw error;
+      console.log(`[profileUpdate] Perfil da conversa e Lead Score (${score}/5) atualizados.`);
+    }
+  } catch (e) {
+    console.error("[profileUpdate] Erro ao resumir perfil da conversa:", e);
+  }
+}
+
 async function callAnthropic(
   provider: Record<string, unknown>,
   agent: Record<string, unknown>,
   systemPrompt: string,
   userText: string,
-): Promise<string> {
+  imageBase64?: string | null,
+): Promise<{ text: string; inputTokens: number; outputTokens: number }> {
   const baseUrl = (provider.baseUrl as string)?.trim() || "";
   const base = (baseUrl || "https://api.anthropic.com/v1").replace(/\/$/, "");
+
+  let contentPayload: any = userText;
+  if (imageBase64) {
+    const base64Data = imageBase64.replace(/^data:image\/\w+;base64,/, "");
+    contentPayload = [
+      { type: "text", text: userText },
+      {
+        type: "image",
+        source: {
+          type: "base64",
+          media_type: "image/jpeg",
+          data: base64Data,
+        },
+      },
+    ];
+  }
+
   const r = await fetch(`${base}/messages`, {
     method: "POST",
     headers: {
@@ -629,14 +939,21 @@ async function callAnthropic(
     body: JSON.stringify({
       model: agent.model,
       system: systemPrompt,
-      messages: [{ role: "user", content: userText }],
+      messages: [{ role: "user", content: contentPayload }],
       max_tokens: 1024,
       temperature: agent.temperature ?? 0.5,
     }),
   });
   if (!r.ok) throw new Error(`LLM ${r.status}: ${(await r.text()).slice(0, 300)}`);
-  const j = (await r.json()) as { content: Array<{ text: string }> };
-  return j.content?.[0]?.text ?? "";
+  const j = (await r.json()) as {
+    content: Array<{ text: string }>;
+    usage?: { input_tokens: number; output_tokens: number };
+  };
+  return {
+    text: j.content?.[0]?.text ?? "",
+    inputTokens: j.usage?.input_tokens ?? 0,
+    outputTokens: j.usage?.output_tokens ?? 0,
+  };
 }
 
 async function callGoogle(
@@ -644,23 +961,40 @@ async function callGoogle(
   agent: Record<string, unknown>,
   systemPrompt: string,
   userText: string,
-): Promise<string> {
+  imageBase64?: string | null,
+): Promise<{ text: string; inputTokens: number; outputTokens: number }> {
   const url = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(agent.model as string)}:generateContent?key=${encodeURIComponent(provider.apiKey as string)}`;
   return withRetry(async () => {
+    const parts: any[] = [{ text: userText }];
+    if (imageBase64) {
+      const base64Data = imageBase64.replace(/^data:image\/\w+;base64,/, "");
+      parts.push({
+        inlineData: {
+          mimeType: "image/jpeg",
+          data: base64Data,
+        },
+      });
+    }
+
     const r = await fetch(url, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         systemInstruction: { parts: [{ text: systemPrompt }] },
-        contents: [{ role: "user", parts: [{ text: userText }] }],
+        contents: [{ role: "user", parts }],
         generationConfig: { temperature: agent.temperature ?? 0.5 },
       }),
     });
     if (!r.ok) throw new Error(`LLM ${r.status}: ${(await r.text()).slice(0, 300)}`);
     const j = (await r.json()) as {
       candidates?: Array<{ content: { parts: Array<{ text: string }> } }>;
+      usageMetadata?: { promptTokenCount: number; candidatesTokenCount: number };
     };
-    return j.candidates?.[0]?.content?.parts?.[0]?.text ?? "";
+    return {
+      text: j.candidates?.[0]?.content?.parts?.[0]?.text ?? "",
+      inputTokens: j.usageMetadata?.promptTokenCount ?? 0,
+      outputTokens: j.usageMetadata?.candidatesTokenCount ?? 0,
+    };
   });
 }
 
@@ -669,10 +1003,27 @@ async function callOpenAICompat(
   agent: Record<string, unknown>,
   systemPrompt: string,
   userText: string,
-): Promise<string> {
+  imageBase64?: string | null,
+): Promise<{ text: string; inputTokens: number; outputTokens: number }> {
   const baseUrl = (provider.baseUrl as string)?.trim() || "";
   const base = (baseUrl || "https://api.openai.com/v1").replace(/\/$/, "");
   return withRetry(async () => {
+    let contentPayload: any = userText;
+    if (imageBase64) {
+      const formattedBase64 = imageBase64.startsWith("data:")
+        ? imageBase64
+        : `data:image/jpeg;base64,${imageBase64}`;
+      contentPayload = [
+        { type: "text", text: userText },
+        {
+          type: "image_url",
+          image_url: {
+            url: formattedBase64,
+          },
+        },
+      ];
+    }
+
     const r = await fetch(`${base}/chat/completions`, {
       method: "POST",
       headers: { "Content-Type": "application/json", Authorization: `Bearer ${provider.apiKey}` },
@@ -680,14 +1031,21 @@ async function callOpenAICompat(
         model: agent.model,
         messages: [
           { role: "system", content: systemPrompt },
-          { role: "user", content: userText },
+          { role: "user", content: contentPayload },
         ],
         temperature: agent.temperature ?? 0.5,
       }),
     });
     if (!r.ok) throw new Error(`LLM ${r.status}: ${(await r.text()).slice(0, 300)}`);
-    const j = (await r.json()) as { choices: Array<{ message: { content: string } }> };
-    return j.choices?.[0]?.message?.content ?? "";
+    const j = (await r.json()) as {
+      choices: Array<{ message: { content: string } }>;
+      usage?: { prompt_tokens: number; completion_tokens: number };
+    };
+    return {
+      text: j.choices?.[0]?.message?.content ?? "",
+      inputTokens: j.usage?.prompt_tokens ?? 0,
+      outputTokens: j.usage?.completion_tokens ?? 0,
+    };
   });
 }
 
@@ -696,11 +1054,285 @@ async function callLLM(
   agent: Record<string, unknown>,
   systemPrompt: string,
   userText: string,
-): Promise<string> {
-  const kind = provider.kind;
-  if (kind === "anthropic") return callAnthropic(provider, agent, systemPrompt, userText);
-  if (kind === "google") return callGoogle(provider, agent, systemPrompt, userText);
-  return callOpenAICompat(provider, agent, systemPrompt, userText);
+  tenantId?: string,
+  imageBase64?: string | null,
+): Promise<{ text: string; inputTokens: number; outputTokens: number }> {
+  try {
+    const kind = provider.kind;
+    if (kind === "anthropic")
+      return await callAnthropic(provider, agent, systemPrompt, userText, imageBase64);
+    if (kind === "google")
+      return await callGoogle(provider, agent, systemPrompt, userText, imageBase64);
+    return await callOpenAICompat(provider, agent, systemPrompt, userText, imageBase64);
+  } catch (err) {
+    console.warn(
+      `[callLLM] Falha no provedor principal (id=${provider.id}). Iniciando failover... Erro:`,
+      err,
+    );
+    if (tenantId) {
+      try {
+        const { data: alternativeProvs } = await supabase
+          .from("llm_providers")
+          .select("*")
+          .eq("tenantId", tenantId)
+          .neq("id", provider.id);
+
+        if (alternativeProvs && alternativeProvs.length > 0) {
+          const fallbackProv = alternativeProvs[0];
+          console.log(
+            `[callLLM] Failover: Roteando para "${fallbackProv.name}" (${fallbackProv.kind})`,
+          );
+
+          let fallbackModel = agent.model;
+          if (fallbackProv.kind === "google") fallbackModel = "gemini-1.5-flash";
+          else if (fallbackProv.kind === "openai") fallbackModel = "gpt-4o-mini";
+          else if (fallbackProv.kind === "anthropic") fallbackModel = "claude-3-5-haiku-20241022";
+          else if (fallbackProv.models && fallbackProv.models.length > 0)
+            fallbackModel = fallbackProv.models[0].id;
+
+          const fallbackAgent = { ...agent, model: fallbackModel };
+
+          if (fallbackProv.kind === "anthropic")
+            return await callAnthropic(
+              fallbackProv,
+              fallbackAgent,
+              systemPrompt,
+              userText,
+              imageBase64,
+            );
+          if (fallbackProv.kind === "google")
+            return await callGoogle(
+              fallbackProv,
+              fallbackAgent,
+              systemPrompt,
+              userText,
+              imageBase64,
+            );
+          return await callOpenAICompat(
+            fallbackProv,
+            fallbackAgent,
+            systemPrompt,
+            userText,
+            imageBase64,
+          );
+        }
+      } catch (fallbackErr) {
+        console.error(`[callLLM] Falha no roteamento de contingência local:`, fallbackErr);
+      }
+    }
+    throw err;
+  }
+}
+
+// ===== Linha Dir// ===== Linha Direta (Comandos do Proprietário) =====
+
+async function runDirectLine(
+  tenantId: string,
+  instanceName: string,
+  remoteJid: string,
+  userText: string,
+  convId: string,
+  isAudioInput = false,
+) {
+  console.log(`[directLine] Iniciando atendimento da Linha Direta para ${instanceName}`);
+  const t0 = Date.now();
+  let inputTokens = 0;
+  let outputTokens = 0;
+
+  // 1) Encontrar agente vinculado a esta instância
+  const { data: agents } = await supabase.from("agents").select("*").eq("tenantId", tenantId);
+  const agent = (agents || []).find((a: any) => a.whatsappInstanceId === instanceName);
+  if (!agent) {
+    console.warn(`[directLine] Nenhum agente vinculado à instância "${instanceName}"`);
+    return { skipped: "no-agent-linked" };
+  }
+  if (!agent.providerId || !agent.model) {
+    console.warn(`[directLine] Agente incompleto`);
+    return { skipped: "agent-incomplete" };
+  }
+
+  // 2) Carregar provider
+  const { data: provider } = await supabase
+    .from("llm_providers")
+    .select("*")
+    .eq("id", agent.providerId)
+    .eq("tenantId", tenantId)
+    .single();
+  if (!provider?.apiKey) {
+    console.warn(`[directLine] API key não configurada`);
+    return { skipped: "no-provider" };
+  }
+
+  // 3) Prompt de comando direto
+  const directLineSystemPrompt = `Você é a central de comando do proprietário deste WhatsApp. O dono da conta acabou de lhe enviar uma mensagem (ou áudio).
+Analise o que ele deseja e execute uma das seguintes ações retornando a tag correspondente exatamente no final da resposta:
+
+1. Se ele deseja configurar uma mensagem de ausência/aviso para quando os clientes quiserem falar com ele (ex: "estarei em reunião", "estou ausente", "avise que...", "não posso atender"), extraia a mensagem/motivo de ausência e retorne exatamente no formato:
+   [ACTION: set_away { "message": "A mensagem/aviso de ausência exata em português informando que ele está ocupado/ausente e responderá depois" }]
+   
+2. Se ele deseja limpar/desativar o aviso de ausência:
+   [ACTION: clear_away {}]
+   
+3. Se ele deseja ver os agendamentos ou resumo do dia:
+   [ACTION: get_summary {}]
+   
+Caso contrário, apenas responda de forma prestativa confirmando que entendeu ou explicando como ele pode usar os comandos (ex: "resumo do dia", "agendamento", "definir aviso de ausência").`;
+
+  let reply = "";
+  let llmError: string | null = null;
+  try {
+    const res = await callLLM(provider, agent, directLineSystemPrompt, userText, tenantId);
+    reply = res.text.trim();
+    inputTokens += res.inputTokens;
+    outputTokens += res.outputTokens;
+  } catch (e) {
+    llmError = e instanceof Error ? e.message : String(e);
+  }
+
+  if (llmError) {
+    console.error(`[directLine] Erro LLM:`, llmError);
+    return { error: llmError };
+  }
+  if (!reply) return { skipped: "empty-reply" };
+
+  // Interceptar ações
+  if (reply.includes("[ACTION:")) {
+    const actionRegex = /\[ACTION:\s*(\w+)\s*(\{.*?\})?\s*\]/;
+    const match = reply.match(actionRegex);
+    if (match) {
+      const actionType = match[1];
+      const actionArgsStr = match[2] || "{}";
+      let actionResult = "";
+
+      try {
+        const args = JSON.parse(actionArgsStr) as Record<string, string>;
+        if (actionType === "set_away") {
+          const { error } = await supabase
+            .from("agents")
+            .update({ awayMessage: args.message })
+            .eq("id", agent.id)
+            .eq("tenantId", tenantId);
+          if (error) throw error;
+          actionResult = `Aviso de ausência definido para: "${args.message}"`;
+        } else if (actionType === "clear_away") {
+          const { error } = await supabase
+            .from("agents")
+            .update({ awayMessage: null })
+            .eq("id", agent.id)
+            .eq("tenantId", tenantId);
+          if (error) throw error;
+          actionResult = "Aviso de ausência desativado com sucesso.";
+        } else if (actionType === "get_summary") {
+          const today = new Date().toLocaleDateString("sv-SE"); // Formato AAAA-MM-DD local
+
+          // 1. Buscar do banco local
+          const { data: booked } = await supabase
+            .from("appointments")
+            .select("time, patientName, specialty")
+            .eq("tenantId", tenantId)
+            .eq("date", today)
+            .eq("status", "scheduled");
+
+          let localAppts = (booked || [])
+            .map((b) => `- ${b.time}: ${b.patientName} (${b.specialty})`)
+            .join("\n");
+          if (!localAppts) localAppts = "Nenhum agendamento no banco local para hoje.";
+
+          // 2. Buscar do Google Calendar (se integrado)
+          let calAppts = "";
+          try {
+            const calRes = await googleCalendarListEvents(tenantId, today);
+            if (!calRes.error && calRes.events.length > 0) {
+              calAppts = calRes.events
+                .map((e) => {
+                  const time = e.start.includes("T")
+                    ? e.start.split("T")[1].slice(0, 5)
+                    : "Dia inteiro";
+                  return `- ${time}: ${e.summary}`;
+                })
+                .join("\n");
+            }
+          } catch (e) {
+            console.warn("[directLine] Falha ao listar Google Calendar:", e);
+          }
+
+          actionResult = `## Agendamentos de Hoje (${today}):\n\n### Banco Local:\n${localAppts}`;
+          if (calAppts) {
+            actionResult += `\n\n### Google Calendar:\n${calAppts}`;
+          }
+        }
+      } catch (err) {
+        actionResult = `Erro ao executar comando: ${err instanceof Error ? err.message : String(err)}`;
+      }
+
+      // Segunda chamada do LLM para formular a resposta amigável para o dono
+      const feedbackSystemPrompt = `Você é o assistente pessoal do proprietário. Você executou a ação '${actionType}' com o seguinte resultado:\n"${actionResult}"\n\nFormule uma resposta simpática e profissional em português para o proprietário relatando o resultado.`;
+      try {
+        const res = await callLLM(
+          provider,
+          agent,
+          feedbackSystemPrompt,
+          `Resultado: ${actionResult}`,
+          tenantId,
+        );
+        reply = res.text.trim();
+        inputTokens += res.inputTokens;
+        outputTokens += res.outputTokens;
+      } catch (e) {
+        reply = `Comando executado. ${actionResult}`;
+      }
+    }
+  }
+
+  reply = reply.replace(/\[ACTION:.*?\]/g, "").trim();
+
+  // Enviar de volta ao dono
+  const number = remoteJid.split("@")[0];
+  await evoSendText(tenantId, instanceName, number, reply);
+
+  // Registrar mensagem do bot
+  const replyId = `bot_owner_${Date.now()}`;
+  await supabase.from("messages").upsert({
+    id: replyId,
+    tenantId,
+    conversationId: convId,
+    text: reply,
+    fromMe: true,
+    bot: true,
+    agentId: agent.id,
+    createdAt: new Date().toISOString(),
+  });
+
+  // Registrar em ai_logs para faturamento/analytics
+  const latencyMs = Date.now() - t0;
+  try {
+    const logId = `log_owner_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
+    await supabase.from("ai_logs").upsert({
+      id: logId,
+      tenantId,
+      createdAt: new Date().toISOString(),
+      agentId: agent.id,
+      agentName: agent.name ?? "",
+      providerId: agent.providerId,
+      providerKind: provider.kind ?? "",
+      model: agent.model ?? "",
+      instanceName,
+      remoteJid,
+      conversationId: convId,
+      userText: userText.slice(0, 2000),
+      reply: reply.slice(0, 4000),
+      systemPromptChars: directLineSystemPrompt.length,
+      latencyMs,
+      ok: !llmError && !!reply,
+      error: llmError,
+      inputTokens,
+      outputTokens,
+    });
+  } catch (e) {
+    console.warn("[ai_logs] directLine log falhou:", e);
+  }
+
+  return { ok: true };
 }
 
 // ===== Bridge principal =====
@@ -712,13 +1344,28 @@ async function runBridge(
   userText: string,
   convId: string,
   isAudioInput = false,
+  imageBase64: string | null = null,
 ) {
   // 1) Encontrar agente vinculado a esta instância
   const { data: agents } = await supabase.from("agents").select("*").eq("tenantId", tenantId);
   const agent = (agents || []).find((a: any) => a.whatsappInstanceId === instanceName);
-  if (!agent) return { skipped: "no-agent-linked" };
-  if (agent.autoReply === false) return { skipped: "auto-reply-off" };
-  if (!agent.providerId || !agent.model) return { skipped: "agent-incomplete" };
+  if (!agent) {
+    console.warn(
+      `[bridge] SKIP: Nenhum agente vinculado à instância "${instanceName}". Agentes do tenant: ${(agents || []).map((a: any) => `${a.name}(whatsappInstanceId=${a.whatsappInstanceId})`).join(", ") || "nenhum"}`,
+    );
+    return { skipped: "no-agent-linked" };
+  }
+  if (agent.autoReply === false) {
+    console.warn(`[bridge] SKIP: Agente "${agent.name}" tem autoReply=false`);
+    return { skipped: "auto-reply-off" };
+  }
+  if (!agent.providerId || !agent.model) {
+    console.warn(
+      `[bridge] SKIP: Agente "${agent.name}" incompleto — providerId=${agent.providerId}, model=${agent.model}`,
+    );
+    return { skipped: "agent-incomplete" };
+  }
+  console.log(`[bridge] Agente "${agent.name}" encontrado (id=${agent.id}, model=${agent.model})`);
 
   // 2) Carregar provider
   const { data: provider } = await supabase
@@ -729,12 +1376,36 @@ async function runBridge(
     .single();
   if (!provider?.apiKey) return { skipped: "no-provider" };
 
+  // 2.5) Carregar notas de perfil históricas da conversa
+  let profileContext = "";
+  try {
+    const { data: conv } = await supabase
+      .from("conversations")
+      .select("profileNotes, triageAnswers")
+      .eq("id", convId)
+      .eq("tenantId", tenantId)
+      .single();
+    if (conv?.profileNotes) {
+      profileContext =
+        `## PERFIL DO CLIENTE (MEMÓRIA HISTÓRICA)\n` +
+        `Aqui estão notas sobre as preferências e histórico deste cliente:\n` +
+        `"${conv.profileNotes}"\n\n`;
+    }
+  } catch (e) {
+    console.warn("[bridge] falhou ao carregar profileNotes:", e);
+  }
+
   // 3) RAG opcional
   let systemPrompt: string = (agent.systemPrompt as string) ?? "Você é um assistente útil.";
+  systemPrompt =
+    `${systemPrompt}\n\n## DETECÇÃO DE FRUSTRAÇÃO / IRRITAÇÃO\n` +
+    `Se o cliente demonstrar irritação extrema, frustração ou exigir falar com humanos de forma ríspida, responda de forma muito educada e coloque a tag [FRUSTRATED] exatamente no final da sua resposta para que o atendimento humano assuma.\n\n`;
+
   try {
     const ragCtx = await buildRagContext(tenantId, userText);
     if (ragCtx) {
-      systemPrompt = `${systemPrompt}\n\n## BASE DE CONHECIMENTO — FONTE ÚNICA DE VERDADE\n` +
+      systemPrompt =
+        `${systemPrompt}\n\n## BASE DE CONHECIMENTO — FONTE ÚNICA DE VERDADE\n` +
         `Abaixo estão as únicas informações que você deve usar para responder o usuário.\n` +
         `REGRAS OBRIGATÓRIAS:\n` +
         `1. Responda SOMENTE com base nas informações abaixo. Nunca invente, suponha ou complemente com conhecimento externo.\n` +
@@ -742,7 +1413,8 @@ async function runBridge(
         `3. Não mencione que está consultando uma base de conhecimento ou documentos.\n` +
         `4. Não crie listas de itens, preços, planos ou funcionalidades que não estejam explicitamente descritos abaixo.\n\n${ragCtx}`;
     } else {
-      systemPrompt = `${systemPrompt}\n\n## DIRETRIZ DE CONHECIMENTO LIMITADO\n` +
+      systemPrompt =
+        `${systemPrompt}\n\n## DIRETRIZ DE CONHECIMENTO LIMITADO\n` +
         `Se o usuário perguntar sobre detalhes específicos (planos, preços, canais, funcionalidades) que não estejam no seu prompt, responda: "Vou verificar isso para você agora." Nunca invente informações.`;
     }
   } catch (e) {
@@ -766,16 +1438,31 @@ async function runBridge(
         const sender = m.fromMe ? "Helena" : "Cliente";
         return `[${sender}]: ${m.text}`;
       });
-      historyContext = `## HISTÓRICO RECENTE DA CONVERSA\n` +
+      historyContext =
+        `## HISTÓRICO RECENTE DA CONVERSA\n` +
         `Use o histórico abaixo para saber o que já foi conversado, evitar repetir as mesmas perguntas ou saudações e manter a fluidez:\n\n` +
-        formattedLines.join("\n") + "\n\n";
+        formattedLines.join("\n") +
+        "\n\n";
     }
   } catch (e) {
     console.warn("[bridge] falhou ao carregar histórico:", e);
   }
 
-  // 4) Chamar LLM com instruções de Agendamento Clínico acopladas no prompt
-  const systemPromptComAgendamento = `${systemPrompt}\n\n` +
+  let triageContext = "";
+  if (conv?.triageAnswers && Object.keys(conv.triageAnswers).length > 0) {
+    triageContext =
+      `## INFORMAÇÕES COLETADAS NA TRIAGEM INICIAL\n` +
+      Object.entries(conv.triageAnswers)
+        .map(([q, a]) => `- Pergunta: ${q}\n  Resposta: ${a}`)
+        .join("\n") +
+      "\n\n";
+  }
+
+  // 4) Chamar LLM com instruções de Agendamento + Google integrations
+  const systemPromptComAgendamento =
+    `${systemPrompt}\n\n` +
+    (profileContext ? `${profileContext}` : "") +
+    (triageContext ? `${triageContext}` : "") +
     (historyContext ? `${historyContext}` : "") +
     `## AGENDAMENTO INTELIGENTE (SUPERPODERES)\n` +
     `Você é integrado em tempo real ao banco de dados da clínica. Sempre que precisar consultar vagas, criar ou cancelar agendamentos, emita a tag correspondente EXATAMENTE no final da sua resposta, e o sistema executará a ação:\n` +
@@ -785,13 +1472,43 @@ async function runBridge(
     `   [ACTION: book_appointment { "patientName": "Nome do Paciente", "specialty": "especialidade", "date": "AAAA-MM-DD", "time": "HH:MM" }]\n` +
     `3. Cancelar a consulta ativa do paciente atual (libera a vaga no banco):\n` +
     `   [ACTION: cancel_appointment {}]\n\n` +
+    `## GOOGLE CALENDAR (AGENDA)\n` +
+    `Você também pode acessar o Google Calendar para agendamentos. Use estas ações:\n` +
+    `4. Verificar horários livres no Google Calendar:\n` +
+    `   [ACTION: google_calendar_check { "date": "AAAA-MM-DD" }]\n` +
+    `5. Criar evento no Google Calendar:\n` +
+    `   [ACTION: google_calendar_book { "title": "Título", "date": "AAAA-MM-DD", "time": "HH:MM", "duration": 60 }]\n` +
+    `6. Cancelar evento no Google Calendar:\n` +
+    `   [ACTION: google_calendar_cancel { "eventId": "id_do_evento" }]\n\n` +
+    `## GOOGLE SHEETS (PLANILHA DE CLIENTES)\n` +
+    `Você pode consultar e adicionar dados na planilha de clientes:\n` +
+    `7. Buscar cliente na planilha:\n` +
+    `   [ACTION: google_sheets_search { "query": "nome ou telefone" }]\n` +
+    `8. Adicionar novo registro na planilha:\n` +
+    `   [ACTION: google_sheets_add { "values": ["Nome", "Telefone", "Email", "Observação"] }]\n\n` +
+    `## CATÁLOGO DE PRODUTOS\n` +
+    `Você pode pesquisar produtos do estoque/loja no catálogo para tirar dúvidas e fechar vendas:\n` +
+    `9. Buscar produtos no catálogo:\n` +
+    `   [ACTION: search_products { "query": "nome ou palavra-chave" }]\n\n` +
     `Nota: Emita apenas UMA tag por resposta. O usuário não verá essas tags [ACTION:].`;
 
   const t0 = Date.now();
   let reply = "";
+  let inputTokens = 0;
+  let outputTokens = 0;
   let llmError: string | null = null;
   try {
-    reply = (await callLLM(provider, agent, systemPromptComAgendamento, userText)).trim();
+    const res = await callLLM(
+      provider,
+      agent,
+      systemPromptComAgendamento,
+      userText,
+      tenantId,
+      imageBase64,
+    );
+    reply = res.text.trim();
+    inputTokens = res.inputTokens;
+    outputTokens = res.outputTokens;
   } catch (e) {
     llmError = e instanceof Error ? e.message : String(e);
   }
@@ -816,15 +1533,110 @@ async function runBridge(
           }
         } else if (actionType === "book_appointment") {
           const number = remoteJid.split("@")[0];
-          const ok = await createAppointment(tenantId, args.patientName, number, args.specialty, args.date, args.time);
+          const ok = await createAppointment(
+            tenantId,
+            args.patientName,
+            number,
+            args.specialty,
+            args.date,
+            args.time,
+          );
           if (ok) {
             actionResult = `Agendamento criado com sucesso para ${args.patientName} em ${args.date} às ${args.time} para a especialidade ${args.specialty}.`;
+            // Registrar ROI
+            supabase
+              .from("conversations")
+              .select("convertedValue")
+              .eq("id", convId)
+              .single()
+              .then(({ data }) => {
+                const currentVal = Number(data?.convertedValue || 0);
+                supabase
+                  .from("conversations")
+                  .update({ convertedValue: currentVal + 120 })
+                  .eq("id", convId)
+                  .then(() => {});
+              });
           } else {
             actionResult = `Falha ao criar agendamento no banco de dados.`;
           }
         } else if (actionType === "cancel_appointment") {
           const number = remoteJid.split("@")[0];
           actionResult = await cancelAppointment(tenantId, number);
+        } else if (actionType === "google_calendar_check") {
+          const slots = await googleCalendarGetAvailableSlots(tenantId, args.date);
+          if (slots.length > 0) {
+            actionResult = `Horários disponíveis no Google Calendar para ${args.date}: ${slots.join(", ")}.`;
+          } else {
+            actionResult = `Não há horários disponíveis no Google Calendar para ${args.date}.`;
+          }
+        } else if (actionType === "google_calendar_book") {
+          const res = await googleCalendarCreateEvent(
+            tenantId,
+            args.title || "Agendamento",
+            args.date,
+            args.time,
+            parseInt(args.duration || "60", 10),
+          );
+          if (res.ok) {
+            actionResult = `Evento criado com sucesso no Google Calendar: "${args.title}" em ${args.date} às ${args.time}. ID: ${res.eventId}`;
+            // Registrar ROI
+            supabase
+              .from("conversations")
+              .select("convertedValue")
+              .eq("id", convId)
+              .single()
+              .then(({ data }) => {
+                const currentVal = Number(data?.convertedValue || 0);
+                supabase
+                  .from("conversations")
+                  .update({ convertedValue: currentVal + 120 })
+                  .eq("id", convId)
+                  .then(() => {});
+              });
+          } else {
+            actionResult = `Falha ao criar evento: ${res.error}`;
+          }
+        } else if (actionType === "google_calendar_cancel") {
+          const res = await googleCalendarCancelEvent(tenantId, args.eventId);
+          if (res.ok) {
+            actionResult = `Evento cancelado com sucesso no Google Calendar.`;
+          } else {
+            actionResult = `Falha ao cancelar evento: ${res.error}`;
+          }
+        } else if (actionType === "google_sheets_search") {
+          const res = await googleSheetsSearch(tenantId, args.query);
+          if (res.error) {
+            actionResult = `Erro ao buscar na planilha: ${res.error}`;
+          } else if (res.rows.length === 0) {
+            actionResult = `Nenhum resultado encontrado na planilha para "${args.query}".`;
+          } else {
+            const headerLine = res.headers.join(" | ");
+            const rowLines = res.rows.map((r) => r.join(" | ")).join("\n");
+            actionResult = `Resultados encontrados (${res.rows.length}):\nColunas: ${headerLine}\n${rowLines}`;
+          }
+        } else if (actionType === "google_sheets_add") {
+          const values = Array.isArray(args.values) ? args.values : [args.values];
+          const res = await googleSheetsAppendRow(tenantId, values);
+          if (res.ok) {
+            actionResult = `Registro adicionado com sucesso na planilha.`;
+          } else {
+            actionResult = `Falha ao adicionar registro: ${res.error}`;
+          }
+        } else if (actionType === "search_products") {
+          const items = await searchProducts(tenantId, args.query || "");
+          if (items.length === 0) {
+            actionResult = `Nenhum produto correspondente encontrado no catálogo para "${args.query}".`;
+          } else {
+            actionResult =
+              `Produtos encontrados no catálogo:\n` +
+              items
+                .map(
+                  (i) =>
+                    `- SKU: ${i.sku || "N/A"} | Nome: ${i.name} | Preço: R$ ${i.price} | Descrição: ${i.description || "N/A"} | Link: ${i.linkUrl || "N/A"}`,
+                )
+                .join("\n");
+          }
         } else {
           actionResult = `Ação desconhecida: ${actionType}`;
         }
@@ -833,14 +1645,24 @@ async function runBridge(
       }
 
       // Segunda chamada do LLM com o resultado para gerar a resposta conversacional final
-      const feedbackSystemPrompt = `${systemPrompt}\n\n` +
+      const feedbackSystemPrompt =
+        `${systemPrompt}\n\n` +
         `## RESULTADO DA AÇÃO EXECUTADA NO BANCO\n` +
         `Você acionou a ação '${actionType}' e o sistema retornou:\n` +
         `"${actionResult}"\n\n` +
         `Agora, formule uma resposta amigável e simpática em português para o paciente informando o resultado. Não emita nenhuma tag [ACTION:] nesta resposta final.`;
 
       try {
-        reply = (await callLLM(provider, agent, feedbackSystemPrompt, `Resultado do sistema: ${actionResult}`)).trim();
+        const res = await callLLM(
+          provider,
+          agent,
+          feedbackSystemPrompt,
+          `Resultado do sistema: ${actionResult}`,
+          tenantId,
+        );
+        reply = res.text.trim();
+        inputTokens += res.inputTokens;
+        outputTokens += res.outputTokens;
       } catch (e) {
         llmError = e instanceof Error ? e.message : String(e);
       }
@@ -851,6 +1673,8 @@ async function runBridge(
   reply = reply.replace(/\[ACTION:.*?\]/g, "").trim();
 
   const latencyMs = Date.now() - t0;
+
+  const ragSuccess = !reply.includes("Vou verificar isso para você agora.");
 
   // 5) Log de trace
   try {
@@ -873,6 +1697,9 @@ async function runBridge(
       latencyMs,
       ok: !llmError && !!reply,
       error: llmError,
+      inputTokens,
+      outputTokens,
+      ragSuccess,
     });
   } catch (e) {
     console.warn("[ai_logs] falhou:", e);
@@ -896,28 +1723,68 @@ async function runBridge(
     agent.voiceResponseMode === "always_audio";
 
   if (shouldRespondVoice && tenant?.elevenlabsApiKey && agent.elevenlabsVoiceId) {
-    console.log(`[bridge] Gerando resposta de voz via ElevenLabs para voiceId=${agent.elevenlabsVoiceId}`);
+    console.log(
+      `[bridge] Gerando resposta de voz via ElevenLabs para voiceId=${agent.elevenlabsVoiceId}`,
+    );
     try {
       const audioUrl = await generateElevenLabsAudio(
         tenantId,
         tenant.elevenlabsApiKey,
         agent.elevenlabsVoiceId,
-        reply
+        reply,
       );
       if (audioUrl) {
         sentAudioUrl = audioUrl;
         console.log(`[bridge] Áudio gerado: ${audioUrl}. Enviando ao WhatsApp...`);
+        // Presença de gravação humana
+        await evoSendPresence(tenantId, instanceName, number, "recording");
+        await new Promise((r) => setTimeout(r, 4000));
+        await evoSendPresence(tenantId, instanceName, number, "paused");
+
         await evoSendAudio(tenantId, instanceName, number, audioUrl);
       } else {
         console.warn("[bridge] Falha na geração do áudio. Usando texto de fallback.");
+        // Presença de digitação humana
+        await evoSendPresence(tenantId, instanceName, number, "composing");
+        await new Promise((r) => setTimeout(r, Math.min(3000, reply.length * 15)));
+        await evoSendPresence(tenantId, instanceName, number, "paused");
+
         await evoSendText(tenantId, instanceName, number, reply);
       }
     } catch (e) {
       console.error("[bridge] Erro ao enviar áudio. Usando texto de fallback:", e);
+      // Presença de digitação humana
+      await evoSendPresence(tenantId, instanceName, number, "composing");
+      await new Promise((r) => setTimeout(r, Math.min(3000, reply.length * 15)));
+      await evoSendPresence(tenantId, instanceName, number, "paused");
+
       await evoSendText(tenantId, instanceName, number, reply);
     }
   } else {
-    await evoSendText(tenantId, instanceName, number, reply);
+    // Verificar se a resposta tem a tag de botões interativos
+    const buttonRegex = /\[BUTTONS:\s*(.*?)\s*\]/i;
+    const btnMatch = reply.match(buttonRegex);
+    if (btnMatch) {
+      const buttons = btnMatch[1]
+        .split("|")
+        .map((b) => b.trim())
+        .filter(Boolean);
+      const cleanReply = reply.replace(buttonRegex, "").trim();
+
+      // Presença de digitação humana
+      await evoSendPresence(tenantId, instanceName, number, "composing");
+      await new Promise((r) => setTimeout(r, Math.min(3000, cleanReply.length * 15)));
+      await evoSendPresence(tenantId, instanceName, number, "paused");
+
+      await evoSendButtons(tenantId, instanceName, number, cleanReply, buttons);
+    } else {
+      // Presença de digitação humana
+      await evoSendPresence(tenantId, instanceName, number, "composing");
+      await new Promise((r) => setTimeout(r, Math.min(3000, reply.length * 15)));
+      await evoSendPresence(tenantId, instanceName, number, "paused");
+
+      await evoSendText(tenantId, instanceName, number, reply);
+    }
   }
 
   // 7) Registrar resposta do bot no Supabase
@@ -933,8 +1800,14 @@ async function runBridge(
     createdAt: new Date().toISOString(),
   });
 
-  // Verifica se a resposta da IA indica transferência para suporte especializado
-  const isHandoff = /encaminhar seu atendimento|equipe especializada|suporte especializado/i.test(reply);
+  // Verifica se a resposta da IA indica transferência para suporte especializado ou frustração
+  const isFrustrated = reply.includes("[FRUSTRATED]");
+  if (isFrustrated) {
+    reply = reply.replace("[FRUSTRATED]", "").trim();
+  }
+  const isHandoff =
+    isFrustrated ||
+    /encaminhar seu atendimento|equipe especializada|suporte especializado/i.test(reply);
 
   const convUpdatePayload: Record<string, any> = {
     lastMessage: reply.slice(0, 200),
@@ -942,9 +1815,20 @@ async function runBridge(
   };
 
   if (isHandoff) {
-    console.log(`[bridge] Resposta da IA contêm gatilho de handoff. Pausando bot para a conversa ${convId}.`);
+    console.log(
+      `[bridge] Resposta da IA contêm gatilho de handoff/frustração. Pausando bot para a conversa ${convId}.`,
+    );
     convUpdatePayload.botPaused = true;
     convUpdatePayload.status = "handoff";
+    if (isFrustrated) {
+      convUpdatePayload.isFrustrated = true;
+    }
+    if (agent.awayMessage) {
+      console.log(
+        `[bridge] Substituindo resposta padrão de handoff pelo aviso de ausência do proprietário: "${agent.awayMessage}"`,
+      );
+      reply = agent.awayMessage;
+    }
   }
 
   await supabase
@@ -952,6 +1836,11 @@ async function runBridge(
     .update(convUpdatePayload)
     .eq("id", convId)
     .eq("tenantId", tenantId);
+
+  // Atualizar perfil/score do lead em background (não bloqueante)
+  updateConversationProfile(tenantId, convId).catch((err) => {
+    console.error("[profileUpdate] background error:", err);
+  });
 
   return { ok: true, agent: agent.id, latencyMs };
 }
@@ -976,22 +1865,28 @@ async function handleMessage(
   if (remoteJid.endsWith("@g.us")) return Response.json({ ok: true, ignored: "group" });
 
   const fromMe: boolean = !!key.fromMe;
+  const rawSender = body?.sender ?? (body as any)?.data?.sender ?? (body as any)?.instance?.owner;
+  const ownerJid = typeof rawSender === "string" ? rawSender : undefined;
+  const isDirectLine = fromMe && !!ownerJid && remoteJid === ownerJid;
+
   const messageId: string = (key.id as string) ?? `${Date.now()}`;
   const msgData = m?.message as Record<string, unknown> | undefined;
   const isAudio = !!msgData?.audioMessage;
+  const isImage = !!msgData?.imageMessage;
   let text: string =
     (msgData?.conversation as string) ??
     ((msgData?.extendedTextMessage as Record<string, unknown>)?.text as string) ??
+    ((msgData?.imageMessage as any)?.caption as string) ??
     (m?.text as string) ??
-    (isAudio ? "[áudio]" : "[mídia]");
+    (isAudio ? "[áudio]" : isImage ? "[imagem]" : "[mídia]");
   const pushName: string = (m?.pushName as string) ?? remoteJid.split("@")[0];
   const convId = remoteJid.replace(/[^a-zA-Z0-9_-]/g, "_");
 
-  // Transcrição de áudio recebido do cliente
-  if (isAudio && !fromMe) {
+  // Transcrição de áudio recebido do cliente ou do dono (linha direta)
+  if (isAudio && (!fromMe || isDirectLine)) {
     console.log(`[webhook] Detectado áudio recebido. Tentando obter transcrição...`);
     // 1. Tentar pegar transcrição nativa da Evolution API se estiver disponível
-    let audioText = (msgData?.audioMessage as any)?.text || (m as any)?.text;
+    const audioText = (msgData?.audioMessage as any)?.text || (m as any)?.text;
     if (audioText && audioText !== "[áudio]" && audioText !== "[mídia]") {
       text = audioText;
       console.log(`[webhook] Transcrição nativa da Evolution API obtida: "${text}"`);
@@ -1000,7 +1895,10 @@ async function handleMessage(
       try {
         const base64Audio = await evoGetBase64Media(tenantId, instanceName, messageId);
         if (base64Audio) {
-          const { data: agents } = await supabase.from("agents").select("*").eq("tenantId", tenantId);
+          const { data: agents } = await supabase
+            .from("agents")
+            .select("*")
+            .eq("tenantId", tenantId);
           const agent = (agents || []).find((a: any) => a.whatsappInstanceId === instanceName);
           const openAiKey = await getOpenAiApiKey(tenantId, agent?.providerId);
           if (openAiKey) {
@@ -1053,8 +1951,29 @@ async function handleMessage(
     createdAt: new Date().toISOString(),
   });
 
-  // Lógica de controle do Bot via WhatsApp (atendente interage pelo celular)
+  // Lógica de controle do Bot via WhatsApp (atendente interage pelo celular ou Dono envia comandos)
   if (fromMe) {
+    if (isDirectLine) {
+      console.log(`[webhook] ⚡ Linha Direta: Comando recebido do dono: "${text}"`);
+      try {
+        const directResult = await runDirectLine(
+          tenantId,
+          instanceName,
+          remoteJid,
+          text,
+          convId,
+          isAudio,
+        );
+        return Response.json({ ok: true, directLine: directResult });
+      } catch (e) {
+        console.error("[directLine] erro:", e);
+        return Response.json({
+          ok: true,
+          directLineError: e instanceof Error ? e.message : String(e),
+        });
+      }
+    }
+
     if (text && text !== "[mídia]" && text !== "[áudio]") {
       const cleanText = text.trim().toLowerCase();
       const isActivationCommand = ["#ia", "#voltar", "/ia", "/voltar"].includes(cleanText);
@@ -1065,7 +1984,7 @@ async function handleMessage(
           .update({ botPaused: false, updatedAt: new Date().toISOString() })
           .eq("id", convId)
           .eq("tenantId", tenantId);
-        
+
         await evoDeleteMessage(tenantId, instanceName, remoteJid, messageId);
       } else {
         await supabase
@@ -1088,7 +2007,9 @@ async function handleMessage(
   const hasHandoffKeyword = cleanText.includes("instalei") || cleanText.includes("baixei");
 
   if (hasHandoffKeyword) {
-    console.log(`[webhook] Detectada palavra-chave de handoff ("instalei" ou "baixei"). Pausando bot e transferindo...`);
+    console.log(
+      `[webhook] Detectada palavra-chave de handoff ("instalei" ou "baixei"). Pausando bot e transferindo...`,
+    );
 
     // 1. Pausa o bot e atualiza o status para handoff
     await supabase
@@ -1102,8 +2023,24 @@ async function handleMessage(
       .eq("id", convId)
       .eq("tenantId", tenantId);
 
-    // 2. Envia a mensagem de transferência padrão
-    const transferMsg = "Perfeito. Vou encaminhar seu atendimento para nossa equipe especializada. Um momento, por favor.";
+    // 2. Envia a mensagem de transferência padrão (ou aviso de ausência)
+    let transferMsg =
+      "Perfeito. Vou encaminhar seu atendimento para nossa equipe especializada. Um momento, por favor.";
+
+    // Buscar se o agente tem awayMessage
+    const { data: linkedAgent } = await supabase
+      .from("agents")
+      .select("awayMessage")
+      .eq("whatsappInstanceId", instanceName)
+      .eq("tenantId", tenantId)
+      .maybeSingle();
+
+    if (linkedAgent?.awayMessage) {
+      console.log(
+        `[webhook] Utilizando aviso de ausência para transferência: "${linkedAgent.awayMessage}"`,
+      );
+      transferMsg = linkedAgent.awayMessage;
+    }
     const number = remoteJid.split("@")[0];
     await evoSendText(tenantId, instanceName, number, transferMsg);
 
@@ -1119,6 +2056,11 @@ async function handleMessage(
       createdAt: new Date().toISOString(),
     });
 
+    // 4. Atualiza o perfil do cliente e scoring
+    updateConversationProfile(tenantId, convId).catch((err) => {
+      console.error("[profileUpdate] keyword background error:", err);
+    });
+
     return Response.json({
       ok: true,
       handoffTriggered: true,
@@ -1126,12 +2068,93 @@ async function handleMessage(
     });
   }
 
+  let imageBase64: string | null = null;
+  if (isImage) {
+    console.log(`[webhook] Detectada imagem recebida. Baixando base64...`);
+    imageBase64 = await getEvoMediaBase64(tenantId, instanceName, messageId);
+  }
+
+  // Lógica de Triagem Pré-AI
+  try {
+    const { data: agents } = await supabase.from("agents").select("*").eq("tenantId", tenantId);
+    const agent = (agents || []).find((a: any) => a.whatsappInstanceId === instanceName);
+
+    if (
+      agent?.triageEnabled === true &&
+      agent.triageQuestions &&
+      agent.triageQuestions.length > 0
+    ) {
+      const questions = agent.triageQuestions || [];
+      const currentIndex = conv?.triageCurrentIndex || 0;
+      const answers = conv?.triageAnswers || {};
+
+      if (currentIndex < questions.length) {
+        if (currentIndex > 0) {
+          const prevQuestion = questions[currentIndex - 1];
+          answers[prevQuestion] = text;
+        }
+
+        const nextQuestion = questions[currentIndex];
+
+        // Simular digitação humana
+        const number = remoteJid.split("@")[0];
+        await evoSendPresence(tenantId, instanceName, number, "composing");
+        await new Promise((r) => setTimeout(r, Math.min(2500, nextQuestion.length * 15)));
+        await evoSendPresence(tenantId, instanceName, number, "paused");
+
+        await evoSendText(tenantId, instanceName, number, nextQuestion);
+
+        // Atualizar estado no banco de dados
+        await supabase
+          .from("conversations")
+          .update({
+            triageAnswers: answers,
+            triageCurrentIndex: currentIndex + 1,
+            updatedAt: new Date().toISOString(),
+            lastMessage: nextQuestion.slice(0, 200),
+          })
+          .eq("id", convId)
+          .eq("tenantId", tenantId);
+
+        // Salvar mensagem da triagem no histórico
+        await supabase.from("messages").upsert({
+          id: `bot_triage_${Date.now()}`,
+          tenantId,
+          conversationId: convId,
+          text: nextQuestion,
+          fromMe: true,
+          bot: true,
+          createdAt: new Date().toISOString(),
+        });
+
+        return Response.json({ ok: true, triageStatus: `question_${currentIndex}` });
+      }
+    }
+  } catch (triageErr) {
+    console.error("[triage] erro no processador de triagem:", triageErr);
+  }
+
   try {
     const auto = await runAutomations(tenantId, instanceName, remoteJid, text, convId, conv);
     if (conv?.botPaused === true || auto.pauseBot) {
+      console.log(
+        `[webhook] Bot PAUSADO para conversa ${convId} (botPaused=${conv?.botPaused}, autoPause=${auto.pauseBot}). Use #ia ou /ia para reativar.`,
+      );
       return Response.json({ ok: true, automations: auto, bridge: { skipped: "bot-paused" } });
     }
-    const bridge = await runBridge(tenantId, instanceName, remoteJid, text, convId, isAudio);
+    console.log(
+      `[webhook] Encaminhando para bridge IA: instance=${instanceName}, convId=${convId}, text="${text.slice(0, 50)}..."`,
+    );
+    const bridge = await runBridge(
+      tenantId,
+      instanceName,
+      remoteJid,
+      text,
+      convId,
+      isAudio,
+      imageBase64,
+    );
+    console.log(`[webhook] Bridge result:`, JSON.stringify(bridge).slice(0, 300));
     return Response.json({ ok: true, automations: auto, bridge });
   } catch (e) {
     console.error("[bridge] erro:", e);
@@ -1142,6 +2165,99 @@ async function handleMessage(
 export const Route = createFileRoute("/api/public/evolution-webhook")({
   server: {
     handlers: {
+      GET: async ({ request }) => {
+        // Endpoint de diagnóstico — acessível via browser
+        const url = new URL(request.url);
+        const instanceName = url.searchParams.get("instance");
+        const action = url.searchParams.get("action");
+
+        // Ação: despausar bot de todas as conversas de uma instância
+        if (action === "unpause" && instanceName) {
+          const { data: idx } = await supabase
+            .from("instance_index")
+            .select("tenantId")
+            .eq("instanceName", instanceName)
+            .single();
+          if (!idx?.tenantId) {
+            return Response.json({
+              error: `Instância "${instanceName}" não encontrada no instance_index`,
+            });
+          }
+          const { data: updated, error } = await supabase
+            .from("conversations")
+            .update({ botPaused: false })
+            .eq("instanceName", instanceName)
+            .eq("tenantId", idx.tenantId)
+            .select("id");
+          return Response.json({
+            ok: true,
+            message: `Bot despausado em ${updated?.length || 0} conversas da instância "${instanceName}"`,
+            error: error?.message,
+          });
+        }
+
+        // Diagnóstico geral
+        const diagnostics: Record<string, unknown> = { timestamp: new Date().toISOString() };
+
+        // Listar todas as instâncias registradas
+        const { data: allInstances } = await supabase
+          .from("instance_index")
+          .select("instanceName, tenantId");
+        diagnostics.registeredInstances = allInstances || [];
+
+        // Listar agentes com whatsappInstanceId
+        const { data: allAgents } = await supabase
+          .from("agents")
+          .select("id, name, whatsappInstanceId, autoReply, providerId, model, status");
+        diagnostics.agents = (allAgents || []).map((a: any) => ({
+          id: a.id,
+          name: a.name,
+          whatsappInstanceId: a.whatsappInstanceId,
+          autoReply: a.autoReply,
+          hasProvider: !!a.providerId,
+          hasModel: !!a.model,
+          status: a.status,
+        }));
+
+        // Conversas pausadas
+        const { data: pausedConvs } = await supabase
+          .from("conversations")
+          .select("id, instanceName, contactName, botPaused, status")
+          .eq("botPaused", true)
+          .limit(50);
+        diagnostics.pausedConversations = pausedConvs || [];
+
+        // Checagem de instância específica
+        if (instanceName) {
+          const { data: idx } = await supabase
+            .from("instance_index")
+            .select("tenantId")
+            .eq("instanceName", instanceName)
+            .single();
+          diagnostics.instanceLookup = idx
+            ? { found: true, tenantId: idx.tenantId }
+            : {
+                found: false,
+                error: "Instância NÃO registrada no instance_index — webhook será ignorado",
+              };
+
+          const linkedAgent = (allAgents || []).find(
+            (a: any) => a.whatsappInstanceId === instanceName,
+          );
+          diagnostics.linkedAgent = linkedAgent
+            ? {
+                found: true,
+                name: linkedAgent.name,
+                autoReply: linkedAgent.autoReply,
+                hasProvider: !!linkedAgent.providerId,
+                hasModel: !!linkedAgent.model,
+              }
+            : { found: false, error: "Nenhum agente vinculado a esta instância" };
+        }
+
+        return Response.json(diagnostics);
+      },
+
       POST: async ({ request }) => {
         let body: any;
         try {
@@ -1153,16 +2269,17 @@ export const Route = createFileRoute("/api/public/evolution-webhook")({
         // Evolution API v2 sends instance as object: { instanceName: "name", ... }
         // Evolution API v1 sends instance as string
         const rawInstance = body?.instance ?? body?.data?.instance;
-        const instanceName: string | undefined = (
-          (typeof rawInstance === "object" && rawInstance !== null
-            ? rawInstance.instanceName ?? rawInstance.name
-            : rawInstance) ??
+        const instanceName: string | undefined = ((typeof rawInstance === "object" &&
+        rawInstance !== null
+          ? (rawInstance.instanceName ?? rawInstance.name)
+          : rawInstance) ??
           body?.instanceName ??
-          body?.sender
-        ) as string | undefined;
+          body?.sender) as string | undefined;
         const event: string = ((body?.event ?? body?.type ?? "") as string).toUpperCase();
 
-        console.log(`[webhook] event=${event} instance=${instanceName} rawInstance=${JSON.stringify(rawInstance)}`);
+        console.log(
+          `[webhook] ▶ event=${event} instance=${instanceName} rawInstance=${JSON.stringify(rawInstance)}`,
+        );
 
         if (!instanceName) return new Response("missing instance", { status: 200 });
 
@@ -1173,7 +2290,9 @@ export const Route = createFileRoute("/api/public/evolution-webhook")({
           .single();
         const tenantId: string | undefined = idx?.tenantId as string | undefined;
         if (!tenantId) {
-          console.warn(`[webhook] instance "${instanceName}" not found in instance_index`);
+          console.warn(
+            `[webhook] ❌ instance "${instanceName}" NOT FOUND in instance_index. Verifique se a instância foi registrada corretamente.`,
+          );
           return new Response("unknown instance", { status: 200 });
         }
 
@@ -1183,19 +2302,24 @@ export const Route = createFileRoute("/api/public/evolution-webhook")({
           .eq("id", tenantId)
           .single();
 
-        const isExpired = tenant?.planExpiresAt ? new Date() > new Date(tenant.planExpiresAt) : false;
+        const isExpired = tenant?.planExpiresAt
+          ? new Date() > new Date(tenant.planExpiresAt)
+          : false;
         if (tenant?.status === "suspended" || isExpired) {
-          console.warn(`[webhook] tenant "${tenantId}" suspenso ou expirado (status=${tenant?.status}, expires=${tenant?.planExpiresAt}). Ignorando evento ${event}`);
+          console.warn(
+            `[webhook] ⛔ tenant "${tenantId}" suspenso ou expirado (status=${tenant?.status}, expires=${tenant?.planExpiresAt}). Ignorando evento ${event}`,
+          );
           return Response.json({ ok: false, error: "tenant_suspended_or_expired" });
         }
 
-        console.log(`[webhook] tenantId=${tenantId} processing ${event} for ${instanceName}`);
+        console.log(`[webhook] ✓ tenantId=${tenantId} processing ${event} for ${instanceName}`);
 
         if (event.includes("CONNECTION")) {
           const state = ((body?.data as Record<string, unknown>)?.state ??
             body?.state ??
             "unknown") as string;
           const resolvedStatus = resolveInstanceStatus(state);
+          console.log(`[webhook] 🔌 Connection update: ${instanceName} → ${resolvedStatus}`);
           await supabase.from("instances").upsert({
             id: instanceName,
             tenantId,

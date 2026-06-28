@@ -24,7 +24,7 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
-import { Database, Upload, Loader2, Trash2, FileText, Globe, Pencil, RefreshCw } from "lucide-react";
+import { Database, Upload, Loader2, Trash2, FileText, Globe, Pencil, RefreshCw, AlertCircle } from "lucide-react";
 import { toast } from "sonner";
 
 export const Route = createFileRoute("/app/knowledge")({ component: Page });
@@ -110,6 +110,33 @@ function Page() {
   // Refresh (URL re-scrape) state
   const [refreshDoc, setRefreshDoc] = useState<KnowDoc | null>(null);
   const [refreshBusy, setRefreshBusy] = useState(false);
+
+  // RAG fails state
+  const [fails, setFails] = useState<{ id: string; createdAt: string; userText: string; agentName: string }[]>([]);
+  const [loadingFails, setLoadingFails] = useState(true);
+
+  const fetchFails = async () => {
+    if (!tenant?.id) return;
+    setLoadingFails(true);
+    try {
+      const { data, error } = await supabase
+        .from("ai_logs")
+        .select("id, createdAt, userText, agentName")
+        .eq("tenantId", tenant.id)
+        .eq("ragSuccess", false)
+        .order("createdAt", { ascending: false })
+        .limit(50);
+      if (data && !error) setFails(data as any[]);
+    } catch (e) {
+      console.warn("Erro ao buscar furos do RAG:", e);
+    } finally {
+      setLoadingFails(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchFails();
+  }, [tenant?.id]);
   // DeepSeek e Groq NÃO suportam embeddings via API direta
   const EMBED_CAPABLE_KINDS = ["openai", "openrouter", "google", "custom"];
   const embedProviders = providers.filter((p) =>
@@ -629,64 +656,113 @@ function Page() {
         </div>
       )}
 
-      {docs.length === 0 ? (
-        <div className="rounded-2xl border-2 border-dashed border-border p-12 text-center">
-          <Database className="size-10 mx-auto text-muted-foreground mb-3" />
-          <p className="font-semibold">Nenhum documento indexado</p>
-          <p className="text-sm text-muted-foreground mt-1">
-            Adicione FAQs, manuais ou políticas para o agente consultar antes de responder.
-          </p>
-        </div>
-      ) : (
-        <ul className="grid md:grid-cols-2 gap-3">
-          {docs.map((d) => {
-            const isUrl = !!(d.sourceUrl || d.name.startsWith("http://") || d.name.startsWith("https://"));
-            const isRefreshing = refreshDoc?.id === d.id && refreshBusy;
-            return (
-              <li
-                key={d.id}
-                className="rounded-2xl border border-border bg-gradient-card p-4 flex items-start justify-between gap-3"
-              >
-                <div className="min-w-0 flex-1">
-                  <p className="font-semibold text-sm truncate flex items-center gap-2">
-                    {isUrl ? (
-                      <Globe className="size-4 shrink-0 text-primary" />
-                    ) : (
-                      <FileText className="size-4 shrink-0 text-muted-foreground" />
-                    )}
-                    {d.name}
-                  </p>
-                  <p className="text-xs text-muted-foreground mt-1">{d.embedModel}</p>
-                </div>
-                <div className="flex items-center gap-1 shrink-0">
-                  {isUrl && (
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      title="Sincronizar com a página"
-                      disabled={isRefreshing}
-                      onClick={() => runRefresh(d)}
-                    >
-                      <RefreshCw className={`size-4 text-primary ${isRefreshing ? "animate-spin" : ""}`} />
-                    </Button>
-                  )}
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    title="Editar"
-                    onClick={() => openEdit(d)}
+      <Tabs defaultValue="documents" className="w-full" onValueChange={(val) => { if (val === "fails") fetchFails(); }}>
+        <TabsList className="grid w-full grid-cols-2 max-w-sm">
+          <TabsTrigger value="documents">Documentos indexados</TabsTrigger>
+          <TabsTrigger value="fails">Furos de resposta</TabsTrigger>
+        </TabsList>
+
+        <TabsContent value="documents" className="space-y-4 pt-4">
+          {docs.length === 0 ? (
+            <div className="rounded-2xl border-2 border-dashed border-border p-12 text-center">
+              <Database className="size-10 mx-auto text-muted-foreground mb-3" />
+              <p className="font-semibold">Nenhum documento indexado</p>
+              <p className="text-sm text-muted-foreground mt-1">
+                Adicione FAQs, manuais ou políticas para o agente consultar antes de responder.
+              </p>
+            </div>
+          ) : (
+            <ul className="grid md:grid-cols-2 gap-3">
+              {docs.map((d) => {
+                const isUrl = !!(d.sourceUrl || d.name.startsWith("http://") || d.name.startsWith("https://"));
+                const isRefreshing = refreshDoc?.id === d.id && refreshBusy;
+                return (
+                  <li
+                    key={d.id}
+                    className="rounded-2xl border border-border bg-gradient-card p-4 flex items-start justify-between gap-3"
                   >
-                    <Pencil className="size-4 text-muted-foreground" />
-                  </Button>
-                  <Button variant="ghost" size="icon" title="Excluir" onClick={() => remove(d)}>
-                    <Trash2 className="size-4 text-destructive" />
-                  </Button>
-                </div>
-              </li>
-            );
-          })}
-        </ul>
-      )}
+                    <div className="min-w-0 flex-1">
+                      <p className="font-semibold text-sm truncate flex items-center gap-2">
+                        {isUrl ? (
+                          <Globe className="size-4 shrink-0 text-primary" />
+                        ) : (
+                          <FileText className="size-4 shrink-0 text-muted-foreground" />
+                        )}
+                        {d.name}
+                      </p>
+                      <p className="text-xs text-muted-foreground mt-1">{d.embedModel}</p>
+                    </div>
+                    <div className="flex items-center gap-1 shrink-0">
+                      {isUrl && (
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          title="Sincronizar com a página"
+                          disabled={isRefreshing}
+                          onClick={() => runRefresh(d)}
+                        >
+                          <RefreshCw className={`size-4 text-primary ${isRefreshing ? "animate-spin" : ""}`} />
+                        </Button>
+                      )}
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        title="Editar"
+                        onClick={() => openEdit(d)}
+                      >
+                        <Pencil className="size-4 text-muted-foreground" />
+                      </Button>
+                      <Button variant="ghost" size="icon" title="Excluir" onClick={() => remove(d)}>
+                        <Trash2 className="size-4 text-destructive" />
+                      </Button>
+                    </div>
+                  </li>
+                );
+              })}
+            </ul>
+          )}
+        </TabsContent>
+
+        <TabsContent value="fails" className="space-y-4 pt-4">
+          {loadingFails ? (
+            <div className="flex items-center justify-center p-8">
+              <Loader2 className="size-6 animate-spin text-muted-foreground" />
+            </div>
+          ) : fails.length === 0 ? (
+            <div className="rounded-2xl border border-border bg-gradient-card p-8 text-center text-muted-foreground text-sm">
+              <AlertCircle className="size-8 mx-auto text-success mb-2" />
+              Nenhum furo de RAG registrado. Todos os clientes receberam respostas com base no conhecimento disponível!
+            </div>
+          ) : (
+            <div className="space-y-3">
+              <div className="bg-amber-500/10 border border-amber-500/20 text-amber-500 rounded-xl p-4 text-xs">
+                As perguntas abaixo resultaram na resposta de contingência do bot (falta de conhecimento na base). Use o botão de atalho para adicionar novos conteúdos cobrindo estas dúvidas.
+              </div>
+              <ul className="space-y-3">
+                {fails.map((f) => (
+                  <li key={f.id} className="rounded-xl border border-border bg-gradient-card p-4 flex flex-col md:flex-row md:items-center justify-between gap-4">
+                    <div className="space-y-1">
+                      <p className="font-medium text-sm text-foreground">"{f.userText}"</p>
+                      <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                        <span>Agente: <strong>{f.agentName}</strong></span>
+                        <span>·</span>
+                        <span>{new Date(f.createdAt).toLocaleString("pt-BR")}</span>
+                      </div>
+                    </div>
+                    <Button variant="outline" size="sm" onClick={() => {
+                      setName(`Resposta para: ${f.userText.slice(0, 30)}...`);
+                      setText(`Dúvida do cliente: ${f.userText}\n\nResposta:\n`);
+                      setOpen(true);
+                    }}>
+                      Indexar resposta
+                    </Button>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+        </TabsContent>
+      </Tabs>
 
       {/* Edit Document Dialog */}
       <Dialog open={!!editDoc} onOpenChange={(o) => { if (!o) setEditDoc(null); }}>

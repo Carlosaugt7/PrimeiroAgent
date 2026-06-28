@@ -327,9 +327,32 @@ function CRM() {
                         {c.contactPhone}
                       </div>
 
-                      <p className="text-xs text-muted-foreground/90 line-clamp-2 min-h-[2rem] mb-3 whitespace-pre-wrap break-words">
-                        {c.lastMessage}
-                      </p>
+                      {c.profileNotes ? (
+                        <p className="text-xs text-muted-foreground line-clamp-2 min-h-[2rem] mb-2 p-1.5 rounded border border-border/10 bg-secondary/15 italic">
+                          📝 {c.profileNotes}
+                        </p>
+                      ) : (
+                        <p className="text-xs text-muted-foreground/90 line-clamp-2 min-h-[2rem] mb-2 whitespace-pre-wrap break-words">
+                          {c.lastMessage}
+                        </p>
+                      )}
+
+                      {c.leadScore && (
+                        <div className="flex items-center gap-0.5 text-amber-500 mb-3" title={`Lead Score: ${c.leadScore}/5`}>
+                          {[1, 2, 3, 4, 5].map((star) => (
+                            <span
+                              key={star}
+                              className={
+                                star <= (c.leadScore || 0)
+                                  ? "opacity-100"
+                                  : "opacity-25 text-muted-foreground"
+                              }
+                            >
+                              ★
+                            </span>
+                          ))}
+                        </div>
+                      )}
 
                       {c.tags && c.tags.length > 0 && (
                         <div className="flex flex-wrap gap-1 mb-3">

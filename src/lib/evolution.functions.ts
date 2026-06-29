@@ -191,6 +191,22 @@ export const createInstance = createServerFn({ method: "POST" })
     return { ok: true };
   });
 
+export const setWebhook = createServerFn({ method: "POST" })
+  .inputValidator((d: { tenantId: string; instanceName: string; webhookUrl: string }) => d)
+  .handler(async ({ data }) => {
+    await evo(`/webhook/set/${encodeURIComponent(data.instanceName)}`, data.tenantId, {
+      method: "POST",
+      body: JSON.stringify({
+        url: data.webhookUrl,
+        enabled: true,
+        events: ["MESSAGES_UPSERT", "CONNECTION_UPDATE"],
+        webhookByEvents: false,
+        webhookBase64: false,
+      }),
+    });
+    return { ok: true };
+  });
+
 export const connectInstance = createServerFn({ method: "POST" })
   .inputValidator((d: { tenantId: string; instanceName: string }) => d)
   .handler(async ({ data }) => {

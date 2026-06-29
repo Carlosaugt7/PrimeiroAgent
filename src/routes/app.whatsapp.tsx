@@ -2,7 +2,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useServerFn } from "@tanstack/react-start";
 import { useCallback, useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
-import { Loader2, LogOut, Plus, QrCode, RefreshCw, Smartphone, Trash2 } from "lucide-react";
+import { Loader2, LogOut, Plus, QrCode, RefreshCw, Smartphone, Trash2, Webhook } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -22,6 +22,7 @@ import {
   listInstances,
   logoutInstance,
   restartInstance,
+  setWebhook,
 } from "@/lib/evolution.functions";
 import { useAuth } from "@/lib/auth";
 import { useAppStore } from "@/lib/app-store";
@@ -65,6 +66,7 @@ function Page() {
   const restart = useServerFn(restartInstance);
   const logout = useServerFn(logoutInstance);
   const del = useServerFn(deleteInstance);
+  const webhook = useServerFn(setWebhook);
 
   const [instances, setInstances] = useState<Inst[]>([]);
   const [localInstances, setLocalInstances] = useState<LocalInst[]>([]);
@@ -198,6 +200,17 @@ function Page() {
     }
   };
 
+  const handleSetWebhook = async (name: string) => {
+    try {
+      const publicUrl = import.meta.env.VITE_PUBLIC_URL || globalThis.location.origin;
+      const webhookUrl = `${publicUrl}/api/public/evolution-webhook`;
+      await webhook({ data: { tenantId: tenant?.id || "", instanceName: name, webhookUrl } });
+      toast.success("Webhook configurado! O agente agora receberá mensagens desta instância.");
+    } catch (error) {
+      toast.error(messageFromError(error, "Falha ao configurar webhook"));
+    }
+  };
+
   const handleRestart = async (name: string) => {
     try {
       await restart({ data: { tenantId: tenant?.id || "", instanceName: name } });
@@ -319,6 +332,14 @@ function Page() {
               <div className="flex flex-wrap gap-2">
                 <Button size="sm" variant="outline" onClick={() => openQr(i.instanceName)}>
                   <QrCode className="size-3.5" /> QR
+                </Button>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => handleSetWebhook(i.instanceName)}
+                  title="Configurar Webhook — necessário para o agente receber mensagens"
+                >
+                  <Webhook className="size-3.5" /> Webhook
                 </Button>
                 <Button size="sm" variant="outline" onClick={() => handleRestart(i.instanceName)}>
                   <RefreshCw className="size-3.5" />

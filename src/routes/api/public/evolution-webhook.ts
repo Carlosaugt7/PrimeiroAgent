@@ -1378,13 +1378,15 @@ async function runBridge(
 
   // 2.5) Carregar notas de perfil históricas da conversa
   let profileContext = "";
+  let conv: Record<string, any> | null = null;
   try {
-    const { data: conv } = await supabase
+    const { data: convData } = await supabase
       .from("conversations")
       .select("profileNotes, triageAnswers")
       .eq("id", convId)
       .eq("tenantId", tenantId)
       .single();
+    conv = convData;
     if (conv?.profileNotes) {
       profileContext =
         `## PERFIL DO CLIENTE (MEMÓRIA HISTÓRICA)\n` +
@@ -1867,7 +1869,10 @@ async function handleMessage(
   const fromMe: boolean = !!key.fromMe;
   const rawSender = body?.sender ?? (body as any)?.data?.sender ?? (body as any)?.instance?.owner;
   const ownerJid = typeof rawSender === "string" ? rawSender : undefined;
-  const isDirectLine = fromMe && !!ownerJid && remoteJid === ownerJid;
+  // Compare only the phone number part (strip @s.whatsapp.net, @lid, etc.) for robustness
+  const remoteNumber = remoteJid.split("@")[0];
+  const ownerNumber = ownerJid ? ownerJid.split("@")[0] : undefined;
+  const isDirectLine = fromMe && !!ownerNumber && remoteNumber === ownerNumber;
 
   const messageId: string = (key.id as string) ?? `${Date.now()}`;
   const msgData = m?.message as Record<string, unknown> | undefined;

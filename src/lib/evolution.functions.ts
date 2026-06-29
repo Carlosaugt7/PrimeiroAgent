@@ -197,11 +197,13 @@ export const setWebhook = createServerFn({ method: "POST" })
     await evo(`/webhook/set/${encodeURIComponent(data.instanceName)}`, data.tenantId, {
       method: "POST",
       body: JSON.stringify({
-        url: data.webhookUrl,
-        enabled: true,
-        events: ["MESSAGES_UPSERT", "CONNECTION_UPDATE"],
-        webhookByEvents: false,
-        webhookBase64: false,
+        webhook: {
+          url: data.webhookUrl,
+          enabled: true,
+          events: ["MESSAGES_UPSERT", "CONNECTION_UPDATE"],
+          webhookByEvents: false,
+          webhookBase64: false,
+        }
       }),
     });
     return { ok: true };

@@ -30,6 +30,7 @@ import { Route as AppInboxRouteImport } from './routes/app.inbox'
 import { Route as AppExtractorRouteImport } from './routes/app.extractor'
 import { Route as AppDeployRouteImport } from './routes/app.deploy'
 import { Route as AppCrmRouteImport } from './routes/app.crm'
+import { Route as AppCatalogRouteImport } from './routes/app.catalog'
 import { Route as AppCampaignsRouteImport } from './routes/app.campaigns'
 import { Route as AppBillingRouteImport } from './routes/app.billing'
 import { Route as AppAutomationsRouteImport } from './routes/app.automations'
@@ -148,6 +149,11 @@ const AppCrmRoute = AppCrmRouteImport.update({
   path: '/crm',
   getParentRoute: () => AppRoute,
 } as any)
+const AppCatalogRoute = AppCatalogRouteImport.update({
+  id: '/catalog',
+  path: '/catalog',
+  getParentRoute: () => AppRoute,
+} as any)
 const AppCampaignsRoute = AppCampaignsRouteImport.update({
   id: '/campaigns',
   path: '/campaigns',
@@ -220,6 +226,7 @@ export interface FileRoutesByFullPath {
   '/app/automations': typeof AppAutomationsRoute
   '/app/billing': typeof AppBillingRoute
   '/app/campaigns': typeof AppCampaignsRoute
+  '/app/catalog': typeof AppCatalogRoute
   '/app/crm': typeof AppCrmRoute
   '/app/deploy': typeof AppDeployRoute
   '/app/extractor': typeof AppExtractorRoute
@@ -253,6 +260,7 @@ export interface FileRoutesByTo {
   '/app/automations': typeof AppAutomationsRoute
   '/app/billing': typeof AppBillingRoute
   '/app/campaigns': typeof AppCampaignsRoute
+  '/app/catalog': typeof AppCatalogRoute
   '/app/crm': typeof AppCrmRoute
   '/app/deploy': typeof AppDeployRoute
   '/app/extractor': typeof AppExtractorRoute
@@ -289,6 +297,7 @@ export interface FileRoutesById {
   '/app/automations': typeof AppAutomationsRoute
   '/app/billing': typeof AppBillingRoute
   '/app/campaigns': typeof AppCampaignsRoute
+  '/app/catalog': typeof AppCatalogRoute
   '/app/crm': typeof AppCrmRoute
   '/app/deploy': typeof AppDeployRoute
   '/app/extractor': typeof AppExtractorRoute
@@ -326,6 +335,7 @@ export interface FileRouteTypes {
     | '/app/automations'
     | '/app/billing'
     | '/app/campaigns'
+    | '/app/catalog'
     | '/app/crm'
     | '/app/deploy'
     | '/app/extractor'
@@ -359,6 +369,7 @@ export interface FileRouteTypes {
     | '/app/automations'
     | '/app/billing'
     | '/app/campaigns'
+    | '/app/catalog'
     | '/app/crm'
     | '/app/deploy'
     | '/app/extractor'
@@ -394,6 +405,7 @@ export interface FileRouteTypes {
     | '/app/automations'
     | '/app/billing'
     | '/app/campaigns'
+    | '/app/catalog'
     | '/app/crm'
     | '/app/deploy'
     | '/app/extractor'
@@ -579,6 +591,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppCrmRouteImport
       parentRoute: typeof AppRoute
     }
+    '/app/catalog': {
+      id: '/app/catalog'
+      path: '/catalog'
+      fullPath: '/app/catalog'
+      preLoaderRoute: typeof AppCatalogRouteImport
+      parentRoute: typeof AppRoute
+    }
     '/app/campaigns': {
       id: '/app/campaigns'
       path: '/campaigns'
@@ -687,6 +706,7 @@ interface AppRouteChildren {
   AppAutomationsRoute: typeof AppAutomationsRoute
   AppBillingRoute: typeof AppBillingRoute
   AppCampaignsRoute: typeof AppCampaignsRoute
+  AppCatalogRoute: typeof AppCatalogRoute
   AppCrmRoute: typeof AppCrmRoute
   AppDeployRoute: typeof AppDeployRoute
   AppExtractorRoute: typeof AppExtractorRoute
@@ -714,6 +734,7 @@ const AppRouteChildren: AppRouteChildren = {
   AppAutomationsRoute: AppAutomationsRoute,
   AppBillingRoute: AppBillingRoute,
   AppCampaignsRoute: AppCampaignsRoute,
+  AppCatalogRoute: AppCatalogRoute,
   AppCrmRoute: AppCrmRoute,
   AppDeployRoute: AppDeployRoute,
   AppExtractorRoute: AppExtractorRoute,

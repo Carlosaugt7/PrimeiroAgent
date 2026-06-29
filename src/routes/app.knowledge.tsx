@@ -40,6 +40,7 @@ interface KnowDoc {
   vectorDim?: number;
   status?: "processando" | "indexado" | "erro";
   createdAt: string;
+  agentId?: string | null;
 }
 
 // Gera UUID compatível inclusive em contextos HTTP (localhost sem HTTPS)
@@ -85,7 +86,7 @@ function chunkText(text: string, chunkSize = 800, overlap = 120): string[] {
 
 function Page() {
   const { tenant } = useAuth();
-  const { providers } = useAppStore();
+  const { providers, agents } = useAppStore();
   const embed = useServerFn(embedTexts);
   const fetchWebpage = useServerFn(fetchWebpageText);
 
@@ -97,6 +98,7 @@ function Page() {
   const [activeTab, setActiveTab] = useState("file");
   const [providerId, setProviderId] = useState("");
   const [embedModel, setEmbedModel] = useState("text-embedding-3-small");
+  const [agentId, setAgentId] = useState<string | null>(null);
   const [ingesting, setIngesting] = useState(false);
   const [progress, setProgress] = useState("");
 
@@ -104,6 +106,7 @@ function Page() {
   const [editDoc, setEditDoc] = useState<KnowDoc | null>(null);
   const [editName, setEditName] = useState("");
   const [editText, setEditText] = useState("");
+  const [editAgentId, setEditAgentId] = useState<string | null>(null);
   const [editBusy, setEditBusy] = useState(false);
   const [editProgress, setEditProgress] = useState("");
 
@@ -283,6 +286,7 @@ function Page() {
         embedModel,
         embedProviderId: providerId,
         sourceUrl: activeTab === "url" ? url.trim() : null,
+        agentId: agentId || null,
         createdAt: new Date().toISOString(),
       });
       if (docErr) throw docErr;
@@ -306,6 +310,7 @@ function Page() {
       setName("");
       setText("");
       setUrl("");
+      setAgentId(null);
       setProgress("");
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : "Falha na ingestão";
@@ -341,6 +346,7 @@ function Page() {
   const openEdit = async (d: KnowDoc) => {
     setEditDoc(d);
     setEditName(d.name);
+    setEditAgentId(d.agentId || null);
     setEditText("");
     setEditProgress("Carregando conteúdo...");
     try {
@@ -416,10 +422,13 @@ function Page() {
         if (error) throw error;
       }
 
-      // Atualiza o nome se mudou
+      // Atualiza o nome e o agente
       await supabase
         .from("knowledge")
-        .update({ name: editName.trim() })
+        .update({ 
+          name: editName.trim(),
+          agentId: editAgentId || null
+        })
         .eq("id", editDoc.id);
 
       toast.success(`"${editName}" atualizado (${chunks.length} chunks)`);
@@ -521,6 +530,24 @@ function Page() {
                   />
                 </div>
                 <div className="space-y-1.5">
+                  <Label>Agente Associado</Label>
+                  <Select value={agentId || "global"} onValueChange={(val) => setAgentId(val === "global" ? null : val)}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Selecione o agente..." />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="global">Global (Todos os agentes)</SelectItem>
+                      {agents.map((a) => (
+                        <SelectItem key={a.id} value={a.id}>
+                          {a.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1.5">
                   <Label>Provedor de embeddings</Label>
                   <Select value={providerId} onValueChange={(val) => {
                     setProviderId(val);
@@ -550,29 +577,29 @@ function Page() {
                     </p>
                   )}
                 </div>
-              </div>
-              <div className="space-y-1.5">
-                <Label>Modelo de embedding</Label>
-                <Input
-                  value={embedModel}
-                  onChange={(e) => setEmbedModel(e.target.value)}
-                  placeholder="text-embedding-3-small"
-                />
-                <p className="text-xs text-muted-foreground">
-                  {(() => {
-                    const p = providers.find((x) => x.id === providerId);
-                    if (p?.kind === "google") {
-                      return "Google Gemini: recomendado gemini-embedding-2 (768 dimensões).";
-                    }
-                    if (p?.kind === "openrouter") {
-                      return "OpenRouter: ex: openai/text-embedding-3-small.";
-                    }
-                    if (p?.kind === "custom") {
-                      return "Custom: informe o modelo de embedding do seu provedor.";
-                    }
-                    return "OpenAI: text-embedding-3-small (1536) ou text-embedding-3-large (3072).";
-                  })()}
-                </p>
+                <div className="space-y-1.5">
+                  <Label>Modelo de embedding</Label>
+                  <Input
+                    value={embedModel}
+                    onChange={(e) => setEmbedModel(e.target.value)}
+                    placeholder="text-embedding-3-small"
+                  />
+                  <p className="text-[10px] text-muted-foreground mt-0.5">
+                    {(() => {
+                      const p = providers.find((x) => x.id === providerId);
+                      if (p?.kind === "google") {
+                        return "Google: gemini-embedding-2 (768).";
+                      }
+                      if (p?.kind === "openrouter") {
+                        return "OpenRouter: ex: openai/text-embedding-3-small.";
+                      }
+                      if (p?.kind === "custom") {
+                        return "Custom: informe o modelo do provedor.";
+                      }
+                      return "OpenAI: text-embedding-3-small (1536) ou text-embedding-3-large (3072).";
+                    })()}
+                  </p>
+                </div>
               </div>
               <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
                 <TabsList className="grid w-full grid-cols-2">
@@ -690,7 +717,14 @@ function Page() {
                         )}
                         {d.name}
                       </p>
-                      <p className="text-xs text-muted-foreground mt-1">{d.embedModel}</p>
+                      <p className="text-xs text-muted-foreground mt-1 flex items-center gap-2 flex-wrap">
+                        <span>{d.embedModel}</span>
+                        <span className="text-[9px] bg-secondary px-1.5 py-0.5 rounded text-secondary-foreground">
+                          {d.agentId 
+                            ? `Agente: ${agents.find((a) => a.id === d.agentId)?.name || "Desconhecido"}` 
+                            : "Global"}
+                        </span>
+                      </p>
                     </div>
                     <div className="flex items-center gap-1 shrink-0">
                       {isUrl && (
@@ -778,6 +812,22 @@ function Page() {
                 onChange={(e) => setEditName(e.target.value)}
                 placeholder="Nome do documento"
               />
+            </div>
+            <div className="space-y-1.5">
+              <Label>Agente Associado</Label>
+              <Select value={editAgentId || "global"} onValueChange={(val) => setEditAgentId(val === "global" ? null : val)}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Selecione o agente..." />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="global">Global (Todos os agentes)</SelectItem>
+                  {agents.map((a) => (
+                    <SelectItem key={a.id} value={a.id}>
+                      {a.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
             <div className="space-y-1.5">
               <Label>Conteúdo</Label>

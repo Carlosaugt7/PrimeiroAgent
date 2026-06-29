@@ -581,8 +581,35 @@ async function embedQuery(
   }
 }
 
-async function buildRagContext(tenantId: string, userText: string): Promise<string | null> {
-  const { data: docs } = await supabase.from("knowledge").select("*").eq("tenantId", tenantId);
+async function buildRagContext(tenantId: string, userText: string, agentId: string): Promise<string | null> {
+  let docs: any[] | null = null;
+
+  try {
+    // Busca documentos específicos do agente ou globais (agentId é nulo)
+    const { data, error } = await supabase
+      .from("knowledge")
+      .select("*")
+      .eq("tenantId", tenantId)
+      .or(`agentId.eq.${agentId},agentId.is.null`);
+
+    if (!error && data) {
+      docs = data;
+    } else if (error) {
+      console.warn("[RAG] Falha ao filtrar por agentId (coluna pode nao existir). Buscando todos do tenant.", error.message);
+    }
+  } catch (err) {
+    console.warn("[RAG] Erro ao buscar knowledge com filtro agentId:", err);
+  }
+
+  // Fallback se a consulta acima falhou ou retornou erro (ex: migracao nao aplicada)
+  if (!docs) {
+    const { data } = await supabase
+      .from("knowledge")
+      .select("*")
+      .eq("tenantId", tenantId);
+    docs = data || [];
+  }
+
   if (!docs || docs.length === 0) return null;
 
   const docsWithEmbed = docs.filter((d: any) => d.embedProviderId && d.embedModel);
@@ -644,7 +671,8 @@ async function buildRagContext(tenantId: string, userText: string): Promise<stri
   if (scored.length === 0) return null;
 
   scored.sort((a, b) => b.score - a.score);
-  const top = scored.slice(0, 4).filter((s) => s.score > 0.2);
+  // Threshold elevado de 0.2 para 0.35 para maior relevancia e precisao
+  const top = scored.slice(0, 4).filter((s) => s.score > 0.35);
   if (top.length === 0) return null;
 
   return top.map((t, i) => `[${i + 1}] ${t.text}`).join("\n\n");
@@ -1404,7 +1432,7 @@ async function runBridge(
     `Se o cliente demonstrar irritação extrema, frustração ou exigir falar com humanos de forma ríspida, responda de forma muito educada e coloque a tag [FRUSTRATED] exatamente no final da sua resposta para que o atendimento humano assuma.\n\n`;
 
   try {
-    const ragCtx = await buildRagContext(tenantId, userText);
+    const ragCtx = await buildRagContext(tenantId, userText, agent.id);
     if (ragCtx) {
       systemPrompt =
         `${systemPrompt}\n\n## BASE DE CONHECIMENTO — FONTE ÚNICA DE VERDADE\n` +
@@ -1499,10 +1527,17 @@ async function runBridge(
   let inputTokens = 0;
   let outputTokens = 0;
   let llmError: string | null = null;
+
+  // Força temperatura baixa (0.1) para garantir fidelidade ao RAG e prompt
+  const strictAgent = {
+    ...agent,
+    temperature: 0.1,
+  };
+
   try {
     const res = await callLLM(
       provider,
-      agent,
+      strictAgent,
       systemPromptComAgendamento,
       userText,
       tenantId,
@@ -1657,7 +1692,7 @@ async function runBridge(
       try {
         const res = await callLLM(
           provider,
-          agent,
+          strictAgent,
           feedbackSystemPrompt,
           `Resultado do sistema: ${actionResult}`,
           tenantId,
@@ -1809,6 +1844,7 @@ async function runBridge(
   }
   const isHandoff =
     isFrustrated ||
+    reply.includes("Vou verificar isso para você agora.") ||
     /encaminhar seu atendimento|equipe especializada|suporte especializado/i.test(reply);
 
   const convUpdatePayload: Record<string, any> = {

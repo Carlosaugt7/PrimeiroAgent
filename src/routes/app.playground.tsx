@@ -240,18 +240,35 @@ function PlaygroundPage() {
     }
   };
 
-  // Lista docs do tenant
+  // Lista docs do tenant filtrando por agente selecionado
   useEffect(() => {
     if (!tenant) return;
 
     const fetchKnowledge = async () => {
-      const { data, error } = await supabase
-        .from("knowledge")
-        .select("*")
-        .eq("tenantId", tenant.id);
+      try {
+        let query = supabase
+          .from("knowledge")
+          .select("*")
+          .eq("tenantId", tenant.id);
 
-      if (error) console.warn("[playground] knowledge:", error);
-      else if (data) setKnowDocs(data as any[]);
+        if (agentId) {
+          query = query.or(`agentId.eq.${agentId},agentId.is.null`);
+        }
+
+        const { data, error } = await query;
+        if (error) {
+          // Fallback caso a coluna agentId nao exista no banco de dados ainda
+          const fallbackQuery = await supabase
+            .from("knowledge")
+            .select("*")
+            .eq("tenantId", tenant.id);
+          if (fallbackQuery.data) setKnowDocs(fallbackQuery.data as any[]);
+        } else if (data) {
+          setKnowDocs(data as any[]);
+        }
+      } catch (err) {
+        console.warn("[playground] erro ao carregar docs:", err);
+      }
     };
 
     fetchKnowledge();
@@ -273,7 +290,7 @@ function PlaygroundPage() {
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [tenant]);
+  }, [tenant, agentId]);
 
   // Carrega todos os chunks dos docs do tenant
   useEffect(() => {
@@ -393,7 +410,7 @@ function PlaygroundPage() {
             const topChunks = scored
               .sort((a, b) => b.s - a.s)
               .slice(0, topK)
-              .filter((x) => x.s > 0.2);
+              .filter((x) => x.s > 0.35);
 
             if (topChunks.length) {
               const context = topChunks
@@ -417,7 +434,7 @@ function PlaygroundPage() {
           model: agent.model,
           systemPrompt,
           messages: newMsgs,
-          temperature: agent.temperature,
+          temperature: useRag ? 0.1 : agent.temperature,
         },
       });
       setMsgs([...newMsgs, { role: "assistant", content: r.text }]);

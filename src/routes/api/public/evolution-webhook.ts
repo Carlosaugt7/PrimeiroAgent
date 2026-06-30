@@ -1414,7 +1414,7 @@ async function runBridge(
   try {
     const { data: convData } = await supabase
       .from("conversations")
-      .select("profileNotes, triageAnswers")
+      .select("profileNotes, triageAnswers, contactType")
       .eq("id", convId)
       .eq("tenantId", tenantId)
       .single();
@@ -1427,6 +1427,40 @@ async function runBridge(
     }
   } catch (e) {
     console.warn("[bridge] falhou ao carregar profileNotes:", e);
+  }
+
+  let relationshipContext = "";
+  if (conv?.contactType) {
+    const type = conv.contactType;
+    if (type === "amigo") {
+      relationshipContext =
+        `## RELACIONAMENTO DO CONTATO: AMIGO\n` +
+        `O contato com quem você está falando é um AMIGO pessoal do proprietário.\n` +
+        `REGRAS DE CONDUTA:\n` +
+        `1. Seja informal, caloroso e descontraído. Não use linguagem corporativa excessiva.\n` +
+        `2. Se ele perguntar pelo proprietário, explique de forma descontraída que ele está ocupado no momento e não pode responder imediatamente, mas que você deixará o recado anotado.\n\n`;
+    } else if (type === "familiar") {
+      relationshipContext =
+        `## RELACIONAMENTO DO CONTATO: FAMILIAR\n` +
+        `O contato com quem você está falando é um FAMILIAR (ex: filho, filha, cônjuge, etc.) do proprietário.\n` +
+        `REGRAS DE CONDUTA:\n` +
+        `1. Seja carinhoso, solícito e totalmente informal.\n` +
+        `2. Avise de forma carinhosa que o proprietário está ocupado agora e responderá assim que puder.\n` +
+        `3. Exemplo de tom: "Oi! A assistente virtual do [Nome] aqui. Ele está ocupado agora, mas já avisei ele que você mandou mensagem!"\n\n`;
+    } else if (type === "cliente") {
+      relationshipContext =
+        `## RELACIONAMENTO DO CONTATO: CLIENTE ATIVO\n` +
+        `Este contato é um CLIENTE que já consome nossos serviços.\n` +
+        `REGRAS DE CONDUTA:\n` +
+        `1. Trate-o de forma profissional, atenciosa e priorize resolver as dúvidas dele.\n` +
+        `2. Use o nome do cliente de forma amigável.\n\n`;
+    } else if (type === "lead") {
+      relationshipContext =
+        `## RELACIONAMENTO DO CONTATO: NOVO LEAD / INTERESSADO\n` +
+        `Este contato é um potencial cliente (novo Lead).\n` +
+        `REGRAS DE CONDUTA:\n` +
+        `1. Foco em entender a necessidade dele, capturar interesse e direcionar para o agendamento ou fechamento.\n\n`;
+    }
   }
 
   // 3) RAG opcional
@@ -1495,6 +1529,7 @@ async function runBridge(
   // 4) Chamar LLM com instruções de Agendamento + Google integrations
   const systemPromptComAgendamento =
     `${systemPrompt}\n\n` +
+    (relationshipContext ? `${relationshipContext}` : "") +
     (profileContext ? `${profileContext}` : "") +
     (triageContext ? `${triageContext}` : "") +
     (historyContext ? `${historyContext}` : "") +
@@ -1906,14 +1941,6 @@ async function handleMessage(
   if (!remoteJid) return new Response("no remoteJid", { status: 200 });
   if (remoteJid.endsWith("@g.us")) return Response.json({ ok: true, ignored: "group" });
 
-  const fromMe: boolean = !!key.fromMe;
-  const rawSender = body?.sender ?? (body as any)?.data?.sender ?? (body as any)?.instance?.owner;
-  const ownerJid = typeof rawSender === "string" ? rawSender : undefined;
-  // Compare only the phone number part (strip @s.whatsapp.net, @lid, etc.) for robustness
-  const remoteNumber = remoteJid.split("@")[0];
-  const ownerNumber = ownerJid ? ownerJid.split("@")[0] : undefined;
-  const isDirectLine = fromMe && !!ownerNumber && remoteNumber === ownerNumber;
-
   const messageId: string = (key.id as string) ?? `${Date.now()}`;
   const msgData = m?.message as Record<string, unknown> | undefined;
   const isAudio = !!msgData?.audioMessage;
@@ -1926,6 +1953,17 @@ async function handleMessage(
     (isAudio ? "[áudio]" : isImage ? "[imagem]" : "[mídia]");
   const pushName: string = (m?.pushName as string) ?? remoteJid.split("@")[0];
   const convId = remoteJid.replace(/[^a-zA-Z0-9_-]/g, "_");
+
+  const fromMe: boolean = !!key.fromMe;
+  const rawSender = body?.sender ?? (body as any)?.data?.sender ?? (body as any)?.instance?.owner;
+  const ownerJid = typeof rawSender === "string" ? rawSender : undefined;
+  // Compare only the phone number part (strip @s.whatsapp.net, @lid, etc.) for robustness
+  const remoteNumber = remoteJid.split("@")[0];
+  const ownerNumber = ownerJid ? ownerJid.split("@")[0] : undefined;
+  
+  const isDirectLineCommand = fromMe && (text.toLowerCase().startsWith('/admin') || text.toLowerCase().startsWith('/bot'));
+  const isSelfChat = fromMe && !!ownerNumber && remoteNumber === ownerNumber;
+  const isDirectLine = isSelfChat || isDirectLineCommand;
 
   // Transcrição de áudio recebido do cliente ou do dono (linha direta)
   if (isAudio && (!fromMe || isDirectLine)) {

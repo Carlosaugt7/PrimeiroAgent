@@ -80,6 +80,7 @@ export interface Conversation {
   convertedValue?: number | null;
   triageAnswers?: Record<string, string> | null;
   triageCurrentIndex?: number | null;
+  contactType?: "lead" | "cliente" | "amigo" | "familiar" | "outro" | null;
 }
 
 export interface Product {

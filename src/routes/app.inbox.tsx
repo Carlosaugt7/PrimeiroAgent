@@ -45,6 +45,9 @@ interface Conv {
   botPaused?: boolean;
   tags?: string[];
   isFrustrated?: boolean | null;
+  profileNotes?: string | null;
+  leadScore?: number | null;
+  contactType?: "lead" | "cliente" | "amigo" | "familiar" | "outro" | null;
 }
 interface Msg {
   id: string;
@@ -672,6 +675,37 @@ function Inbox() {
                       <span className="text-xs text-muted-foreground ml-2">
                         {active.leadScore ? `${active.leadScore}/5` : "Sem nota"}
                       </span>
+                    </div>
+                  </div>
+
+                  <div>
+                    <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+                      Tipo de Contato
+                    </h4>
+                    <div className="mt-2">
+                      <select
+                        value={active.contactType || ""}
+                        onChange={async (e) => {
+                          const val = e.target.value || null;
+                          const { error } = await supabase
+                            .from("conversations")
+                            .update({ contactType: val })
+                            .eq("id", active.id);
+                          if (error) {
+                            toast.error(error.message);
+                          } else {
+                            toast.success("Tipo de contato atualizado!");
+                          }
+                        }}
+                        className="w-full text-xs bg-background border border-input rounded-md px-2 py-1 focus:outline-none focus:ring-1 focus:ring-ring"
+                      >
+                        <option value="">Nenhum (Padrão)</option>
+                        <option value="lead">Lead (Potencial Cliente)</option>
+                        <option value="cliente">Cliente Ativo</option>
+                        <option value="amigo">Amigo</option>
+                        <option value="familiar">Familiar</option>
+                        <option value="outro">Outro</option>
+                      </select>
                     </div>
                   </div>
                 </div>

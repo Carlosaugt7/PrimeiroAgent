@@ -233,7 +233,7 @@ function CatalogPage() {
                   <h3 className="font-display font-bold text-lg leading-tight line-clamp-1">
                     {p.name}
                   </h3>
-                  <Badge variant={p.isActive ? "success" : "outline"} className="shrink-0">
+                  <Badge variant={p.isActive ? "default" : "outline"} className="shrink-0">
                     {p.isActive ? "Ativo" : "Inativo"}
                   </Badge>
                 </div>

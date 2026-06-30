@@ -8,13 +8,7 @@ import {
   fetchGroupParticipants,
 } from "@/lib/evolution.functions";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
@@ -132,26 +126,31 @@ function ExtractorPage() {
   const isValidContact = (jid: string): boolean => {
     if (!jid) return false;
     const numberPart = jid.split("@")[0].split(":")[0];
-    
+
     // Deve conter apenas dígitos e ter um tamanho razoável (DDI + DDD + Número)
     if (!/^\d+$/.test(numberPart)) return false;
     if (numberPart.length < 8) return false;
-    
+
     // Evitar broadcasts, JID '0' ou contatos oficiais de sistema
     if (numberPart === "0" || jid.includes("broadcast") || jid.includes("status")) return false;
-    
+
     return true;
   };
 
   // Resolução inteligente dos nomes de contatos para evitar JID/Código
   const resolveName = (c: any, num: string): string => {
-    let resolved = (c.name || c.pushName || c.verifiedName || "").trim();
-    
+    const resolved = (c.name || c.pushName || c.verifiedName || "").trim();
+
     // Se o nome contiver @, for igual ao ID ou for estritamente numérico igual ao número, limpamos
-    if (!resolved || resolved.includes("@") || resolved === c.id || resolved.replace(/\D/g, "") === num) {
+    if (
+      !resolved ||
+      resolved.includes("@") ||
+      resolved === c.id ||
+      resolved.replace(/\D/g, "") === num
+    ) {
       return "";
     }
-    
+
     return resolved;
   };
 
@@ -164,8 +163,10 @@ function ExtractorPage() {
     setLoadingContacts(true);
     setContacts([]);
     try {
-      const res = await fetchInstanceContacts({ data: { tenantId, instanceName: selectedInstance } });
-      
+      const res = await fetchInstanceContacts({
+        data: { tenantId, instanceName: selectedInstance },
+      });
+
       // Mapeia, filtra automaticamente e limpa
       const filtered = (res as any[])
         .filter((c) => isValidContact(c.id))
@@ -265,8 +266,7 @@ function ExtractorPage() {
   // Filtro de pesquisa local
   const filteredContacts = contacts.filter(
     (c) =>
-      c.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      c.number.includes(searchQuery)
+      c.name.toLowerCase().includes(searchQuery.toLowerCase()) || c.number.includes(searchQuery),
   );
 
   // Geração de CSV
@@ -279,21 +279,19 @@ function ExtractorPage() {
 
     // Formato amigável pro Excel (UTF-8 com BOM e delimitador ;)
     const headers = "Número;Nome\n";
-    const rows = targets
-      .map((c) => `="${c.number}";"${c.name.replace(/"/g, '""')}"`)
-      .join("\n");
-    
+    const rows = targets.map((c) => `="${c.number}";"${c.name.replace(/"/g, '""')}"`).join("\n");
+
     const blob = new Blob(["\ufeff" + headers + rows], { type: "text/csv;charset=utf-8;" });
     const url = URL.createObjectURL(blob);
     const link = document.createElement("a");
     const label = activeTab === "agenda" ? "contatos_agenda" : "participantes_grupo";
-    
+
     link.setAttribute("href", url);
     link.setAttribute("download", `${label}_${selectedInstance}_${Date.now()}.csv`);
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
-    
+
     toast.success("CSV exportado com sucesso!");
   };
 
@@ -306,8 +304,8 @@ function ExtractorPage() {
     }
 
     const worksheetData = targets.map((c) => ({
-      "Número": c.number,
-      "Nome": c.name,
+      Número: c.number,
+      Nome: c.name,
     }));
 
     const worksheet = XLSX.utils.json_to_sheet(worksheetData, { raw: true } as any);
@@ -325,10 +323,10 @@ function ExtractorPage() {
 
     const workbook = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(workbook, worksheet, "Contatos");
-    
+
     const label = activeTab === "agenda" ? "contatos_agenda" : "participantes_grupo";
     XLSX.writeFile(workbook, `${label}_${selectedInstance}_${Date.now()}.xlsx`);
-    
+
     toast.success("Excel (.xlsx) exportado com sucesso!");
   };
 
@@ -340,7 +338,8 @@ function ExtractorPage() {
             Extrator de Contatos
           </h1>
           <p className="text-muted-foreground text-sm mt-1">
-            Extraia contatos reais da sua agenda ou de grupos da instância em formato internacional limpo e pronto para envio.
+            Extraia contatos reais da sua agenda ou de grupos da instância em formato internacional
+            limpo e pronto para envio.
           </p>
         </div>
       </div>
@@ -368,7 +367,9 @@ function ExtractorPage() {
                 ) : instances.length === 0 ? (
                   <div className="text-xs text-red-400 py-1 bg-red-950/20 border border-red-500/20 rounded-md p-2 flex items-start gap-2">
                     <AlertTriangle className="size-4 shrink-0 mt-0.5" />
-                    <span>Nenhuma instância conectada no momento. Conecte no menu WhatsApp primeiro.</span>
+                    <span>
+                      Nenhuma instância conectada no momento. Conecte no menu WhatsApp primeiro.
+                    </span>
                   </div>
                 ) : (
                   <select
@@ -429,9 +430,13 @@ function ExtractorPage() {
                     disabled={loadingContacts || !selectedInstance}
                   >
                     {loadingContacts ? (
-                      <><RefreshCw className="animate-spin size-4 mr-2" /> Extraindo...</>
+                      <>
+                        <RefreshCw className="animate-spin size-4 mr-2" /> Extraindo...
+                      </>
                     ) : (
-                      <><Download className="size-4 mr-2" /> Extrair Toda Agenda</>
+                      <>
+                        <Download className="size-4 mr-2" /> Extrair Toda Agenda
+                      </>
                     )}
                   </UIButton>
                 ) : (
@@ -441,9 +446,13 @@ function ExtractorPage() {
                     disabled={loadingContacts || !selectedInstance || !selectedGroup}
                   >
                     {loadingContacts ? (
-                      <><RefreshCw className="animate-spin size-4 mr-2" /> Extraindo...</>
+                      <>
+                        <RefreshCw className="animate-spin size-4 mr-2" /> Extraindo...
+                      </>
                     ) : (
-                      <><Download className="size-4 mr-2" /> Extrair Participantes</>
+                      <>
+                        <Download className="size-4 mr-2" /> Extrair Participantes
+                      </>
                     )}
                   </UIButton>
                 )}
@@ -459,11 +468,23 @@ function ExtractorPage() {
               </CardTitle>
             </CardHeader>
             <CardContent className="text-xs space-y-2 leading-relaxed text-amber-200/90">
-              <p>Para evitar erros de envio nas campanhas, o sistema processa os contatos automaticamente:</p>
+              <p>
+                Para evitar erros de envio nas campanhas, o sistema processa os contatos
+                automaticamente:
+              </p>
               <ul className="list-disc pl-4 space-y-1">
-                <li><strong>Números Reais:</strong> Remove sufixos como <code>@s.whatsapp.net</code> e IDs de multidevice (ex: <code>:2</code>).</li>
-                <li><strong>DDI+DDD+Número:</strong> Formata mantendo apenas dígitos numéricos puros.</li>
-                <li><strong>Prevenção de Códigos:</strong> Filtra contatos de sistema (broadcasts/status) e zera nomes que venham salvos como códigos JID numéricos na agenda.</li>
+                <li>
+                  <strong>Números Reais:</strong> Remove sufixos como <code>@s.whatsapp.net</code> e
+                  IDs de multidevice (ex: <code>:2</code>).
+                </li>
+                <li>
+                  <strong>DDI+DDD+Número:</strong> Formata mantendo apenas dígitos numéricos puros.
+                </li>
+                <li>
+                  <strong>Prevenção de Códigos:</strong> Filtra contatos de sistema
+                  (broadcasts/status) e zera nomes que venham salvos como códigos JID numéricos na
+                  agenda.
+                </li>
               </ul>
             </CardContent>
           </Card>
@@ -481,7 +502,9 @@ function ExtractorPage() {
             className="w-full"
           >
             <TabsList className="grid w-full max-w-sm grid-cols-2 bg-secondary/40 p-1 rounded-xl">
-              <TabsTrigger value="agenda" className="rounded-lg">Extrair da Agenda</TabsTrigger>
+              <TabsTrigger value="agenda" className="rounded-lg">
+                Extrair da Agenda
+              </TabsTrigger>
               <TabsTrigger value="grupos" className="rounded-lg flex items-center gap-1">
                 <Users className="size-3.5" /> Extrair de Grupos
               </TabsTrigger>
@@ -574,15 +597,22 @@ function ExtractorPage() {
                                 onChange={(e) => handleToggleSelectAll(e.target.checked)}
                               />
                             </th>
-                            <th className="p-3 font-semibold text-muted-foreground">Nome Resolvido</th>
-                            <th className="p-3 font-semibold text-muted-foreground">Número de Telefone</th>
+                            <th className="p-3 font-semibold text-muted-foreground">
+                              Nome Resolvido
+                            </th>
+                            <th className="p-3 font-semibold text-muted-foreground">
+                              Número de Telefone
+                            </th>
                             <th className="p-3 font-semibold text-muted-foreground">Origem</th>
                           </tr>
                         </thead>
                         <tbody className="divide-y divide-border/20 font-mono">
                           {filteredContacts.length === 0 ? (
                             <tr>
-                              <td colSpan={4} className="p-8 text-center text-muted-foreground font-sans">
+                              <td
+                                colSpan={4}
+                                className="p-8 text-center text-muted-foreground font-sans"
+                              >
                                 Nenhum contato corresponde à busca local.
                               </td>
                             </tr>
@@ -593,7 +623,10 @@ function ExtractorPage() {
                                 className="hover:bg-secondary/20 transition-colors cursor-pointer"
                                 onClick={() => handleToggleSelectOne(c.id, !c.selected)}
                               >
-                                <td className="p-3 text-center" onClick={(e) => e.stopPropagation()}>
+                                <td
+                                  className="p-3 text-center"
+                                  onClick={(e) => e.stopPropagation()}
+                                >
                                   <input
                                     type="checkbox"
                                     className="cursor-pointer"
@@ -612,7 +645,10 @@ function ExtractorPage() {
                                 </td>
                                 <td className="p-3 text-foreground font-semibold">{c.number}</td>
                                 <td className="p-3">
-                                  <Badge variant="outline" className="bg-secondary/40 text-[10px] uppercase font-sans">
+                                  <Badge
+                                    variant="outline"
+                                    className="bg-secondary/40 text-[10px] uppercase font-sans"
+                                  >
                                     {c.origin}
                                   </Badge>
                                 </td>
@@ -629,7 +665,8 @@ function ExtractorPage() {
                   <Download className="size-8 text-muted-foreground/30 mx-auto mb-3" />
                   <p className="font-semibold">Nenhum contato extraído ainda</p>
                   <p className="text-xs text-muted-foreground/80 mt-1 max-w-xs mx-auto">
-                    Selecione a instância ao lado e clique em extrair para carregar a base de contatos.
+                    Selecione a instância ao lado e clique em extrair para carregar a base de
+                    contatos.
                   </p>
                 </div>
               )}

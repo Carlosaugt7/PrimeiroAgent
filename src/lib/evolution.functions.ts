@@ -14,7 +14,9 @@ async function getGlobalEvoConfig(): Promise<{ url: string; key: string | undefi
       .in("key", ["evolutionApiUrl", "evolutionApiKey"]);
 
     if (data && data.length > 0) {
-      const map = Object.fromEntries(data.map((r: { key: string; value: string }) => [r.key, r.value]));
+      const map = Object.fromEntries(
+        data.map((r: { key: string; value: string }) => [r.key, r.value]),
+      );
       const url = map.evolutionApiUrl?.trim();
       const key = map.evolutionApiKey?.trim();
       if (url && key) return { url: url.replace(/\/$/, ""), key };
@@ -115,21 +117,20 @@ export const updateGlobalEvolutionSettings = createServerFn({ method: "POST" })
     return { ok: true };
   });
 
-export const getGlobalEvolutionSettings = createServerFn({ method: "GET" })
-  .handler(async () => {
-    const { data } = await supabase
-      .from("global_settings")
-      .select("key, value")
-      .in("key", ["evolutionApiUrl", "evolutionApiKey"]);
+export const getGlobalEvolutionSettings = createServerFn({ method: "GET" }).handler(async () => {
+  const { data } = await supabase
+    .from("global_settings")
+    .select("key, value")
+    .in("key", ["evolutionApiUrl", "evolutionApiKey"]);
 
-    const map = Object.fromEntries(
-      (data ?? []).map((r: { key: string; value: string }) => [r.key, r.value]),
-    );
-    return {
-      url: map.evolutionApiUrl ?? "",
-      key: map.evolutionApiKey ?? "",
-    };
-  });
+  const map = Object.fromEntries(
+    (data ?? []).map((r: { key: string; value: string }) => [r.key, r.value]),
+  );
+  return {
+    url: map.evolutionApiUrl ?? "",
+    key: map.evolutionApiKey ?? "",
+  };
+});
 
 export const testEvolutionConnection = createServerFn({ method: "POST" })
   .inputValidator((d: { url: string; key: string }) => d)
@@ -203,7 +204,7 @@ export const setWebhook = createServerFn({ method: "POST" })
           events: ["MESSAGES_UPSERT", "CONNECTION_UPDATE"],
           webhookByEvents: false,
           webhookBase64: false,
-        }
+        },
       }),
     });
     return { ok: true };
@@ -361,7 +362,7 @@ export const fetchInstanceContacts = createServerFn({ method: "POST" })
         {
           method: "POST",
           body: JSON.stringify({ where: {} }),
-        }
+        },
       );
       const arr = Array.isArray(res) ? res : [];
       return arr.map((c: any) => ({
@@ -382,20 +383,19 @@ export const fetchGroupParticipants = createServerFn({ method: "POST" })
     try {
       const res = await evo<any>(
         `/group/participants/${encodeURIComponent(data.instanceName)}?groupJid=${encodeURIComponent(data.groupJid)}`,
-        data.tenantId
+        data.tenantId,
       );
-      const participants = Array.isArray(res) ? res : (res?.participants || []);
+      const participants = Array.isArray(res) ? res : res?.participants || [];
       return participants.map((p: any) => ({
         id: p?.phoneNumber ?? p?.id ?? p?.jid ?? p?.number ?? "",
         name: p?.name ?? null,
         pushName: p?.pushName ?? p?.pushname ?? null,
         verifiedName: p?.verifiedName ?? null,
         isAdmin: !!(p?.admin || p?.isAdmin || p?.adminJid),
-        isSuperAdmin: !!(p?.isSuperAdmin),
+        isSuperAdmin: !!p?.isSuperAdmin,
       }));
     } catch (e) {
       console.warn("[fetchGroupParticipants] falhou:", e);
       return [];
     }
   });
-

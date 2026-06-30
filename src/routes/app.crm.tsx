@@ -14,45 +14,49 @@ export const Route = createFileRoute("/app/crm")({
 });
 
 const columns = [
-  { 
-    id: "aberta", 
-    label: "Aberta (IA)", 
-    dotColor: "bg-sky-500", 
-    colBg: "bg-sky-500/[0.02] dark:bg-sky-500/[0.01]", 
-    colBorder: "border-sky-500/10 dark:border-sky-500/5", 
-    cardBg: "bg-sky-500/[0.04] dark:bg-sky-950/20 hover:bg-sky-500/[0.08] border-sky-500/10 hover:border-sky-500/30",
+  {
+    id: "aberta",
+    label: "Aberta (IA)",
+    dotColor: "bg-sky-500",
+    colBg: "bg-sky-500/[0.02] dark:bg-sky-500/[0.01]",
+    colBorder: "border-sky-500/10 dark:border-sky-500/5",
+    cardBg:
+      "bg-sky-500/[0.04] dark:bg-sky-950/20 hover:bg-sky-500/[0.08] border-sky-500/10 hover:border-sky-500/30",
     shadow: "hover:shadow-sky-500/[0.06] hover:shadow-md",
-    textClass: "text-sky-500 dark:text-sky-400"
+    textClass: "text-sky-500 dark:text-sky-400",
   },
-  { 
-    id: "em_atendimento", 
-    label: "Em Atendimento", 
-    dotColor: "bg-amber-500", 
-    colBg: "bg-amber-500/[0.02] dark:bg-amber-500/[0.01]", 
-    colBorder: "border-amber-500/10 dark:border-amber-500/5", 
-    cardBg: "bg-amber-500/[0.04] dark:bg-amber-950/20 hover:bg-amber-500/[0.08] border-amber-500/10 hover:border-amber-500/30",
+  {
+    id: "em_atendimento",
+    label: "Em Atendimento",
+    dotColor: "bg-amber-500",
+    colBg: "bg-amber-500/[0.02] dark:bg-amber-500/[0.01]",
+    colBorder: "border-amber-500/10 dark:border-amber-500/5",
+    cardBg:
+      "bg-amber-500/[0.04] dark:bg-amber-950/20 hover:bg-amber-500/[0.08] border-amber-500/10 hover:border-amber-500/30",
     shadow: "hover:shadow-amber-500/[0.06] hover:shadow-md",
-    textClass: "text-amber-500 dark:text-amber-400"
+    textClass: "text-amber-500 dark:text-amber-400",
   },
-  { 
-    id: "handoff", 
-    label: "Handoff", 
-    dotColor: "bg-orange-500", 
-    colBg: "bg-orange-500/[0.02] dark:bg-orange-500/[0.01]", 
-    colBorder: "border-orange-500/10 dark:border-orange-500/5", 
-    cardBg: "bg-orange-500/[0.04] dark:bg-orange-950/20 hover:bg-orange-500/[0.08] border-orange-500/10 hover:border-orange-500/30",
+  {
+    id: "handoff",
+    label: "Handoff",
+    dotColor: "bg-orange-500",
+    colBg: "bg-orange-500/[0.02] dark:bg-orange-500/[0.01]",
+    colBorder: "border-orange-500/10 dark:border-orange-500/5",
+    cardBg:
+      "bg-orange-500/[0.04] dark:bg-orange-950/20 hover:bg-orange-500/[0.08] border-orange-500/10 hover:border-orange-500/30",
     shadow: "hover:shadow-orange-500/[0.06] hover:shadow-md",
-    textClass: "text-orange-500 dark:text-orange-400"
+    textClass: "text-orange-500 dark:text-orange-400",
   },
-  { 
-    id: "resolvida", 
-    label: "Resolvida", 
-    dotColor: "bg-emerald-500", 
-    colBg: "bg-emerald-500/[0.02] dark:bg-emerald-500/[0.01]", 
-    colBorder: "border-emerald-500/10 dark:border-emerald-500/5", 
-    cardBg: "bg-emerald-500/[0.04] dark:bg-emerald-950/20 hover:bg-emerald-500/[0.08] border-emerald-500/10 hover:border-emerald-500/30",
+  {
+    id: "resolvida",
+    label: "Resolvida",
+    dotColor: "bg-emerald-500",
+    colBg: "bg-emerald-500/[0.02] dark:bg-emerald-500/[0.01]",
+    colBorder: "border-emerald-500/10 dark:border-emerald-500/5",
+    cardBg:
+      "bg-emerald-500/[0.04] dark:bg-emerald-950/20 hover:bg-emerald-500/[0.08] border-emerald-500/10 hover:border-emerald-500/30",
     shadow: "hover:shadow-emerald-500/[0.06] hover:shadow-md",
-    textClass: "text-emerald-500 dark:text-emerald-400"
+    textClass: "text-emerald-500 dark:text-emerald-400",
   },
 ] as const;
 
@@ -157,7 +161,7 @@ function CRM() {
           newStatus === "em_atendimento"
             ? "Em Atendimento"
             : newStatus[0].toUpperCase() + newStatus.slice(1)
-        }`
+        }`,
       );
     } catch (err: any) {
       toast.error(err.message || "Erro ao mover conversa");
@@ -167,7 +171,7 @@ function CRM() {
   const handleDeleteHistory = async (id: string, name: string) => {
     if (
       !confirm(
-        `Tem certeza que deseja apagar permanentemente todo o histórico de mensagens local da conversa com "${name}"? Esta ação NÃO apagará as mensagens no aparelho celular do cliente.`
+        `Tem certeza que deseja apagar permanentemente todo o histórico de mensagens local da conversa com "${name}"? Esta ação NÃO apagará as mensagens no aparelho celular do cliente.`,
       )
     ) {
       return;
@@ -269,7 +273,7 @@ function CRM() {
         <div className="grid grid-cols-1 md:grid-cols-4 gap-4 items-start overflow-x-auto pb-4">
           {columns.map((col) => {
             const colCards = filtered.filter(
-              (c) => c.status === col.id || (col.id === "aberta" && !c.status)
+              (c) => c.status === col.id || (col.id === "aberta" && !c.status),
             );
             const isOver = dragOverCol === col.id;
             return (
@@ -290,9 +294,14 @@ function CRM() {
                 <div className="flex items-center justify-between mb-4 pb-2 border-b border-border/20">
                   <div className="flex items-center gap-2">
                     <span className={`w-2.5 h-2.5 rounded-full ${col.dotColor} animate-pulse`} />
-                    <span className={`font-bold text-sm tracking-wide ${col.textClass}`}>{col.label}</span>
+                    <span className={`font-bold text-sm tracking-wide ${col.textClass}`}>
+                      {col.label}
+                    </span>
                   </div>
-                  <Badge variant="secondary" className="text-xs bg-secondary/55 font-semibold px-2 py-0.5 rounded-full">
+                  <Badge
+                    variant="secondary"
+                    className="text-xs bg-secondary/55 font-semibold px-2 py-0.5 rounded-full"
+                  >
                     {colCards.length}
                   </Badge>
                 </div>
@@ -338,7 +347,10 @@ function CRM() {
                       )}
 
                       {c.leadScore && (
-                        <div className="flex items-center gap-0.5 text-amber-500 mb-3" title={`Lead Score: ${c.leadScore}/5`}>
+                        <div
+                          className="flex items-center gap-0.5 text-amber-500 mb-3"
+                          title={`Lead Score: ${c.leadScore}/5`}
+                        >
                           {[1, 2, 3, 4, 5].map((star) => (
                             <span
                               key={star}

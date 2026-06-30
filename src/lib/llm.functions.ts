@@ -3,11 +3,7 @@ import { createServerFn } from "@tanstack/react-start";
 type Kind = "openai" | "anthropic" | "google" | "groq" | "deepseek" | "openrouter" | "custom";
 
 // Retry com backoff exponencial para erros transitórios (503, 429, 502)
-async function withRetry<T>(
-  fn: () => Promise<T>,
-  maxAttempts = 3,
-  baseDelayMs = 1500,
-): Promise<T> {
+async function withRetry<T>(fn: () => Promise<T>, maxAttempts = 3, baseDelayMs = 1500): Promise<T> {
   let lastError: unknown;
   for (let attempt = 1; attempt <= maxAttempts; attempt++) {
     try {
@@ -240,7 +236,7 @@ export const embedTexts = createServerFn({ method: "POST" })
     if (data.kind && NO_EMBED_KINDS.includes(data.kind)) {
       throw new Error(
         `O provedor "${data.kind}" não possui endpoint de embeddings. ` +
-        `Use Google Gemini (text-embedding-004), OpenAI (text-embedding-3-small) ou OpenRouter.`
+          `Use Google Gemini (text-embedding-004), OpenAI (text-embedding-3-small) ou OpenRouter.`,
       );
     }
 
@@ -251,10 +247,10 @@ export const embedTexts = createServerFn({ method: "POST" })
       if (data.kind === "google") {
         const modelName = data.model.startsWith("models/") ? data.model : `models/${data.model}`;
         const url = `https://generativelanguage.googleapis.com/v1beta/${modelName}:batchEmbedContents?key=${encodeURIComponent(data.apiKey)}`;
-        
+
         const requests = data.texts.map((t) => ({
           model: modelName,
-          content: { parts: [{ text: t }] }
+          content: { parts: [{ text: t }] },
         }));
 
         const r = await fetch(url, {
@@ -269,12 +265,10 @@ export const embedTexts = createServerFn({ method: "POST" })
           const body = (await r.text()).slice(0, 400);
           if (r.status === 404) {
             throw new Error(
-              `Modelo "${data.model}" não encontrado no Google. Use "gemini-embedding-2".`
+              `Modelo "${data.model}" não encontrado no Google. Use "gemini-embedding-2".`,
             );
           }
-          throw new Error(
-            `Google Embeddings respondeu com HTTP ${r.status}: ${body}`,
-          );
+          throw new Error(`Google Embeddings respondeu com HTTP ${r.status}: ${body}`);
         }
         const j = (await r.json()) as { embeddings: { values: number[] }[] };
         return { vectors: j.embeddings.map((x) => x.values) };
@@ -295,12 +289,10 @@ export const embedTexts = createServerFn({ method: "POST" })
         if (r.status === 404) {
           throw new Error(
             `Endpoint /embeddings não encontrado em ${base}. ` +
-            `Este provedor pode não suportar embeddings.`
+              `Este provedor pode não suportar embeddings.`,
           );
         }
-        throw new Error(
-          `Embeddings respondeu com HTTP ${r.status}: ${body}`,
-        );
+        throw new Error(`Embeddings respondeu com HTTP ${r.status}: ${body}`);
       }
       const j = (await r.json()) as { data: { embedding: number[] }[] };
       return { vectors: j.data.map((x) => x.embedding) };
@@ -311,10 +303,15 @@ export const embedTexts = createServerFn({ method: "POST" })
       }
       const msg = e instanceof Error ? e.message : "Erro desconhecido";
       // Se o erro já tem uma mensagem clara (das validações acima), repassa direto
-      if (msg.includes("não possui endpoint") || msg.includes("não encontrado") || msg.includes("Timeout")) {
+      if (
+        msg.includes("não possui endpoint") ||
+        msg.includes("não encontrado") ||
+        msg.includes("Timeout")
+      ) {
         throw new Error(msg);
       }
-      const targetUrl = data.kind === "google" ? "Google API" : (data.baseUrl || "https://api.openai.com/v1");
+      const targetUrl =
+        data.kind === "google" ? "Google API" : data.baseUrl || "https://api.openai.com/v1";
       throw new Error(`Falha ao gerar embeddings em ${targetUrl}: ${msg}`);
     }
   });

@@ -246,10 +246,7 @@ function PlaygroundPage() {
 
     const fetchKnowledge = async () => {
       try {
-        let query = supabase
-          .from("knowledge")
-          .select("*")
-          .eq("tenantId", tenant.id);
+        let query = supabase.from("knowledge").select("*").eq("tenantId", tenant.id);
 
         if (agentId) {
           query = query.or(`agentId.eq.${agentId},agentId.is.null`);
@@ -657,7 +654,12 @@ function PlaygroundPage() {
       </div>
 
       {/* Modal de edição de resposta do agente */}
-      <Dialog open={editingIdx !== null} onOpenChange={(o) => { if (!o) setEditingIdx(null); }}>
+      <Dialog
+        open={editingIdx !== null}
+        onOpenChange={(o) => {
+          if (!o) setEditingIdx(null);
+        }}
+      >
         <DialogContent className="max-w-2xl" aria-describedby={undefined}>
           <DialogHeader>
             <DialogTitle>Editar resposta do agente</DialogTitle>

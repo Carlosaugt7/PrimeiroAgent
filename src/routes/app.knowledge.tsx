@@ -24,7 +24,17 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
-import { Database, Upload, Loader2, Trash2, FileText, Globe, Pencil, RefreshCw, AlertCircle } from "lucide-react";
+import {
+  Database,
+  Upload,
+  Loader2,
+  Trash2,
+  FileText,
+  Globe,
+  Pencil,
+  RefreshCw,
+  AlertCircle,
+} from "lucide-react";
 import { toast } from "sonner";
 
 export const Route = createFileRoute("/app/knowledge")({ component: Page });
@@ -115,7 +125,9 @@ function Page() {
   const [refreshBusy, setRefreshBusy] = useState(false);
 
   // RAG fails state
-  const [fails, setFails] = useState<{ id: string; createdAt: string; userText: string; agentName: string }[]>([]);
+  const [fails, setFails] = useState<
+    { id: string; createdAt: string; userText: string; agentName: string }[]
+  >([]);
   const [loadingFails, setLoadingFails] = useState(true);
 
   const fetchFails = async () => {
@@ -142,14 +154,10 @@ function Page() {
   }, [tenant?.id]);
   // DeepSeek e Groq NÃO suportam embeddings via API direta
   const EMBED_CAPABLE_KINDS = ["openai", "openrouter", "google", "custom"];
-  const embedProviders = providers.filter((p) =>
-    EMBED_CAPABLE_KINDS.includes(p.kind),
-  );
+  const embedProviders = providers.filter((p) => EMBED_CAPABLE_KINDS.includes(p.kind));
 
   // Provedores sem suporte a embeddings (para exibir aviso)
-  const nonEmbedProviders = providers.filter(
-    (p) => !EMBED_CAPABLE_KINDS.includes(p.kind),
-  );
+  const nonEmbedProviders = providers.filter((p) => !EMBED_CAPABLE_KINDS.includes(p.kind));
 
   useEffect(() => {
     if (!tenant) return;
@@ -316,11 +324,17 @@ function Page() {
       const msg = e instanceof Error ? e.message : "Falha na ingestão";
       // Mensagens mais claras para erros comuns
       if (msg.includes("404") || msg.includes("not found")) {
-        toast.error("Modelo de embedding não encontrado neste provedor. Verifique o nome do modelo.");
+        toast.error(
+          "Modelo de embedding não encontrado neste provedor. Verifique o nome do modelo.",
+        );
       } else if (msg.includes("401") || msg.includes("403") || msg.includes("Unauthorized")) {
-        toast.error("API Key inválida ou sem permissão para embeddings. Verifique nas configurações do provedor.");
+        toast.error(
+          "API Key inválida ou sem permissão para embeddings. Verifique nas configurações do provedor.",
+        );
       } else if (msg.includes("fetch") || msg.includes("network") || msg.includes("ECONNREFUSED")) {
-        toast.error("Falha de rede ao conectar com o provedor. Verifique sua conexão com a internet.");
+        toast.error(
+          "Falha de rede ao conectar com o provedor. Verifique sua conexão com a internet.",
+        );
       } else {
         toast.error(msg);
       }
@@ -425,9 +439,9 @@ function Page() {
       // Atualiza o nome e o agente
       await supabase
         .from("knowledge")
-        .update({ 
+        .update({
           name: editName.trim(),
-          agentId: editAgentId || null
+          agentId: editAgentId || null,
         })
         .eq("id", editDoc.id);
 
@@ -531,7 +545,10 @@ function Page() {
                 </div>
                 <div className="space-y-1.5">
                   <Label>Agente Associado</Label>
-                  <Select value={agentId || "global"} onValueChange={(val) => setAgentId(val === "global" ? null : val)}>
+                  <Select
+                    value={agentId || "global"}
+                    onValueChange={(val) => setAgentId(val === "global" ? null : val)}
+                  >
                     <SelectTrigger>
                       <SelectValue placeholder="Selecione o agente..." />
                     </SelectTrigger>
@@ -549,17 +566,20 @@ function Page() {
               <div className="grid grid-cols-2 gap-3">
                 <div className="space-y-1.5">
                   <Label>Provedor de embeddings</Label>
-                  <Select value={providerId} onValueChange={(val) => {
-                    setProviderId(val);
-                    const p = providers.find((x) => x.id === val);
-                    if (p?.kind === "google") {
-                      setEmbedModel("gemini-embedding-2");
-                    } else if (p?.kind === "openrouter") {
-                      setEmbedModel("openai/text-embedding-3-small");
-                    } else {
-                      setEmbedModel("text-embedding-3-small");
-                    }
-                  }}>
+                  <Select
+                    value={providerId}
+                    onValueChange={(val) => {
+                      setProviderId(val);
+                      const p = providers.find((x) => x.id === val);
+                      if (p?.kind === "google") {
+                        setEmbedModel("gemini-embedding-2");
+                      } else if (p?.kind === "openrouter") {
+                        setEmbedModel("openai/text-embedding-3-small");
+                      } else {
+                        setEmbedModel("text-embedding-3-small");
+                      }
+                    }}
+                  >
                     <SelectTrigger>
                       <SelectValue placeholder="Selecione provedor..." />
                     </SelectTrigger>
@@ -573,7 +593,8 @@ function Page() {
                   </Select>
                   {nonEmbedProviders.length > 0 && (
                     <p className="text-[10px] text-amber-500">
-                      {nonEmbedProviders.map((p) => p.name).join(", ")} não aparecem aqui pois não suportam embeddings via API.
+                      {nonEmbedProviders.map((p) => p.name).join(", ")} não aparecem aqui pois não
+                      suportam embeddings via API.
                     </p>
                   )}
                 </div>
@@ -668,14 +689,23 @@ function Page() {
 
       {embedProviders.length === 0 && (
         <div className="rounded-xl border border-amber-500/30 bg-amber-500/10 p-4 text-sm space-y-2">
-          <p className="font-semibold text-amber-600">Nenhum provedor com suporte a embeddings encontrado</p>
+          <p className="font-semibold text-amber-600">
+            Nenhum provedor com suporte a embeddings encontrado
+          </p>
           <p>
-            Para indexar documentos, cadastre um provedor compatível em <strong>LLM Providers</strong>:
+            Para indexar documentos, cadastre um provedor compatível em{" "}
+            <strong>LLM Providers</strong>:
           </p>
           <ul className="list-disc ml-5 text-xs text-muted-foreground space-y-1">
-            <li><strong>Google Gemini</strong> — modelo <code>text-embedding-004</code></li>
-            <li><strong>OpenAI</strong> — modelo <code>text-embedding-3-small</code></li>
-            <li><strong>OpenRouter</strong> — modelo <code>openai/text-embedding-3-small</code></li>
+            <li>
+              <strong>Google Gemini</strong> — modelo <code>text-embedding-004</code>
+            </li>
+            <li>
+              <strong>OpenAI</strong> — modelo <code>text-embedding-3-small</code>
+            </li>
+            <li>
+              <strong>OpenRouter</strong> — modelo <code>openai/text-embedding-3-small</code>
+            </li>
           </ul>
           <p className="text-xs text-amber-500">
             Nota: DeepSeek e Groq <strong>não suportam</strong> embeddings via API.
@@ -683,7 +713,13 @@ function Page() {
         </div>
       )}
 
-      <Tabs defaultValue="documents" className="w-full" onValueChange={(val) => { if (val === "fails") fetchFails(); }}>
+      <Tabs
+        defaultValue="documents"
+        className="w-full"
+        onValueChange={(val) => {
+          if (val === "fails") fetchFails();
+        }}
+      >
         <TabsList className="grid w-full grid-cols-2 max-w-sm">
           <TabsTrigger value="documents">Documentos indexados</TabsTrigger>
           <TabsTrigger value="fails">Furos de resposta</TabsTrigger>
@@ -701,7 +737,11 @@ function Page() {
           ) : (
             <ul className="grid md:grid-cols-2 gap-3">
               {docs.map((d) => {
-                const isUrl = !!(d.sourceUrl || d.name.startsWith("http://") || d.name.startsWith("https://"));
+                const isUrl = !!(
+                  d.sourceUrl ||
+                  d.name.startsWith("http://") ||
+                  d.name.startsWith("https://")
+                );
                 const isRefreshing = refreshDoc?.id === d.id && refreshBusy;
                 return (
                   <li
@@ -720,8 +760,8 @@ function Page() {
                       <p className="text-xs text-muted-foreground mt-1 flex items-center gap-2 flex-wrap">
                         <span>{d.embedModel}</span>
                         <span className="text-[9px] bg-secondary px-1.5 py-0.5 rounded text-secondary-foreground">
-                          {d.agentId 
-                            ? `Agente: ${agents.find((a) => a.id === d.agentId)?.name || "Desconhecido"}` 
+                          {d.agentId
+                            ? `Agente: ${agents.find((a) => a.id === d.agentId)?.name || "Desconhecido"}`
                             : "Global"}
                         </span>
                       </p>
@@ -735,7 +775,9 @@ function Page() {
                           disabled={isRefreshing}
                           onClick={() => runRefresh(d)}
                         >
-                          <RefreshCw className={`size-4 text-primary ${isRefreshing ? "animate-spin" : ""}`} />
+                          <RefreshCw
+                            className={`size-4 text-primary ${isRefreshing ? "animate-spin" : ""}`}
+                          />
                         </Button>
                       )}
                       <Button
@@ -765,29 +807,41 @@ function Page() {
           ) : fails.length === 0 ? (
             <div className="rounded-2xl border border-border bg-gradient-card p-8 text-center text-muted-foreground text-sm">
               <AlertCircle className="size-8 mx-auto text-success mb-2" />
-              Nenhum furo de RAG registrado. Todos os clientes receberam respostas com base no conhecimento disponível!
+              Nenhum furo de RAG registrado. Todos os clientes receberam respostas com base no
+              conhecimento disponível!
             </div>
           ) : (
             <div className="space-y-3">
               <div className="bg-amber-500/10 border border-amber-500/20 text-amber-500 rounded-xl p-4 text-xs">
-                As perguntas abaixo resultaram na resposta de contingência do bot (falta de conhecimento na base). Use o botão de atalho para adicionar novos conteúdos cobrindo estas dúvidas.
+                As perguntas abaixo resultaram na resposta de contingência do bot (falta de
+                conhecimento na base). Use o botão de atalho para adicionar novos conteúdos cobrindo
+                estas dúvidas.
               </div>
               <ul className="space-y-3">
                 {fails.map((f) => (
-                  <li key={f.id} className="rounded-xl border border-border bg-gradient-card p-4 flex flex-col md:flex-row md:items-center justify-between gap-4">
+                  <li
+                    key={f.id}
+                    className="rounded-xl border border-border bg-gradient-card p-4 flex flex-col md:flex-row md:items-center justify-between gap-4"
+                  >
                     <div className="space-y-1">
                       <p className="font-medium text-sm text-foreground">"{f.userText}"</p>
                       <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                        <span>Agente: <strong>{f.agentName}</strong></span>
+                        <span>
+                          Agente: <strong>{f.agentName}</strong>
+                        </span>
                         <span>·</span>
                         <span>{new Date(f.createdAt).toLocaleString("pt-BR")}</span>
                       </div>
                     </div>
-                    <Button variant="outline" size="sm" onClick={() => {
-                      setName(`Resposta para: ${f.userText.slice(0, 30)}...`);
-                      setText(`Dúvida do cliente: ${f.userText}\n\nResposta:\n`);
-                      setOpen(true);
-                    }}>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => {
+                        setName(`Resposta para: ${f.userText.slice(0, 30)}...`);
+                        setText(`Dúvida do cliente: ${f.userText}\n\nResposta:\n`);
+                        setOpen(true);
+                      }}
+                    >
                       Indexar resposta
                     </Button>
                   </li>
@@ -799,7 +853,12 @@ function Page() {
       </Tabs>
 
       {/* Edit Document Dialog */}
-      <Dialog open={!!editDoc} onOpenChange={(o) => { if (!o) setEditDoc(null); }}>
+      <Dialog
+        open={!!editDoc}
+        onOpenChange={(o) => {
+          if (!o) setEditDoc(null);
+        }}
+      >
         <DialogContent className="max-w-2xl" aria-describedby={undefined}>
           <DialogHeader>
             <DialogTitle>Editar documento</DialogTitle>
@@ -815,7 +874,10 @@ function Page() {
             </div>
             <div className="space-y-1.5">
               <Label>Agente Associado</Label>
-              <Select value={editAgentId || "global"} onValueChange={(val) => setEditAgentId(val === "global" ? null : val)}>
+              <Select
+                value={editAgentId || "global"}
+                onValueChange={(val) => setEditAgentId(val === "global" ? null : val)}
+              >
                 <SelectTrigger>
                   <SelectValue placeholder="Selecione o agente..." />
                 </SelectTrigger>
@@ -843,7 +905,8 @@ function Page() {
                 />
               )}
               <p className="text-[10px] text-muted-foreground">
-                {editText.length.toLocaleString()} chars · ~{Math.max(1, Math.ceil(editText.length / 800))} chunks
+                {editText.length.toLocaleString()} chars · ~
+                {Math.max(1, Math.ceil(editText.length / 800))} chunks
               </p>
             </div>
             {editBusy && editProgress && (
@@ -856,7 +919,13 @@ function Page() {
                 Cancelar
               </Button>
               <Button variant="hero" onClick={saveEdit} disabled={editBusy || !editText.trim()}>
-                {editBusy ? <><Loader2 className="size-4 animate-spin" /> Salvando...</> : "Salvar alterações"}
+                {editBusy ? (
+                  <>
+                    <Loader2 className="size-4 animate-spin" /> Salvando...
+                  </>
+                ) : (
+                  "Salvar alterações"
+                )}
               </Button>
             </div>
           </div>

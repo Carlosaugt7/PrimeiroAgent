@@ -256,7 +256,9 @@ function AgentsList() {
                 </p>
                 <div className="flex items-center gap-2 mt-4">
                   {(() => {
-                    const linkedInstance = instances.find((inst) => inst.name === a.whatsappInstanceId);
+                    const linkedInstance = instances.find(
+                      (inst) => inst.name === a.whatsappInstanceId,
+                    );
                     const currentStatus = linkedInstance ? linkedInstance.status : a.status;
                     let cls = "bg-muted text-muted-foreground";
                     if (currentStatus === "online") cls = "bg-success/15 text-success";

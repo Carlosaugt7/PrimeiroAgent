@@ -19,7 +19,9 @@ function AuthPage() {
   const navigate = useNavigate();
   const pathname = useRouterState({ select: (s) => s.location.pathname });
 
-  const [mode, setMode] = useState<"login" | "signup" | "forgot_password" | "reset_password">("login");
+  const [mode, setMode] = useState<"login" | "signup" | "forgot_password" | "reset_password">(
+    "login",
+  );
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [name, setName] = useState("");
@@ -137,7 +139,8 @@ function AuthPage() {
               <div>
                 <h2 className="font-display text-2xl font-bold mb-1">Recuperar Senha</h2>
                 <p className="text-sm text-muted-foreground mb-4">
-                  Digite o seu e-mail cadastrado. Nós enviaremos um link de redefinição de senha para você.
+                  Digite o seu e-mail cadastrado. Nós enviaremos um link de redefinição de senha
+                  para você.
                 </p>
               </div>
 
@@ -145,7 +148,9 @@ function AuthPage() {
                 <div className="space-y-4">
                   <div className="p-4 rounded-xl border border-success/30 bg-success/10 text-success text-sm space-y-2">
                     <p className="font-semibold">E-mail enviado!</p>
-                    <p>Verifique sua caixa de entrada e siga as instruções para redefinir sua senha.</p>
+                    <p>
+                      Verifique sua caixa de entrada e siga as instruções para redefinir sua senha.
+                    </p>
                   </div>
                   <Button
                     type="button"

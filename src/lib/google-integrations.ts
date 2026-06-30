@@ -108,10 +108,14 @@ function parseCredentials(json: string | null): GoogleCredentials | null {
 export async function googleCalendarListEvents(
   tenantId: string,
   date: string,
-): Promise<{ events: Array<{ id: string; summary: string; start: string; end: string }>; error?: string }> {
+): Promise<{
+  events: Array<{ id: string; summary: string; start: string; end: string }>;
+  error?: string;
+}> {
   try {
     const integration = await getGoogleIntegration(tenantId, "calendar");
-    if (!integration?.credentialsJson) return { events: [], error: "Google Calendar não configurado" };
+    if (!integration?.credentialsJson)
+      return { events: [], error: "Google Calendar não configurado" };
 
     const creds = parseCredentials(integration.credentialsJson);
     if (!creds) return { events: [], error: "Credenciais inválidas" };
@@ -158,7 +162,17 @@ export async function googleCalendarGetAvailableSlots(
   date: string,
   slotDurationMin = 60,
 ): Promise<string[]> {
-  const WORK_HOURS = ["08:00", "09:00", "10:00", "11:00", "13:00", "14:00", "15:00", "16:00", "17:00"];
+  const WORK_HOURS = [
+    "08:00",
+    "09:00",
+    "10:00",
+    "11:00",
+    "13:00",
+    "14:00",
+    "15:00",
+    "16:00",
+    "17:00",
+  ];
 
   const result = await googleCalendarListEvents(tenantId, date);
   if (result.error || result.events.length === 0) return WORK_HOURS;
@@ -184,7 +198,8 @@ export async function googleCalendarCreateEvent(
 ): Promise<{ ok: boolean; eventId?: string; error?: string }> {
   try {
     const integration = await getGoogleIntegration(tenantId, "calendar");
-    if (!integration?.credentialsJson) return { ok: false, error: "Google Calendar não configurado" };
+    if (!integration?.credentialsJson)
+      return { ok: false, error: "Google Calendar não configurado" };
 
     const creds = parseCredentials(integration.credentialsJson);
     if (!creds) return { ok: false, error: "Credenciais inválidas" };
@@ -197,22 +212,19 @@ export async function googleCalendarCreateEvent(
     endDate.setMinutes(endDate.getMinutes() + durationMin);
     const endDateTime = endDate.toISOString().replace("Z", "");
 
-    const r = await fetch(
-      `https://www.googleapis.com/calendar/v3/calendars/${calendarId}/events`,
-      {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${token}`,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          summary: title,
-          description: description || `Agendamento criado via AgentFlow IA`,
-          start: { dateTime: startDateTime, timeZone: "America/Sao_Paulo" },
-          end: { dateTime: endDateTime, timeZone: "America/Sao_Paulo" },
-        }),
+    const r = await fetch(`https://www.googleapis.com/calendar/v3/calendars/${calendarId}/events`, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${token}`,
+        "Content-Type": "application/json",
       },
-    );
+      body: JSON.stringify({
+        summary: title,
+        description: description || `Agendamento criado via AgentFlow IA`,
+        start: { dateTime: startDateTime, timeZone: "America/Sao_Paulo" },
+        end: { dateTime: endDateTime, timeZone: "America/Sao_Paulo" },
+      }),
+    });
 
     if (!r.ok) {
       const err = await r.text();
@@ -232,7 +244,8 @@ export async function googleCalendarCancelEvent(
 ): Promise<{ ok: boolean; error?: string }> {
   try {
     const integration = await getGoogleIntegration(tenantId, "calendar");
-    if (!integration?.credentialsJson) return { ok: false, error: "Google Calendar não configurado" };
+    if (!integration?.credentialsJson)
+      return { ok: false, error: "Google Calendar não configurado" };
 
     const creds = parseCredentials(integration.credentialsJson);
     if (!creds) return { ok: false, error: "Credenciais inválidas" };
@@ -284,7 +297,11 @@ export async function googleSheetsSearch(
 
     if (!r.ok) {
       const err = await r.text();
-      return { rows: [], headers: [], error: `Erro ao ler planilha: ${r.status} — ${err.slice(0, 200)}` };
+      return {
+        rows: [],
+        headers: [],
+        error: `Erro ao ler planilha: ${r.status} — ${err.slice(0, 200)}`,
+      };
     }
 
     const data = (await r.json()) as { values?: string[][] };
@@ -430,10 +447,9 @@ export const testGoogleConnection = createServerFn({ method: "POST" })
 
       if (data.serviceType === "calendar") {
         const calId = encodeURIComponent(data.calendarId || "primary");
-        const r = await fetch(
-          `https://www.googleapis.com/calendar/v3/calendars/${calId}`,
-          { headers: { Authorization: `Bearer ${token}` } },
-        );
+        const r = await fetch(`https://www.googleapis.com/calendar/v3/calendars/${calId}`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
         if (!r.ok) {
           const err = await r.text();
           return { ok: false, error: `Erro no Calendar: ${r.status} — ${err.slice(0, 200)}` };

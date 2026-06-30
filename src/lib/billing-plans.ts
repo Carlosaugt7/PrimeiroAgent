@@ -18,12 +18,7 @@ export const PLANS: PlanDef[] = [
     name: "Trial",
     priceBRL: 0,
     description: "14 dias grátis para experimentar tudo.",
-    features: [
-      "1 agente ativo",
-      "1 instância WhatsApp",
-      "1.000 mensagens",
-      "Suporte via WhatsApp",
-    ],
+    features: ["1 agente ativo", "1 instância WhatsApp", "1.000 mensagens", "Suporte via WhatsApp"],
     limits: { agents: 1, messages: 1000, instances: 1, members: 2 },
   },
   {

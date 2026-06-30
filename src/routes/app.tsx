@@ -84,19 +84,30 @@ function AppLayout() {
           <div className="space-y-2">
             <h1 className="font-display text-2xl font-bold text-foreground">Workspace Bloqueada</h1>
             <p className="text-sm text-muted-foreground">
-              {isExpired 
+              {isExpired
                 ? "O período de avaliação gratuita de 14 dias ou a sua assinatura expirou."
                 : "Este workspace foi suspenso devido a falta de confirmação de pagamento."}
             </p>
             <p className="text-xs text-muted-foreground/80 mt-1">
-              Para reativar a sua conta e continuar usando todas as automações e agentes inteligentes, realize o pagamento no faturamento ou entre em contato com nosso suporte.
+              Para reativar a sua conta e continuar usando todas as automações e agentes
+              inteligentes, realize o pagamento no faturamento ou entre em contato com nosso
+              suporte.
             </p>
           </div>
           <div className="flex flex-col gap-2 pt-2">
-            <Button variant="hero" onClick={() => navigate({ to: "/app/billing" })} className="w-full">
+            <Button
+              variant="hero"
+              onClick={() => navigate({ to: "/app/billing" })}
+              className="w-full"
+            >
               Ir para Faturamento & Planos
             </Button>
-            <a href="https://wa.me/5581999999999" target="_blank" rel="noopener noreferrer" className="w-full text-left">
+            <a
+              href="https://wa.me/5581999999999"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="w-full text-left"
+            >
               <Button variant="outline" className="w-full">
                 Falar com Suporte via WhatsApp
               </Button>

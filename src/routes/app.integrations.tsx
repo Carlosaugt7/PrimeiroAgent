@@ -57,7 +57,9 @@ function Page() {
   const [sheetName, setSheetName] = useState("Sheet1");
   const [savingSheets, setSavingSheets] = useState(false);
   const [testingSheets, setTestingSheets] = useState(false);
-  const [sheetsStatus, setSheetsStatus] = useState<"unknown" | "connected" | "disconnected">("unknown");
+  const [sheetsStatus, setSheetsStatus] = useState<"unknown" | "connected" | "disconnected">(
+    "unknown",
+  );
 
   useEffect(() => {
     (async () => {
@@ -71,7 +73,7 @@ function Page() {
             setStatus(res.ok ? "connected" : "disconnected");
           }
         }
-        
+
         // Carrega a chave ElevenLabs do tenant atual
         if (tenant?.id) {
           const { data, error } = await supabase
@@ -99,7 +101,9 @@ function Page() {
                 if (integ.credentialsJson && integ.spreadsheetId) setSheetsStatus("connected");
               }
             }
-          } catch { /* ignore */ }
+          } catch {
+            /* ignore */
+          }
         }
       } catch {
         setStatus("disconnected");
@@ -110,23 +114,40 @@ function Page() {
   }, [isMaster, tenant?.id]);
 
   const handleTest = async () => {
-    if (!url || !key) { toast.error("Preencha a URL e a API Key antes de testar."); return; }
+    if (!url || !key) {
+      toast.error("Preencha a URL e a API Key antes de testar.");
+      return;
+    }
     setTesting(true);
     setStatus("unknown");
     try {
       const res = await testConn({ data: { url, key } });
-      if (res.ok) { setStatus("connected"); toast.success("Conexão estabelecida!"); }
-      else { setStatus("disconnected"); toast.error(`Falha: ${res.error}`); }
-    } catch { setStatus("disconnected"); toast.error("Erro ao testar conexão."); }
-    finally { setTesting(false); }
+      if (res.ok) {
+        setStatus("connected");
+        toast.success("Conexão estabelecida!");
+      } else {
+        setStatus("disconnected");
+        toast.error(`Falha: ${res.error}`);
+      }
+    } catch {
+      setStatus("disconnected");
+      toast.error("Erro ao testar conexão.");
+    } finally {
+      setTesting(false);
+    }
   };
 
   const handleSave = async () => {
-    if (!url.trim() || !key.trim()) { toast.error("URL e API Key são obrigatórios."); return; }
+    if (!url.trim() || !key.trim()) {
+      toast.error("URL e API Key são obrigatórios.");
+      return;
+    }
     setSaving(true);
     try {
       await updateGlobal({ data: { url: url.trim(), key: key.trim() } });
-      toast.success("Configuração global salva! Todos os clientes passarão a usar automaticamente.");
+      toast.success(
+        "Configuração global salva! Todos os clientes passarão a usar automaticamente.",
+      );
     } catch (e: unknown) {
       toast.error(e instanceof Error ? e.message : "Erro ao salvar.");
     } finally {
@@ -142,7 +163,7 @@ function Page() {
         .from("tenants")
         .update({ elevenlabsApiKey: elevenlabsKey.trim() })
         .eq("id", tenant.id);
-      
+
       if (error) throw error;
       toast.success("Chave do ElevenLabs salva com sucesso!");
     } catch (e: unknown) {
@@ -154,49 +175,101 @@ function Page() {
 
   // Google Calendar handlers
   const handleTestCal = async () => {
-    if (!calCredentials.trim()) { toast.error("Cole o JSON da Service Account."); return; }
+    if (!calCredentials.trim()) {
+      toast.error("Cole o JSON da Service Account.");
+      return;
+    }
     setTestingCal(true);
     try {
-      const res = await testGoogle({ data: { credentialsJson: calCredentials, serviceType: "calendar", calendarId } });
-      if (res.ok) { setCalStatus("connected"); toast.success(`Conexão OK! ${res.info}`); }
-      else { setCalStatus("disconnected"); toast.error(res.error || "Falha na conexão"); }
-    } catch (e: unknown) { setCalStatus("disconnected"); toast.error(e instanceof Error ? e.message : "Erro"); }
-    finally { setTestingCal(false); }
+      const res = await testGoogle({
+        data: { credentialsJson: calCredentials, serviceType: "calendar", calendarId },
+      });
+      if (res.ok) {
+        setCalStatus("connected");
+        toast.success(`Conexão OK! ${res.info}`);
+      } else {
+        setCalStatus("disconnected");
+        toast.error(res.error || "Falha na conexão");
+      }
+    } catch (e: unknown) {
+      setCalStatus("disconnected");
+      toast.error(e instanceof Error ? e.message : "Erro");
+    } finally {
+      setTestingCal(false);
+    }
   };
 
   const handleSaveCal = async () => {
     if (!tenant?.id) return;
     setSavingCal(true);
     try {
-      await saveGoogle({ data: { tenantId: tenant.id, serviceType: "calendar", credentialsJson: calCredentials, calendarId } });
+      await saveGoogle({
+        data: {
+          tenantId: tenant.id,
+          serviceType: "calendar",
+          credentialsJson: calCredentials,
+          calendarId,
+        },
+      });
       toast.success("Google Calendar configurado com sucesso!");
       setCalStatus("connected");
-    } catch (e: unknown) { toast.error(e instanceof Error ? e.message : "Erro ao salvar"); }
-    finally { setSavingCal(false); }
+    } catch (e: unknown) {
+      toast.error(e instanceof Error ? e.message : "Erro ao salvar");
+    } finally {
+      setSavingCal(false);
+    }
   };
 
   // Google Sheets handlers
   const handleTestSheets = async () => {
-    if (!sheetsCredentials.trim()) { toast.error("Cole o JSON da Service Account."); return; }
-    if (!spreadsheetId.trim()) { toast.error("Informe o ID da planilha."); return; }
+    if (!sheetsCredentials.trim()) {
+      toast.error("Cole o JSON da Service Account.");
+      return;
+    }
+    if (!spreadsheetId.trim()) {
+      toast.error("Informe o ID da planilha.");
+      return;
+    }
     setTestingSheets(true);
     try {
-      const res = await testGoogle({ data: { credentialsJson: sheetsCredentials, serviceType: "sheets", spreadsheetId } });
-      if (res.ok) { setSheetsStatus("connected"); toast.success(`Conexão OK! ${res.info}`); }
-      else { setSheetsStatus("disconnected"); toast.error(res.error || "Falha na conexão"); }
-    } catch (e: unknown) { setSheetsStatus("disconnected"); toast.error(e instanceof Error ? e.message : "Erro"); }
-    finally { setTestingSheets(false); }
+      const res = await testGoogle({
+        data: { credentialsJson: sheetsCredentials, serviceType: "sheets", spreadsheetId },
+      });
+      if (res.ok) {
+        setSheetsStatus("connected");
+        toast.success(`Conexão OK! ${res.info}`);
+      } else {
+        setSheetsStatus("disconnected");
+        toast.error(res.error || "Falha na conexão");
+      }
+    } catch (e: unknown) {
+      setSheetsStatus("disconnected");
+      toast.error(e instanceof Error ? e.message : "Erro");
+    } finally {
+      setTestingSheets(false);
+    }
   };
 
   const handleSaveSheets = async () => {
     if (!tenant?.id) return;
     setSavingSheets(true);
     try {
-      await saveGoogle({ data: { tenantId: tenant.id, serviceType: "sheets", credentialsJson: sheetsCredentials, spreadsheetId, sheetName } });
+      await saveGoogle({
+        data: {
+          tenantId: tenant.id,
+          serviceType: "sheets",
+          credentialsJson: sheetsCredentials,
+          spreadsheetId,
+          sheetName,
+        },
+      });
       toast.success("Google Sheets configurado com sucesso!");
       setSheetsStatus("connected");
-    } catch (e: unknown) { toast.error(e instanceof Error ? e.message : "Erro ao salvar"); }
-    finally { setSavingSheets(false); }
+    } catch (e: unknown) {
+      toast.error(e instanceof Error ? e.message : "Erro ao salvar");
+    } finally {
+      setSavingSheets(false);
+    }
   };
 
   if (loading) {
@@ -212,7 +285,7 @@ function Page() {
       <div>
         <h1 className="font-display text-3xl font-bold">Integrações</h1>
         <p className="text-muted-foreground text-sm mt-1">
-          {isMaster 
+          {isMaster
             ? "Configuração global da plataforma — aplicada automaticamente a todos os clientes."
             : "Integrações externas do seu workspace."}
         </p>
@@ -267,16 +340,25 @@ function Page() {
             </div>
             <div className="flex items-center gap-3 pt-2">
               <Button onClick={handleSave} disabled={saving}>
-                {saving ? <Loader2 className="size-4 animate-spin mr-1.5" /> : <Save className="size-4 mr-1.5" />}
+                {saving ? (
+                  <Loader2 className="size-4 animate-spin mr-1.5" />
+                ) : (
+                  <Save className="size-4 mr-1.5" />
+                )}
                 Salvar para todos os clientes
               </Button>
               <Button variant="outline" onClick={handleTest} disabled={testing || !url || !key}>
-                {testing ? <Loader2 className="size-4 animate-spin mr-1.5" /> : <Wifi className="size-4 mr-1.5" />}
+                {testing ? (
+                  <Loader2 className="size-4 animate-spin mr-1.5" />
+                ) : (
+                  <Wifi className="size-4 mr-1.5" />
+                )}
                 Testar Conexão
               </Button>
             </div>
             <p className="text-xs text-muted-foreground pt-1">
-              Clientes com configuração própria continuam usando a deles. Os demais herdam esta configuração automaticamente.
+              Clientes com configuração própria continuam usando a deles. Os demais herdam esta
+              configuração automaticamente.
             </p>
           </CardContent>
         </Card>
@@ -319,7 +401,8 @@ function Page() {
             <div>
               <CardTitle>ElevenLabs (Voz de IA)</CardTitle>
               <CardDescription>
-                Configure sua chave de API do ElevenLabs para permitir respostas em áudio gravado nos agentes.
+                Configure sua chave de API do ElevenLabs para permitir respostas em áudio gravado
+                nos agentes.
               </CardDescription>
             </div>
           </div>
@@ -335,12 +418,17 @@ function Page() {
               onChange={(e) => setElevenlabsKey(e.target.value)}
             />
             <p className="text-xs text-muted-foreground">
-              Você pode encontrar a sua chave no painel da sua conta do ElevenLabs (My Account &gt; API Key).
+              Você pode encontrar a sua chave no painel da sua conta do ElevenLabs (My Account &gt;
+              API Key).
             </p>
           </div>
           <div className="flex items-center gap-3 pt-2">
             <Button onClick={handleSaveElevenlabs} disabled={savingElevenlabs}>
-              {savingElevenlabs ? <Loader2 className="size-4 animate-spin mr-1.5" /> : <Save className="size-4 mr-1.5" />}
+              {savingElevenlabs ? (
+                <Loader2 className="size-4 animate-spin mr-1.5" />
+              ) : (
+                <Save className="size-4 mr-1.5" />
+              )}
               Salvar Configuração de Voz
             </Button>
           </div>
@@ -358,7 +446,8 @@ function Page() {
               <div>
                 <CardTitle>Google Calendar (Agenda)</CardTitle>
                 <CardDescription>
-                  Permite que os agentes agendem, consultem e cancelem eventos diretamente no Google Calendar.
+                  Permite que os agentes agendem, consultem e cancelem eventos diretamente no Google
+                  Calendar.
                 </CardDescription>
               </div>
             </div>
@@ -379,7 +468,7 @@ function Page() {
             <Label>Service Account JSON</Label>
             <Textarea
               rows={4}
-              placeholder='Cole aqui o conteúdo do arquivo JSON da Service Account do Google Cloud...'
+              placeholder="Cole aqui o conteúdo do arquivo JSON da Service Account do Google Cloud..."
               value={calCredentials}
               onChange={(e) => setCalCredentials(e.target.value)}
               className="font-mono text-xs"
@@ -402,11 +491,23 @@ function Page() {
           </div>
           <div className="flex items-center gap-3 pt-2">
             <Button onClick={handleSaveCal} disabled={savingCal}>
-              {savingCal ? <Loader2 className="size-4 animate-spin mr-1.5" /> : <Save className="size-4 mr-1.5" />}
+              {savingCal ? (
+                <Loader2 className="size-4 animate-spin mr-1.5" />
+              ) : (
+                <Save className="size-4 mr-1.5" />
+              )}
               Salvar Calendar
             </Button>
-            <Button variant="outline" onClick={handleTestCal} disabled={testingCal || !calCredentials}>
-              {testingCal ? <Loader2 className="size-4 animate-spin mr-1.5" /> : <Wifi className="size-4 mr-1.5" />}
+            <Button
+              variant="outline"
+              onClick={handleTestCal}
+              disabled={testingCal || !calCredentials}
+            >
+              {testingCal ? (
+                <Loader2 className="size-4 animate-spin mr-1.5" />
+              ) : (
+                <Wifi className="size-4 mr-1.5" />
+              )}
               Testar Conexão
             </Button>
           </div>
@@ -424,7 +525,8 @@ function Page() {
               <div>
                 <CardTitle>Google Sheets (Planilha de Clientes)</CardTitle>
                 <CardDescription>
-                  Permite que os agentes consultem e adicionem dados na planilha de clientes via WhatsApp.
+                  Permite que os agentes consultem e adicionem dados na planilha de clientes via
+                  WhatsApp.
                 </CardDescription>
               </div>
             </div>
@@ -445,13 +547,14 @@ function Page() {
             <Label>Service Account JSON</Label>
             <Textarea
               rows={4}
-              placeholder='Cole aqui o conteúdo do arquivo JSON da Service Account do Google Cloud...'
+              placeholder="Cole aqui o conteúdo do arquivo JSON da Service Account do Google Cloud..."
               value={sheetsCredentials}
               onChange={(e) => setSheetsCredentials(e.target.value)}
               className="font-mono text-xs"
             />
             <p className="text-xs text-muted-foreground">
-              Pode ser a mesma Service Account usada no Calendar. Compartilhe a planilha com o email da Service Account.
+              Pode ser a mesma Service Account usada no Calendar. Compartilhe a planilha com o email
+              da Service Account.
             </p>
           </div>
           <div className="grid grid-cols-2 gap-3">
@@ -480,11 +583,23 @@ function Page() {
           </div>
           <div className="flex items-center gap-3 pt-2">
             <Button onClick={handleSaveSheets} disabled={savingSheets}>
-              {savingSheets ? <Loader2 className="size-4 animate-spin mr-1.5" /> : <Save className="size-4 mr-1.5" />}
+              {savingSheets ? (
+                <Loader2 className="size-4 animate-spin mr-1.5" />
+              ) : (
+                <Save className="size-4 mr-1.5" />
+              )}
               Salvar Sheets
             </Button>
-            <Button variant="outline" onClick={handleTestSheets} disabled={testingSheets || !sheetsCredentials || !spreadsheetId}>
-              {testingSheets ? <Loader2 className="size-4 animate-spin mr-1.5" /> : <Wifi className="size-4 mr-1.5" />}
+            <Button
+              variant="outline"
+              onClick={handleTestSheets}
+              disabled={testingSheets || !sheetsCredentials || !spreadsheetId}
+            >
+              {testingSheets ? (
+                <Loader2 className="size-4 animate-spin mr-1.5" />
+              ) : (
+                <Wifi className="size-4 mr-1.5" />
+              )}
               Testar Conexão
             </Button>
           </div>
@@ -493,4 +608,3 @@ function Page() {
     </div>
   );
 }
-

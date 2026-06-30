@@ -2,7 +2,13 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useState, useRef } from "react";
 import { useAuth } from "@/lib/auth";
 import { supabase } from "@/integrations/supabase/client";
-import { listInstances, listGroups, sendText, sendMedia, sendPresence } from "@/lib/evolution.functions";
+import {
+  listInstances,
+  listGroups,
+  sendText,
+  sendMedia,
+  sendPresence,
+} from "@/lib/evolution.functions";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   Card,
@@ -224,7 +230,11 @@ function CampaignsPage() {
     }
   };
 
-  const handleDeleteCampaign = async (id: string, type: "contacts" | "groups", e: React.MouseEvent) => {
+  const handleDeleteCampaign = async (
+    id: string,
+    type: "contacts" | "groups",
+    e: React.MouseEvent,
+  ) => {
     e.stopPropagation();
     if (!confirm("Deseja realmente excluir esta campanha e todo o seu histórico?")) return;
     try {
@@ -354,7 +364,7 @@ function CampaignsPage() {
 
         if (numberRaw) {
           // Clean number to keep only digits
-          let cleanedNum = numberRaw.replace(/\D/g, "");
+          const cleanedNum = numberRaw.replace(/\D/g, "");
           if (cleanedNum.length > 0) {
             // Basic WhatsApp JID format check
             list.push({
@@ -523,7 +533,7 @@ function CampaignsPage() {
     setIsSending(true);
     setPaused(false);
 
-    let currentList = [...list];
+    const currentList = [...list];
 
     for (let i = 0; i < currentList.length; i++) {
       // Check cancellation
@@ -694,7 +704,7 @@ function CampaignsPage() {
       const updatedCampaign: GroupCampaign = {
         ...campaign,
         status: "sending",
-        recipients: savedRecs.map(r => ({
+        recipients: savedRecs.map((r) => ({
           groupId: r.groupId,
           groupName: r.groupName,
           status: r.status,
@@ -721,7 +731,7 @@ function CampaignsPage() {
     setIsSendingGroup(true);
     setPausedGroup(false);
 
-    let currentList = [...list];
+    const currentList = [...list];
 
     for (let i = 0; i < currentList.length; i++) {
       if (cancelledGroupRef.current) break;
@@ -736,7 +746,9 @@ function CampaignsPage() {
       const recipient = currentList[i];
       if (recipient.status !== "pending") continue;
 
-      setGroupRecipients((prev) => prev.map((r, idx) => (idx === i ? { ...r, status: "pending" } : r)));
+      setGroupRecipients((prev) =>
+        prev.map((r, idx) => (idx === i ? { ...r, status: "pending" } : r)),
+      );
 
       let finalMsg = parseVariables(parseSpintax(camp.messageText), recipient.groupName);
       finalMsg = finalMsg.replace(/\{\{grupo\}\}/gi, recipient.groupName);
@@ -752,7 +764,7 @@ function CampaignsPage() {
               number: recipient.groupId,
               presence: "composing",
               delay: 5000,
-            }
+            },
           });
           await new Promise((r) => setTimeout(r, 5000));
         } catch (e) {
@@ -838,7 +850,9 @@ function CampaignsPage() {
       await supabase.from("group_campaigns").update({ status: finalStatus }).eq("id", camp.id);
       setActiveGroupCampaign((prev) => (prev ? { ...prev, status: finalStatus } : null));
       toast.success(
-        finalStatus === "completed" ? "Campanha em grupo concluída!" : "Campanha em grupo encerrada."
+        finalStatus === "completed"
+          ? "Campanha em grupo concluída!"
+          : "Campanha em grupo encerrada.",
       );
       loadInitialData();
     } catch (e) {
@@ -967,7 +981,7 @@ function CampaignsPage() {
 
   // Filter groups search
   const filteredGroups = groups.filter((g) =>
-    g.name.toLowerCase().includes(groupSearch.toLowerCase())
+    g.name.toLowerCase().includes(groupSearch.toLowerCase()),
   );
 
   return (
@@ -1039,8 +1053,12 @@ function CampaignsPage() {
           className="w-full space-y-6"
         >
           <TabsList className="grid w-full max-w-md grid-cols-2 bg-secondary/40 p-1 rounded-xl">
-            <TabsTrigger value="contacts" className="rounded-lg">Campanhas p/ Contatos</TabsTrigger>
-            <TabsTrigger value="groups" className="rounded-lg">Campanhas p/ Grupos</TabsTrigger>
+            <TabsTrigger value="contacts" className="rounded-lg">
+              Campanhas p/ Contatos
+            </TabsTrigger>
+            <TabsTrigger value="groups" className="rounded-lg">
+              Campanhas p/ Grupos
+            </TabsTrigger>
           </TabsList>
 
           <TabsContent value="contacts" className="outline-none space-y-6">
@@ -1064,18 +1082,24 @@ function CampaignsPage() {
                       </div>
                     ) : history.length === 0 ? (
                       <div className="text-center p-12 text-sm text-muted-foreground">
-                        Nenhuma campanha enviada até o momento. Clique em "Nova Campanha" para começar.
+                        Nenhuma campanha enviada até o momento. Clique em "Nova Campanha" para
+                        começar.
                       </div>
                     ) : (
                       <div className="divide-y divide-border/40">
                         {history.map((c) => {
-                          const success = c.recipients?.filter((r) => r.status === "sent").length ?? 0;
-                          const failed = c.recipients?.filter((r) => r.status === "failed").length ?? 0;
-                          const times = (c.recipients || []).filter((r) => r.sentAt).map((r) => new Date(r.sentAt!).getTime());
+                          const success =
+                            c.recipients?.filter((r) => r.status === "sent").length ?? 0;
+                          const failed =
+                            c.recipients?.filter((r) => r.status === "failed").length ?? 0;
+                          const times = (c.recipients || [])
+                            .filter((r) => r.sentAt)
+                            .map((r) => new Date(r.sentAt!).getTime());
                           let durationStr = "—";
                           if (times.length > 0) {
                             const minTime = Math.min(...times);
-                            const maxTime = c.status === "sending" ? Date.now() : Math.max(...times);
+                            const maxTime =
+                              c.status === "sending" ? Date.now() : Math.max(...times);
                             durationStr = formatDuration(maxTime - minTime);
                           }
 
@@ -1091,23 +1115,49 @@ function CampaignsPage() {
                               <div className="space-y-1.5 min-w-0 flex-1 mr-4">
                                 <p className="font-semibold text-sm truncate">{c.name}</p>
                                 <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-[11px] text-muted-foreground">
-                                  <span>Instância: <strong>{c.instanceName}</strong></span>
+                                  <span>
+                                    Instância: <strong>{c.instanceName}</strong>
+                                  </span>
                                   <span>·</span>
                                   <span>{new Date(c.createdAt).toLocaleDateString("pt-BR")}</span>
                                   <span>·</span>
-                                  <span className="text-emerald-500">Sucesso: <strong>{success}</strong></span>
+                                  <span className="text-emerald-500">
+                                    Sucesso: <strong>{success}</strong>
+                                  </span>
                                   <span>·</span>
-                                  <span className="text-rose-500">Falhas: <strong>{failed}</strong></span>
+                                  <span className="text-rose-500">
+                                    Falhas: <strong>{failed}</strong>
+                                  </span>
                                   <span>·</span>
-                                  <span>Duração: <strong>{durationStr}</strong></span>
+                                  <span>
+                                    Duração: <strong>{durationStr}</strong>
+                                  </span>
                                 </div>
                               </div>
                               <div className="flex items-center gap-3 shrink-0">
                                 <Badge
-                                  variant={c.status === "sending" ? "default" : c.status === "cancelled" ? "destructive" : "secondary"}
-                                  className={c.status === "completed" ? "bg-success/20 text-success border-success/30 capitalize" : c.status === "paused" ? "bg-amber-500/20 text-amber-400 border-amber-500/30 capitalize" : "capitalize"}
+                                  variant={
+                                    c.status === "sending"
+                                      ? "default"
+                                      : c.status === "cancelled"
+                                        ? "destructive"
+                                        : "secondary"
+                                  }
+                                  className={
+                                    c.status === "completed"
+                                      ? "bg-success/20 text-success border-success/30 capitalize"
+                                      : c.status === "paused"
+                                        ? "bg-amber-500/20 text-amber-400 border-amber-500/30 capitalize"
+                                        : "capitalize"
+                                  }
                                 >
-                                  {c.status === "completed" ? "concluída" : c.status === "sending" ? "enviando" : c.status === "paused" ? "pausada" : "cancelada"}
+                                  {c.status === "completed"
+                                    ? "concluída"
+                                    : c.status === "sending"
+                                      ? "enviando"
+                                      : c.status === "paused"
+                                        ? "pausada"
+                                        : "cancelada"}
                                 </Badge>
                                 <UIButton
                                   variant="ghost"
@@ -1137,11 +1187,23 @@ function CampaignsPage() {
                     </CardTitle>
                   </CardHeader>
                   <CardContent className="text-xs space-y-2 leading-relaxed text-amber-200/90">
-                    <p>O WhatsApp monitora disparos repetitivos. Para proteger seu número de bloqueios:</p>
+                    <p>
+                      O WhatsApp monitora disparos repetitivos. Para proteger seu número de
+                      bloqueios:
+                    </p>
                     <ul className="list-disc pl-4 space-y-1">
-                      <li><strong>Varie o texto:</strong> Utilize o sistema de Spintax para que cada mensagem seja sorteada com termos sinônimos (ex: {"{Olá|Oi|Bom dia}"}).</li>
-                      <li><strong>Use o Delay recomendado:</strong> Deixe o intervalo randômico entre 15 e 45 segundos. Menos de 10 segundos pode acionar o filtro anti-spam.</li>
-                      <li><strong>Mídias:</strong> Evite enviar o mesmo vídeo/imagem idêntico para milhares de contatos em poucas horas sem texto explicativo associado.</li>
+                      <li>
+                        <strong>Varie o texto:</strong> Utilize o sistema de Spintax para que cada
+                        mensagem seja sorteada com termos sinônimos (ex: {"{Olá|Oi|Bom dia}"}).
+                      </li>
+                      <li>
+                        <strong>Use o Delay recomendado:</strong> Deixe o intervalo randômico entre
+                        15 e 45 segundos. Menos de 10 segundos pode acionar o filtro anti-spam.
+                      </li>
+                      <li>
+                        <strong>Mídias:</strong> Evite enviar o mesmo vídeo/imagem idêntico para
+                        milhares de contatos em poucas horas sem texto explicativo associado.
+                      </li>
                     </ul>
                   </CardContent>
                 </Card>
@@ -1170,18 +1232,24 @@ function CampaignsPage() {
                       </div>
                     ) : groupHistory.length === 0 ? (
                       <div className="text-center p-12 text-sm text-muted-foreground">
-                        Nenhuma campanha para grupos enviada até o momento. Clique em "Nova Campanha" para começar.
+                        Nenhuma campanha para grupos enviada até o momento. Clique em "Nova
+                        Campanha" para começar.
                       </div>
                     ) : (
                       <div className="divide-y divide-border/40">
                         {groupHistory.map((c) => {
-                          const success = c.recipients?.filter((r) => r.status === "sent").length ?? 0;
-                          const failed = c.recipients?.filter((r) => r.status === "failed").length ?? 0;
-                          const times = (c.recipients || []).filter((r) => r.sentAt).map((r) => new Date(r.sentAt!).getTime());
+                          const success =
+                            c.recipients?.filter((r) => r.status === "sent").length ?? 0;
+                          const failed =
+                            c.recipients?.filter((r) => r.status === "failed").length ?? 0;
+                          const times = (c.recipients || [])
+                            .filter((r) => r.sentAt)
+                            .map((r) => new Date(r.sentAt!).getTime());
                           let durationStr = "—";
                           if (times.length > 0) {
                             const minTime = Math.min(...times);
-                            const maxTime = c.status === "sending" ? Date.now() : Math.max(...times);
+                            const maxTime =
+                              c.status === "sending" ? Date.now() : Math.max(...times);
                             durationStr = formatDuration(maxTime - minTime);
                           }
 
@@ -1197,23 +1265,49 @@ function CampaignsPage() {
                               <div className="space-y-1.5 min-w-0 flex-1 mr-4">
                                 <p className="font-semibold text-sm truncate">{c.name}</p>
                                 <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-[11px] text-muted-foreground">
-                                  <span>Instância: <strong>{c.instanceName}</strong></span>
+                                  <span>
+                                    Instância: <strong>{c.instanceName}</strong>
+                                  </span>
                                   <span>·</span>
                                   <span>{new Date(c.createdAt).toLocaleDateString("pt-BR")}</span>
                                   <span>·</span>
-                                  <span className="text-emerald-500">Sucesso: <strong>{success}</strong></span>
+                                  <span className="text-emerald-500">
+                                    Sucesso: <strong>{success}</strong>
+                                  </span>
                                   <span>·</span>
-                                  <span className="text-rose-500">Falhas: <strong>{failed}</strong></span>
+                                  <span className="text-rose-500">
+                                    Falhas: <strong>{failed}</strong>
+                                  </span>
                                   <span>·</span>
-                                  <span>Duração: <strong>{durationStr}</strong></span>
+                                  <span>
+                                    Duração: <strong>{durationStr}</strong>
+                                  </span>
                                 </div>
                               </div>
                               <div className="flex items-center gap-3 shrink-0">
                                 <Badge
-                                  variant={c.status === "sending" ? "default" : c.status === "cancelled" ? "destructive" : "secondary"}
-                                  className={c.status === "completed" ? "bg-success/20 text-success border-success/30 capitalize" : c.status === "paused" ? "bg-amber-500/20 text-amber-400 border-amber-500/30 capitalize" : "capitalize"}
+                                  variant={
+                                    c.status === "sending"
+                                      ? "default"
+                                      : c.status === "cancelled"
+                                        ? "destructive"
+                                        : "secondary"
+                                  }
+                                  className={
+                                    c.status === "completed"
+                                      ? "bg-success/20 text-success border-success/30 capitalize"
+                                      : c.status === "paused"
+                                        ? "bg-amber-500/20 text-amber-400 border-amber-500/30 capitalize"
+                                        : "capitalize"
+                                  }
                                 >
-                                  {c.status === "completed" ? "concluída" : c.status === "sending" ? "enviando" : c.status === "paused" ? "pausada" : "cancelada"}
+                                  {c.status === "completed"
+                                    ? "concluída"
+                                    : c.status === "sending"
+                                      ? "enviando"
+                                      : c.status === "paused"
+                                        ? "pausada"
+                                        : "cancelada"}
                                 </Badge>
                                 <UIButton
                                   variant="ghost"
@@ -1243,11 +1337,24 @@ function CampaignsPage() {
                     </CardTitle>
                   </CardHeader>
                   <CardContent className="text-xs space-y-2 leading-relaxed text-amber-200/90">
-                    <p>O disparo para grupos exige cautela máxima para evitar o banimento da sua instância:</p>
+                    <p>
+                      O disparo para grupos exige cautela máxima para evitar o banimento da sua
+                      instância:
+                    </p>
                     <ul className="list-disc pl-4 space-y-1">
-                      <li><strong>Atraso Amplo (Delay Inteligente):</strong> Mantenha o delay padrão de 60 a 180 segundos. Disparos rápidos para múltiplos grupos levam ao bloqueio imediato do número.</li>
-                      <li><strong>Simulação de Presença:</strong> Ativa a simulação de digitação antes do disparo para emular o comportamento humano real.</li>
-                      <li><strong>Variáveis Dinâmicas:</strong> Use <code>{"{{grupo}}"}</code> no corpo do texto para que o robô do WhatsApp veja cada mensagem como única.</li>
+                      <li>
+                        <strong>Atraso Amplo (Delay Inteligente):</strong> Mantenha o delay padrão
+                        de 60 a 180 segundos. Disparos rápidos para múltiplos grupos levam ao
+                        bloqueio imediato do número.
+                      </li>
+                      <li>
+                        <strong>Simulação de Presença:</strong> Ativa a simulação de digitação antes
+                        do disparo para emular o comportamento humano real.
+                      </li>
+                      <li>
+                        <strong>Variáveis Dinâmicas:</strong> Use <code>{"{{grupo}}"}</code> no
+                        corpo do texto para que o robô do WhatsApp veja cada mensagem como única.
+                      </li>
                     </ul>
                   </CardContent>
                 </Card>
@@ -1260,7 +1367,9 @@ function CampaignsPage() {
       {view === "new" && (
         <Card className="border border-border/40 bg-gradient-card">
           <CardHeader>
-            <CardTitle>{activeTab === "contacts" ? "Nova Campanha (Contatos)" : "Nova Campanha (Grupos)"}</CardTitle>
+            <CardTitle>
+              {activeTab === "contacts" ? "Nova Campanha (Contatos)" : "Nova Campanha (Grupos)"}
+            </CardTitle>
             <CardDescription>
               {activeTab === "contacts"
                 ? "Preencha os campos abaixo e selecione sua base de contatos para iniciar o envio inteligente."
@@ -1356,7 +1465,8 @@ function CampaignsPage() {
                     </p>
                   ) : loadingGroups ? (
                     <div className="text-sm text-muted-foreground py-8 text-center flex items-center justify-center">
-                      <RefreshCw className="animate-spin size-5 mr-2" /> Buscando grupos no celular...
+                      <RefreshCw className="animate-spin size-5 mr-2" /> Buscando grupos no
+                      celular...
                     </div>
                   ) : groups.length === 0 ? (
                     <p className="text-sm text-muted-foreground py-8 text-center">
@@ -1385,7 +1495,9 @@ function CampaignsPage() {
                             }
                           }}
                         >
-                          {selectedGroups.length === groups.length ? "Desmarcar Todos" : "Selecionar Todos"}
+                          {selectedGroups.length === groups.length
+                            ? "Desmarcar Todos"
+                            : "Selecionar Todos"}
                         </UIButton>
                       </div>
                       <div className="max-h-60 overflow-y-auto border border-border/40 rounded-md divide-y divide-border/20">
@@ -1430,7 +1542,11 @@ function CampaignsPage() {
                     <Badge
                       variant="outline"
                       className="cursor-pointer hover:bg-secondary"
-                      onClick={() => setMessageText((p) => p + (activeTab === "contacts" ? " {{nome}}" : " {{grupo}}"))}
+                      onClick={() =>
+                        setMessageText(
+                          (p) => p + (activeTab === "contacts" ? " {{nome}}" : " {{grupo}}"),
+                        )
+                      }
                     >
                       {activeTab === "contacts" ? "+ Variável Nome" : "+ Variável Grupo"}
                     </Badge>
@@ -1455,11 +1571,18 @@ function CampaignsPage() {
                   onChange={(e) => setMessageText(e.target.value)}
                 />
                 <p className="text-[11px] text-muted-foreground font-mono leading-relaxed bg-secondary/20 p-2 rounded-lg border border-border">
-                  Use Spintax com chaves e barras verticais: <code>{"{Olá|Oi}"}</code>. O sistema irá sortear uma das palavras para cada envio.
+                  Use Spintax com chaves e barras verticais: <code>{"{Olá|Oi}"}</code>. O sistema
+                  irá sortear uma das palavras para cada envio.
                   {activeTab === "contacts" ? (
-                    <> Para o nome do contato, insira <code>{"{{nome}}"}</code>.</>
+                    <>
+                      {" "}
+                      Para o nome do contato, insira <code>{"{{nome}}"}</code>.
+                    </>
                   ) : (
-                    <> Para o nome do grupo, insira <code>{"{{grupo}}"}</code>.</>
+                    <>
+                      {" "}
+                      Para o nome do grupo, insira <code>{"{{grupo}}"}</code>.
+                    </>
                   )}
                 </p>
               </div>
@@ -1475,9 +1598,13 @@ function CampaignsPage() {
                     disabled={uploadingMedia}
                   >
                     {uploadingMedia ? (
-                      <><RefreshCw className="animate-spin size-4 mr-2" /> Enviando...</>
+                      <>
+                        <RefreshCw className="animate-spin size-4 mr-2" /> Enviando...
+                      </>
                     ) : (
-                      <><Upload className="size-4 mr-2" /> Escolher Imagem/Vídeo</>
+                      <>
+                        <Upload className="size-4 mr-2" /> Escolher Imagem/Vídeo
+                      </>
                     )}
                     <input
                       type="file"
@@ -1521,7 +1648,9 @@ function CampaignsPage() {
                   <Label>Intervalo de Delay (Em Segundos)</Label>
                   <div className="flex gap-4">
                     <div className="flex-1 space-y-1">
-                      <Label htmlFor="min-delay" className="text-xs text-muted-foreground">Mínimo</Label>
+                      <Label htmlFor="min-delay" className="text-xs text-muted-foreground">
+                        Mínimo
+                      </Label>
                       <Input
                         id="min-delay"
                         type="number"
@@ -1531,7 +1660,9 @@ function CampaignsPage() {
                       />
                     </div>
                     <div className="flex-1 space-y-1">
-                      <Label htmlFor="max-delay" className="text-xs text-muted-foreground">Máximo</Label>
+                      <Label htmlFor="max-delay" className="text-xs text-muted-foreground">
+                        Máximo
+                      </Label>
                       <Input
                         id="max-delay"
                         type="number"
@@ -1559,7 +1690,9 @@ function CampaignsPage() {
                       />
                       <div>
                         <p>Simular Digitação no WhatsApp</p>
-                        <p className="text-xs font-normal text-muted-foreground">Mostra "Digitando..." por 5 segundos antes de cada envio.</p>
+                        <p className="text-xs font-normal text-muted-foreground">
+                          Mostra "Digitando..." por 5 segundos antes de cada envio.
+                        </p>
                       </div>
                     </label>
                   </div>
@@ -1615,8 +1748,14 @@ function CampaignsPage() {
                       </>
                     ) : (
                       <Badge
-                        variant={activeCampaign.status === "completed" ? "secondary" : "destructive"}
-                        className={activeCampaign.status === "completed" ? "bg-success/20 text-success border-success/30 px-3 py-1.5 text-sm" : "px-3 py-1.5 text-sm"}
+                        variant={
+                          activeCampaign.status === "completed" ? "secondary" : "destructive"
+                        }
+                        className={
+                          activeCampaign.status === "completed"
+                            ? "bg-success/20 text-success border-success/30 px-3 py-1.5 text-sm"
+                            : "px-3 py-1.5 text-sm"
+                        }
                       >
                         {activeCampaign.status === "completed" ? "Concluída" : "Encerrada"}
                       </Badge>
@@ -1665,7 +1804,10 @@ function CampaignsPage() {
                   <div className="flex items-start gap-2.5 p-3 rounded-lg border border-amber-500/20 bg-amber-500/5 text-amber-200 text-xs">
                     <AlertTriangle className="size-4 shrink-0 text-amber-400 mt-0.5" />
                     <div>
-                      <strong>Atenção:</strong> Como o disparo é controlado pelo navegador (Client-side), <strong>não feche esta aba ou desligue o computador</strong> enquanto a campanha estiver ativa! Se você fechar a aba, o envio será interrompido e ficará pausado.
+                      <strong>Atenção:</strong> Como o disparo é controlado pelo navegador
+                      (Client-side), <strong>não feche esta aba ou desligue o computador</strong>{" "}
+                      enquanto a campanha estiver ativa! Se você fechar a aba, o envio será
+                      interrompido e ficará pausado.
                     </div>
                   </div>
                 )}
@@ -1675,24 +1817,37 @@ function CampaignsPage() {
                   <div className="border border-border/40 rounded-xl overflow-hidden bg-secondary/10">
                     <div className="max-h-[300px] overflow-y-auto divide-y divide-border/20 text-xs font-mono">
                       {recipients.length === 0 ? (
-                        <div className="p-8 text-center text-muted-foreground">Carregando contatos da fila...</div>
+                        <div className="p-8 text-center text-muted-foreground">
+                          Carregando contatos da fila...
+                        </div>
                       ) : (
                         recipients.map((r, idx) => (
-                          <div key={idx} className="p-3 flex items-center justify-between hover:bg-secondary/20 transition-colors">
+                          <div
+                            key={idx}
+                            className="p-3 flex items-center justify-between hover:bg-secondary/20 transition-colors"
+                          >
                             <div className="flex-1 min-w-0 space-y-0.5">
                               <p className="font-semibold text-foreground">
                                 {r.number}{" "}
-                                {r.name && <span className="text-muted-foreground">({r.name})</span>}
+                                {r.name && (
+                                  <span className="text-muted-foreground">({r.name})</span>
+                                )}
                               </p>
                               {r.error && <p className="text-[10px] text-destructive">{r.error}</p>}
                             </div>
                             <div>
                               {r.status === "sent" ? (
-                                <Badge className="bg-success/20 text-success border-success/40">Sucesso</Badge>
+                                <Badge className="bg-success/20 text-success border-success/40">
+                                  Sucesso
+                                </Badge>
                               ) : r.status === "failed" ? (
-                                <Badge className="bg-destructive/20 text-destructive border-destructive/40">Falhou</Badge>
+                                <Badge className="bg-destructive/20 text-destructive border-destructive/40">
+                                  Falhou
+                                </Badge>
                               ) : (
-                                <Badge className="bg-secondary/40 text-muted-foreground border-border/40">Na Fila</Badge>
+                                <Badge className="bg-secondary/40 text-muted-foreground border-border/40">
+                                  Na Fila
+                                </Badge>
                               )}
                             </div>
                           </div>
@@ -1710,7 +1865,8 @@ function CampaignsPage() {
                   <div>
                     <CardTitle>{activeGroupCampaign.name} (Grupos)</CardTitle>
                     <CardDescription className="mt-1">
-                      Instância de Envio: <strong>{activeGroupCampaign.instanceName}</strong> · Delays:{" "}
+                      Instância de Envio: <strong>{activeGroupCampaign.instanceName}</strong> ·
+                      Delays:{" "}
                       <strong>
                         {activeGroupCampaign.minDelay}s a {activeGroupCampaign.maxDelay}s
                       </strong>
@@ -1734,8 +1890,14 @@ function CampaignsPage() {
                       </>
                     ) : (
                       <Badge
-                        variant={activeGroupCampaign.status === "completed" ? "secondary" : "destructive"}
-                        className={activeGroupCampaign.status === "completed" ? "bg-success/20 text-success border-success/30 px-3 py-1.5 text-sm" : "px-3 py-1.5 text-sm"}
+                        variant={
+                          activeGroupCampaign.status === "completed" ? "secondary" : "destructive"
+                        }
+                        className={
+                          activeGroupCampaign.status === "completed"
+                            ? "bg-success/20 text-success border-success/30 px-3 py-1.5 text-sm"
+                            : "px-3 py-1.5 text-sm"
+                        }
                       >
                         {activeGroupCampaign.status === "completed" ? "Concluída" : "Encerrada"}
                       </Badge>
@@ -1748,11 +1910,23 @@ function CampaignsPage() {
                   <div className="flex items-center justify-between text-sm font-medium">
                     <span>Progresso da Campanha nos Grupos</span>
                     <span>
-                      {Math.round(((groupRecipients.filter(r => r.status === "sent" || r.status === "failed").length) / (groupRecipients.length || 1)) * 100)}% ({groupRecipients.filter(r => r.status === "sent").length} / {groupRecipients.length})
+                      {Math.round(
+                        (groupRecipients.filter((r) => r.status === "sent" || r.status === "failed")
+                          .length /
+                          (groupRecipients.length || 1)) *
+                          100,
+                      )}
+                      % ({groupRecipients.filter((r) => r.status === "sent").length} /{" "}
+                      {groupRecipients.length})
                     </span>
                   </div>
                   <Progress
-                    value={Math.round(((groupRecipients.filter(r => r.status === "sent" || r.status === "failed").length) / (groupRecipients.length || 1)) * 100)}
+                    value={Math.round(
+                      (groupRecipients.filter((r) => r.status === "sent" || r.status === "failed")
+                        .length /
+                        (groupRecipients.length || 1)) *
+                        100,
+                    )}
                     className="h-3 bg-secondary/80 rounded-full"
                   />
                 </div>
@@ -1764,15 +1938,21 @@ function CampaignsPage() {
                   </div>
                   <div className="bg-success/5 border border-success/20 rounded-xl p-4 text-center text-success">
                     <p className="text-xs text-muted-foreground">Enviados</p>
-                    <p className="text-2xl font-bold mt-1">{groupRecipients.filter((r) => r.status === "sent").length}</p>
+                    <p className="text-2xl font-bold mt-1">
+                      {groupRecipients.filter((r) => r.status === "sent").length}
+                    </p>
                   </div>
                   <div className="bg-destructive/5 border border-destructive/20 rounded-xl p-4 text-center text-destructive">
                     <p className="text-xs text-muted-foreground">Falhas</p>
-                    <p className="text-2xl font-bold mt-1">{groupRecipients.filter((r) => r.status === "failed").length}</p>
+                    <p className="text-2xl font-bold mt-1">
+                      {groupRecipients.filter((r) => r.status === "failed").length}
+                    </p>
                   </div>
                   <div className="bg-amber-500/5 border border-amber-500/20 rounded-xl p-4 text-center text-amber-400">
                     <p className="text-xs text-muted-foreground">Fila</p>
-                    <p className="text-2xl font-bold mt-1">{groupRecipients.filter((r) => r.status === "pending").length}</p>
+                    <p className="text-2xl font-bold mt-1">
+                      {groupRecipients.filter((r) => r.status === "pending").length}
+                    </p>
                   </div>
                 </div>
 
@@ -1787,7 +1967,9 @@ function CampaignsPage() {
                   <div className="flex items-start gap-2.5 p-3 rounded-lg border border-amber-500/20 bg-amber-500/5 text-amber-200 text-xs">
                     <AlertTriangle className="size-4 shrink-0 text-amber-400 mt-0.5" />
                     <div>
-                      <strong>Atenção:</strong> Como o disparo é controlado pelo navegador (Client-side), <strong>não feche esta aba ou desligue o computador</strong> enquanto o envio para grupos estiver ativo! Fechar a aba interrompe o loop.
+                      <strong>Atenção:</strong> Como o disparo é controlado pelo navegador
+                      (Client-side), <strong>não feche esta aba ou desligue o computador</strong>{" "}
+                      enquanto o envio para grupos estiver ativo! Fechar a aba interrompe o loop.
                     </div>
                   </div>
                 )}
@@ -1797,24 +1979,37 @@ function CampaignsPage() {
                   <div className="border border-border/40 rounded-xl overflow-hidden bg-secondary/10">
                     <div className="max-h-[300px] overflow-y-auto divide-y divide-border/20 text-xs font-mono">
                       {groupRecipients.length === 0 ? (
-                        <div className="p-8 text-center text-muted-foreground">Carregando grupos da fila...</div>
+                        <div className="p-8 text-center text-muted-foreground">
+                          Carregando grupos da fila...
+                        </div>
                       ) : (
                         groupRecipients.map((r, idx) => (
-                          <div key={idx} className="p-3 flex items-center justify-between hover:bg-secondary/20 transition-colors">
+                          <div
+                            key={idx}
+                            className="p-3 flex items-center justify-between hover:bg-secondary/20 transition-colors"
+                          >
                             <div className="flex-1 min-w-0 space-y-0.5">
                               <p className="font-semibold text-foreground">
                                 {r.groupName}{" "}
-                                <span className="text-muted-foreground text-[10px]">({r.groupId})</span>
+                                <span className="text-muted-foreground text-[10px]">
+                                  ({r.groupId})
+                                </span>
                               </p>
                               {r.error && <p className="text-[10px] text-destructive">{r.error}</p>}
                             </div>
                             <div>
                               {r.status === "sent" ? (
-                                <Badge className="bg-success/20 text-success border-success/40">Sucesso</Badge>
+                                <Badge className="bg-success/20 text-success border-success/40">
+                                  Sucesso
+                                </Badge>
                               ) : r.status === "failed" ? (
-                                <Badge className="bg-destructive/20 text-destructive border-destructive/40">Falhou</Badge>
+                                <Badge className="bg-destructive/20 text-destructive border-destructive/40">
+                                  Falhou
+                                </Badge>
                               ) : (
-                                <Badge className="bg-secondary/40 text-muted-foreground border-border/40">Na Fila</Badge>
+                                <Badge className="bg-secondary/40 text-muted-foreground border-border/40">
+                                  Na Fila
+                                </Badge>
                               )}
                             </div>
                           </div>

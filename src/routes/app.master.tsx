@@ -86,16 +86,22 @@ function Master() {
     setModalPlan(t.plan || "trial");
     setModalStatus(t.status || "active");
     setModalExpiresAt(t.planExpiresAt ? new Date(t.planExpiresAt).toISOString().split("T")[0] : "");
-    setModalMaxAgents(t.maxAgents !== null && t.maxAgents !== undefined ? t.maxAgents.toString() : "");
-    setModalMaxMessages(t.maxMessages !== null && t.maxMessages !== undefined ? t.maxMessages.toString() : "");
-    setModalMaxInstances(t.maxInstances !== null && t.maxInstances !== undefined ? t.maxInstances.toString() : "");
+    setModalMaxAgents(
+      t.maxAgents !== null && t.maxAgents !== undefined ? t.maxAgents.toString() : "",
+    );
+    setModalMaxMessages(
+      t.maxMessages !== null && t.maxMessages !== undefined ? t.maxMessages.toString() : "",
+    );
+    setModalMaxInstances(
+      t.maxInstances !== null && t.maxInstances !== undefined ? t.maxInstances.toString() : "",
+    );
     setModalFeatures(t.enabledFeatures || []);
     setModalPhone(t.phone || "");
   };
 
   const handleFeatureToggle = (feature: string) => {
     setModalFeatures((prev) =>
-      prev.includes(feature) ? prev.filter((f) => f !== feature) : [...prev, feature]
+      prev.includes(feature) ? prev.filter((f) => f !== feature) : [...prev, feature],
     );
   };
 
@@ -117,7 +123,9 @@ function Master() {
         .update({
           plan: modalPlan,
           status: modalStatus,
-          planExpiresAt: modalExpiresAt ? new Date(modalExpiresAt + "T23:59:59Z").toISOString() : null,
+          planExpiresAt: modalExpiresAt
+            ? new Date(modalExpiresAt + "T23:59:59Z").toISOString()
+            : null,
           maxAgents: modalMaxAgents ? parseInt(modalMaxAgents) : null,
           maxMessages: modalMaxMessages ? parseInt(modalMaxMessages) : null,
           maxInstances: modalMaxInstances ? parseInt(modalMaxInstances) : null,
@@ -135,15 +143,17 @@ function Master() {
                 ...r,
                 plan: modalPlan,
                 status: modalStatus,
-                planExpiresAt: modalExpiresAt ? new Date(modalExpiresAt + "T23:59:59Z").toISOString() : undefined,
+                planExpiresAt: modalExpiresAt
+                  ? new Date(modalExpiresAt + "T23:59:59Z").toISOString()
+                  : undefined,
                 maxAgents: modalMaxAgents ? parseInt(modalMaxAgents) : null,
                 maxMessages: modalMaxMessages ? parseInt(modalMaxMessages) : null,
                 maxInstances: modalMaxInstances ? parseInt(modalMaxInstances) : null,
                 enabledFeatures: modalFeatures,
                 phone: modalPhone || null,
               }
-            : r
-        )
+            : r,
+        ),
       );
 
       toast.success("Plano e limites do cliente salvos com sucesso!");
@@ -233,7 +243,12 @@ function Master() {
   };
 
   const deleteTenant = async (id: string, name?: string) => {
-    if (!window.confirm(`Tem certeza que deseja excluir a workspace ${name || id}?\nEsta ação não pode ser desfeita e excluirá todos os dados atrelados.`)) return;
+    if (
+      !window.confirm(
+        `Tem certeza que deseja excluir a workspace ${name || id}?\nEsta ação não pode ser desfeita e excluirá todos os dados atrelados.`,
+      )
+    )
+      return;
     try {
       const { error } = await supabase.from("tenants").delete().eq("id", id);
       if (error) throw error;
@@ -303,7 +318,10 @@ function Master() {
           <p className="p-6 text-sm text-muted-foreground">Nenhum tenant encontrado.</p>
         ) : (
           filtered.map((t) => (
-            <div key={t.id} className="p-4 flex items-center gap-3 hover:bg-muted/50 transition-colors">
+            <div
+              key={t.id}
+              className="p-4 flex items-center gap-3 hover:bg-muted/50 transition-colors"
+            >
               <div className="size-10 rounded-xl bg-secondary flex items-center justify-center">
                 <Building2 className="size-5 text-muted-foreground" />
               </div>
@@ -329,17 +347,36 @@ function Master() {
                 <div className="text-xs text-muted-foreground font-mono truncate mt-1">
                   ID: {t.id} · owner: {t.ownerId ?? "—"}
                   {t.phone && ` · cel: ${t.phone}`}
-                  {t.planExpiresAt && ` · expira: ${new Date(t.planExpiresAt).toLocaleDateString("pt-BR")}`}
+                  {t.planExpiresAt &&
+                    ` · expira: ${new Date(t.planExpiresAt).toLocaleDateString("pt-BR")}`}
                 </div>
               </div>
               <div className="flex items-center gap-2">
-                <Button size="icon" variant="ghost" className="text-muted-foreground hover:text-foreground" onClick={() => editTenant(t.id, t.name)} title="Editar workspace">
+                <Button
+                  size="icon"
+                  variant="ghost"
+                  className="text-muted-foreground hover:text-foreground"
+                  onClick={() => editTenant(t.id, t.name)}
+                  title="Editar workspace"
+                >
                   <Edit className="size-4" />
                 </Button>
-                <Button size="icon" variant="ghost" className="text-muted-foreground hover:text-destructive" onClick={() => deleteTenant(t.id, t.name)} title="Excluir workspace">
+                <Button
+                  size="icon"
+                  variant="ghost"
+                  className="text-muted-foreground hover:text-destructive"
+                  onClick={() => deleteTenant(t.id, t.name)}
+                  title="Excluir workspace"
+                >
                   <Trash className="size-4" />
                 </Button>
-                <Button size="icon" variant="ghost" className="text-amber-500 hover:text-amber-600" onClick={() => openPlanModal(t)} title="Gerenciar plano e limites">
+                <Button
+                  size="icon"
+                  variant="ghost"
+                  className="text-amber-500 hover:text-amber-600"
+                  onClick={() => openPlanModal(t)}
+                  title="Gerenciar plano e limites"
+                >
                   <Crown className="size-4" />
                 </Button>
                 <div className="w-[1px] h-6 bg-border mx-1" />
@@ -368,7 +405,8 @@ function Master() {
                 Gerenciar Plano: {selectedTenant.name || selectedTenant.id}
               </DialogTitle>
               <DialogDescription>
-                Configure as datas, status, limites e permissões/serviços adicionais para este cliente.
+                Configure as datas, status, limites e permissões/serviços adicionais para este
+                cliente.
               </DialogDescription>
             </DialogHeader>
 
@@ -376,7 +414,9 @@ function Master() {
               <div className="grid grid-cols-2 gap-4">
                 {/* Seleção do Plano */}
                 <div>
-                  <Label htmlFor="m-plan" className="text-xs font-semibold">Plano da Workspace</Label>
+                  <Label htmlFor="m-plan" className="text-xs font-semibold">
+                    Plano da Workspace
+                  </Label>
                   <select
                     id="m-plan"
                     value={modalPlan}
@@ -393,7 +433,9 @@ function Master() {
 
                 {/* Seleção do Status */}
                 <div>
-                  <Label htmlFor="m-status" className="text-xs font-semibold">Status do Cliente</Label>
+                  <Label htmlFor="m-status" className="text-xs font-semibold">
+                    Status do Cliente
+                  </Label>
                   <select
                     id="m-status"
                     value={modalStatus}
@@ -408,7 +450,9 @@ function Master() {
 
               {/* Celular do Cliente */}
               <div>
-                <Label htmlFor="m-phone" className="text-xs font-semibold">Celular do Cliente (Dono)</Label>
+                <Label htmlFor="m-phone" className="text-xs font-semibold">
+                  Celular do Cliente (Dono)
+                </Label>
                 <Input
                   id="m-phone"
                   value={modalPhone}
@@ -437,16 +481,21 @@ function Master() {
                   className="w-full mt-1"
                 />
                 <p className="text-[11px] text-muted-foreground">
-                  Se a data atual for posterior à data de expiração, a workspace do cliente será bloqueada automaticamente.
+                  Se a data atual for posterior à data de expiração, a workspace do cliente será
+                  bloqueada automaticamente.
                 </p>
               </div>
 
               {/* Limites Customizados (Overrides) */}
               <div className="space-y-3">
-                <h3 className="text-sm font-semibold border-b border-border pb-1">Limites Customizados (Vazio usa o padrão do plano)</h3>
+                <h3 className="text-sm font-semibold border-b border-border pb-1">
+                  Limites Customizados (Vazio usa o padrão do plano)
+                </h3>
                 <div className="grid grid-cols-3 gap-3">
                   <div>
-                    <Label htmlFor="m-agents" className="text-xs">Máx. Agentes</Label>
+                    <Label htmlFor="m-agents" className="text-xs">
+                      Máx. Agentes
+                    </Label>
                     <Input
                       id="m-agents"
                       type="number"
@@ -457,7 +506,9 @@ function Master() {
                     />
                   </div>
                   <div>
-                    <Label htmlFor="m-messages" className="text-xs">Máx. Mensagens</Label>
+                    <Label htmlFor="m-messages" className="text-xs">
+                      Máx. Mensagens
+                    </Label>
                     <Input
                       id="m-messages"
                       type="number"
@@ -468,7 +519,9 @@ function Master() {
                     />
                   </div>
                   <div>
-                    <Label htmlFor="m-instances" className="text-xs">Máx. Instâncias</Label>
+                    <Label htmlFor="m-instances" className="text-xs">
+                      Máx. Instâncias
+                    </Label>
                     <Input
                       id="m-instances"
                       type="number"
@@ -483,7 +536,9 @@ function Master() {
 
               {/* Habilitar / Desabilitar Serviços adicionais */}
               <div className="space-y-3">
-                <h3 className="text-sm font-semibold border-b border-border pb-1">Habilitar / Desabilitar Serviços e Módulos</h3>
+                <h3 className="text-sm font-semibold border-b border-border pb-1">
+                  Habilitar / Desabilitar Serviços e Módulos
+                </h3>
                 <div className="grid grid-cols-2 gap-3">
                   {[
                     { key: "campaigns_csv", label: "Campanhas por CSV" },
@@ -495,7 +550,10 @@ function Master() {
                   ].map((feat) => {
                     const isChecked = modalFeatures.includes(feat.key);
                     return (
-                      <label key={feat.key} className="flex items-center gap-2 p-2.5 rounded-lg border border-border bg-card/20 hover:bg-muted/50 cursor-pointer select-none transition-colors">
+                      <label
+                        key={feat.key}
+                        className="flex items-center gap-2 p-2.5 rounded-lg border border-border bg-card/20 hover:bg-muted/50 cursor-pointer select-none transition-colors"
+                      >
                         <input
                           type="checkbox"
                           checked={isChecked}
@@ -511,7 +569,11 @@ function Master() {
             </div>
 
             <DialogFooter className="gap-2">
-              <Button variant="outline" onClick={() => setSelectedTenant(null)} disabled={savingPlan}>
+              <Button
+                variant="outline"
+                onClick={() => setSelectedTenant(null)}
+                disabled={savingPlan}
+              >
                 Cancelar
               </Button>
               <Button onClick={savePlanChanges} disabled={savingPlan}>

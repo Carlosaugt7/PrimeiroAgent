@@ -52,7 +52,7 @@ export interface LimitCheck {
 /** Verifica se um recurso (feature) está habilitado para o tenant. */
 export function checkFeature(tenant: any, feature: string): boolean {
   if (!tenant) return false;
-  
+
   // Verifica se a feature foi habilitada manualmente e individualmente nas configurações customizadas
   if (Array.isArray(tenant.enabledFeatures)) {
     if (tenant.enabledFeatures.includes(feature)) return true;
@@ -74,7 +74,7 @@ export function checkLimit(
     return { ok: true, limit: Infinity, current, remaining: Infinity };
   }
 
-  let planId = typeof planIdOrTenant === "string" ? planIdOrTenant : planIdOrTenant?.plan;
+  const planId = typeof planIdOrTenant === "string" ? planIdOrTenant : planIdOrTenant?.plan;
   const limits = planLimits(planId);
   let limit = limits[kind];
 

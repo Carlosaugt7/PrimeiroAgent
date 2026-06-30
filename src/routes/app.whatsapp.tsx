@@ -2,7 +2,16 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useServerFn } from "@tanstack/react-start";
 import { useCallback, useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
-import { Loader2, LogOut, Plus, QrCode, RefreshCw, Smartphone, Trash2, Webhook } from "lucide-react";
+import {
+  Loader2,
+  LogOut,
+  Plus,
+  QrCode,
+  RefreshCw,
+  Smartphone,
+  Trash2,
+  Webhook,
+} from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {

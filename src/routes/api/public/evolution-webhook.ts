@@ -581,7 +581,11 @@ async function embedQuery(
   }
 }
 
-async function buildRagContext(tenantId: string, userText: string, agentId: string): Promise<string | null> {
+async function buildRagContext(
+  tenantId: string,
+  userText: string,
+  agentId: string,
+): Promise<string | null> {
   let docs: any[] | null = null;
 
   try {
@@ -595,7 +599,10 @@ async function buildRagContext(tenantId: string, userText: string, agentId: stri
     if (!error && data) {
       docs = data;
     } else if (error) {
-      console.warn("[RAG] Falha ao filtrar por agentId (coluna pode nao existir). Buscando todos do tenant.", error.message);
+      console.warn(
+        "[RAG] Falha ao filtrar por agentId (coluna pode nao existir). Buscando todos do tenant.",
+        error.message,
+      );
     }
   } catch (err) {
     console.warn("[RAG] Erro ao buscar knowledge com filtro agentId:", err);
@@ -603,10 +610,7 @@ async function buildRagContext(tenantId: string, userText: string, agentId: stri
 
   // Fallback se a consulta acima falhou ou retornou erro (ex: migracao nao aplicada)
   if (!docs) {
-    const { data } = await supabase
-      .from("knowledge")
-      .select("*")
-      .eq("tenantId", tenantId);
+    const { data } = await supabase.from("knowledge").select("*").eq("tenantId", tenantId);
     docs = data || [];
   }
 

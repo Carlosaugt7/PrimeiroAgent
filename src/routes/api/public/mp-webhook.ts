@@ -25,7 +25,18 @@ export const Route = createFileRoute("/api/public/mp-webhook")({
             return new Response(JSON.stringify({ ok: true, ignored: true }), { status: 200 });
           }
 
-          const token = process.env.MERCADOPAGO_ACCESS_TOKEN;
+          let token = process.env.MERCADOPAGO_ACCESS_TOKEN;
+          try {
+            const { data: gs } = await supabase
+              .from("global_settings")
+              .select("value")
+              .eq("key", "mercadoPagoAccessToken")
+              .maybeSingle();
+            if (gs?.value) token = gs.value;
+          } catch (e) {
+            console.error("[mp-webhook] erro ao obter token no global_settings:", e);
+          }
+
           if (!token) {
             console.error("[mp-webhook] MERCADOPAGO_ACCESS_TOKEN ausente");
             return new Response(JSON.stringify({ ok: false }), { status: 200 });

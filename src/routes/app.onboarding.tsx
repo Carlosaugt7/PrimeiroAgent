@@ -20,7 +20,7 @@ import {
 import { cn } from "@/lib/utils";
 
 export const Route = createFileRoute("/app/onboarding")({
-  head: () => ({ meta: [{ title: "Começar — AgentFlow IA" }] }),
+  head: () => ({ meta: [{ title: "Começar — Primeiro Agent" }] }),
   component: OnboardingPage,
 });
 

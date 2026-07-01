@@ -121,14 +121,14 @@ const empty = {
 
 function AgentsList() {
   const { agents, providers, createAgent, updateAgent, deleteAgent, instances } = useAppStore();
-  const [open, setOpen] = useState(() => localStorage.getItem("agentflow_draft_open") === "true");
+  const [open, setOpen] = useState(() => localStorage.getItem("primeiro_agent_draft_open") === "true");
   const [q, setQ] = useState("");
   const [step, setStep] = useState<"basic" | "persona" | "prompt" | "model">(() => {
-    const s = localStorage.getItem("agentflow_draft_step");
+    const s = localStorage.getItem("primeiro_agent_draft_step");
     return (s as "basic" | "persona" | "prompt" | "model") || "basic";
   });
   const [form, setForm] = useState(() => {
-    const s = localStorage.getItem("agentflow_draft_form");
+    const s = localStorage.getItem("primeiro_agent_draft_form");
     try {
       return s ? JSON.parse(s) : empty;
     } catch {
@@ -139,9 +139,9 @@ function AgentsList() {
 
   // Auto-save draft
   useEffect(() => {
-    localStorage.setItem("agentflow_draft_open", String(open));
-    localStorage.setItem("agentflow_draft_step", step);
-    localStorage.setItem("agentflow_draft_form", JSON.stringify(form));
+    localStorage.setItem("primeiro_agent_draft_open", String(open));
+    localStorage.setItem("primeiro_agent_draft_step", step);
+    localStorage.setItem("primeiro_agent_draft_form", JSON.stringify(form));
   }, [open, step, form]);
 
   const filtered = agents.filter((a) => a.name.toLowerCase().includes(q.toLowerCase()));
@@ -150,8 +150,8 @@ function AgentsList() {
   const reset = () => {
     setForm(empty);
     setStep("basic");
-    localStorage.removeItem("agentflow_draft_form");
-    localStorage.removeItem("agentflow_draft_step");
+    localStorage.removeItem("primeiro_agent_draft_form");
+    localStorage.removeItem("primeiro_agent_draft_step");
   };
 
   const submit = async () => {

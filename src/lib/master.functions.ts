@@ -86,3 +86,108 @@ export const createTenantAsMaster = createServerFn({ method: "POST" })
 
     return { ok: true, tenantId, name };
   });
+
+export const getMasterDashboardMetrics = createServerFn({ method: "POST" })
+  .inputValidator((d: { idToken: string }) => d)
+  .handler(async ({ data }) => {
+    await requireMaster(data.idToken);
+
+    // 1. Total Tenants
+    const { count: totalTenants } = await supabase
+      .from("tenants")
+      .select("*", { count: "exact", head: true });
+
+    // 2. Total Agents
+    const { count: totalAgents } = await supabase
+      .from("agents")
+      .select("*", { count: "exact", head: true });
+
+    // 3. WhatsApp Instances status counts
+    const { data: instances } = await supabase
+      .from("instances")
+      .select("status");
+
+    const totalInstances = instances?.length ?? 0;
+    const onlineInstances = instances?.filter((i) => i.status === "online").length ?? 0;
+    const offlineInstances = totalInstances - onlineInstances;
+
+    // 4. Message Volume / Logs
+    const { count: totalMessages } = await supabase
+      .from("ai_logs")
+      .select("*", { count: "exact", head: true });
+
+    // 5. Active Subscriptions Count (non-trial plan tenants)
+    const { count: activeSubs } = await supabase
+      .from("tenants")
+      .select("*", { count: "exact", head: true })
+      .neq("plan", "trial")
+      .eq("status", "active");
+
+    // 6. Recent Audit logs
+    const { data: recentAudits } = await supabase
+      .from("audit")
+      .select("action, targetLabel, actorEmail, createdAt")
+      .order("createdAt", { ascending: false })
+      .limit(10);
+
+    return {
+      totalTenants: totalTenants || 0,
+      totalAgents: totalAgents || 0,
+      totalInstances,
+      onlineInstances,
+      offlineInstances,
+      totalMessages: totalMessages || 0,
+      activeSubs: activeSubs || 0,
+      recentAudits: recentAudits || [],
+    };
+  });
+
+export const getGlobalBillingSettings = createServerFn({ method: "POST" })
+  .inputValidator((d: { idToken: string }) => d)
+  .handler(async ({ data }) => {
+    await requireMaster(data.idToken);
+    const { data: rows } = await supabase
+      .from("global_settings")
+      .select("key, value")
+      .in("key", ["asaasApiKey", "asaasEnv", "asaasWebhookToken", "mercadoPagoAccessToken"]);
+    
+    const map = Object.fromEntries(
+      (rows ?? []).map((r: { key: string; value: string }) => [r.key, r.value])
+    );
+
+    return {
+      asaasApiKey: map.asaasApiKey ?? "",
+      asaasEnv: map.asaasEnv ?? "sandbox",
+      asaasWebhookToken: map.asaasWebhookToken ?? "",
+      mercadoPagoAccessToken: map.mercadoPagoAccessToken ?? "",
+    };
+  });
+
+export const updateGlobalBillingSettings = createServerFn({ method: "POST" })
+  .inputValidator((d: {
+    idToken: string;
+    asaasApiKey: string;
+    asaasEnv: string;
+    asaasWebhookToken: string;
+    mercadoPagoAccessToken: string;
+  }) => d)
+  .handler(async ({ data }) => {
+    await requireMaster(data.idToken);
+    
+    const settings = [
+      { key: "asaasApiKey", value: data.asaasApiKey.trim() },
+      { key: "asaasEnv", value: data.asaasEnv.trim() },
+      { key: "asaasWebhookToken", value: data.asaasWebhookToken.trim() },
+      { key: "mercadoPagoAccessToken", value: data.mercadoPagoAccessToken.trim() },
+    ];
+
+    for (const item of settings) {
+      const { error } = await supabase
+        .from("global_settings")
+        .upsert(item, { onConflict: "key" });
+      if (error) throw new Error(error.message);
+    }
+
+    return { ok: true };
+  });
+

@@ -64,7 +64,6 @@ const groups: { title: string; items: NavItem[] }[] = [
       { to: "/app/reports", label: "Relatórios", icon: BarChart3 },
       { to: "/app/logs", label: "Logs & Traces", icon: ScrollText },
       { to: "/app/audit", label: "Auditoria", icon: History },
-      { to: "/app/deploy", label: "Deploy", icon: Rocket },
       { to: "/app/billing", label: "Planos & uso", icon: CreditCard },
       { to: "/app/team", label: "Equipe", icon: Users },
       { to: "/app/settings", label: "Configurações", icon: Settings },
@@ -86,8 +85,12 @@ export function AppSidebar({ tenantName, planName }: { tenantName: string; planN
         ...groups,
       ]
     : groups;
-  const visibleGroups = isMaster
-    ? [
+
+  let visibleGroups = baseGroups;
+
+  if (isMaster) {
+    if (impersonating) {
+      visibleGroups = [
         ...baseGroups,
         {
           title: "Plataforma (Master)",
@@ -96,8 +99,29 @@ export function AppSidebar({ tenantName, planName }: { tenantName: string; planN
             { to: "/app/master", label: "Master Admin", icon: Crown },
           ],
         },
-      ]
-    : baseGroups;
+      ];
+    } else {
+      visibleGroups = [
+        {
+          title: "Plataforma (Master)",
+          items: [
+            { to: "/app", label: "Dashboard", icon: LayoutDashboard, exact: true },
+            { to: "/app/integrations", label: "Integrações", icon: Plug },
+            { to: "/app/master", label: "Master Admin", icon: Crown },
+          ],
+        },
+        {
+          title: "Plataforma",
+          items: [
+            { to: "/app/reports", label: "Relatórios", icon: BarChart3 },
+            { to: "/app/logs", label: "Logs & Traces", icon: ScrollText },
+            { to: "/app/audit", label: "Auditoria", icon: History },
+            { to: "/app/team", label: "Equipe", icon: Users },
+          ],
+        },
+      ];
+    }
+  }
 
   return (
     <aside className="hidden md:flex w-64 shrink-0 flex-col gap-2 p-4 border-r border-border bg-card/40 backdrop-blur-xl">
@@ -106,7 +130,7 @@ export function AppSidebar({ tenantName, planName }: { tenantName: string; planN
           <Sparkles className="size-4 text-primary-foreground" />
         </div>
         <span className="font-display font-bold text-lg tracking-tight">
-          AgentFlow<span className="text-gradient"> IA</span>
+          Primeiro<span className="text-gradient"> Agent</span>
         </span>
       </Link>
 

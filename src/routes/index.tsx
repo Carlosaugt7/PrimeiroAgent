@@ -10,7 +10,7 @@ import { Sparkles, Loader2, Eye, EyeOff } from "lucide-react";
 import { toast } from "sonner";
 
 export const Route = createFileRoute("/")({
-  head: () => ({ meta: [{ title: "Entrar — AgentFlow IA" }] }),
+  head: () => ({ meta: [{ title: "Entrar — Primeiro Agent" }] }),
   component: AuthPage,
 });
 
@@ -116,7 +116,7 @@ function AuthPage() {
             <Sparkles className="size-4 text-primary-foreground" />
           </div>
           <span className="font-display font-bold text-xl">
-            AgentFlow<span className="text-gradient"> IA</span>
+            Primeiro<span className="text-gradient"> Agent</span>
           </span>
         </Link>
         <div>
@@ -129,7 +129,7 @@ function AuthPage() {
             Multi-tenant, multi-LLM, integração nativa com Evolution API. Sem código, sem terminal.
           </p>
         </div>
-        <p className="text-xs text-muted-foreground">© AgentFlow IA — RS Consultoria</p>
+        <p className="text-xs text-muted-foreground">© Primeiro Agent — RS Consultoria</p>
       </div>
 
       <div className="flex items-center justify-center p-6">

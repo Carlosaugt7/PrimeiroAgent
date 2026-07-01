@@ -372,7 +372,7 @@ async function evoSendButtons(
         number,
         title: "Opções disponíveis",
         description: text,
-        footerText: "AgentFlow IA",
+        footerText: "Primeiro Agent",
         buttons: buttons.map((btn, index) => ({
           text: btn,
           id: `btn_${index}_${Date.now()}`,

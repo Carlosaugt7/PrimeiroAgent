@@ -32,7 +32,7 @@ import {
 import { toast } from "sonner";
 
 export const Route = createFileRoute("/app/catalog")({
-  head: () => ({ meta: [{ title: "Catálogo de vendas — AgentFlow IA" }] }),
+  head: () => ({ meta: [{ title: "Catálogo de vendas — Primeiro Agent" }] }),
   component: CatalogPage,
 });
 

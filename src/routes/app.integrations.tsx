@@ -13,6 +13,10 @@ import {
   getGoogleIntegrations,
   testGoogleConnection,
 } from "@/lib/google-integrations";
+import {
+  getGlobalBillingSettings,
+  updateGlobalBillingSettings,
+} from "@/lib/master.functions";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -32,6 +36,8 @@ function Page() {
   const saveGoogle = useServerFn(saveGoogleIntegration);
   const getGoogle = useServerFn(getGoogleIntegrations);
   const testGoogle = useServerFn(testGoogleConnection);
+  const getBillingSettings = useServerFn(getGlobalBillingSettings);
+  const updateBillingSettings = useServerFn(updateGlobalBillingSettings);
 
   const [url, setUrl] = useState("");
   const [key, setKey] = useState("");
@@ -39,6 +45,13 @@ function Page() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [testing, setTesting] = useState(false);
+
+  // Billing (Asaas / Mercado Pago)
+  const [asaasApiKey, setAsaasApiKey] = useState("");
+  const [asaasEnv, setAsaasEnv] = useState("sandbox");
+  const [asaasWebhookToken, setAsaasWebhookToken] = useState("");
+  const [mercadoPagoAccessToken, setMercadoPagoAccessToken] = useState("");
+  const [savingBilling, setSavingBilling] = useState(false);
 
   // ElevenLabs
   const [elevenlabsKey, setElevenlabsKey] = useState("");
@@ -71,6 +84,19 @@ function Page() {
           if (cfg.url && cfg.key) {
             const res = await testConn({ data: { url: cfg.url, key: cfg.key } });
             setStatus(res.ok ? "connected" : "disconnected");
+          }
+
+          try {
+            const session = (await supabase.auth.getSession()).data.session;
+            if (session) {
+              const bSettings = await getBillingSettings({ data: { idToken: session.access_token } });
+              setAsaasApiKey(bSettings.asaasApiKey);
+              setAsaasEnv(bSettings.asaasEnv);
+              setAsaasWebhookToken(bSettings.asaasWebhookToken);
+              setMercadoPagoAccessToken(bSettings.mercadoPagoAccessToken);
+            }
+          } catch (billingErr) {
+            console.error("Erro ao carregar configurações de pagamento:", billingErr);
           }
         }
 
@@ -272,6 +298,28 @@ function Page() {
     }
   };
 
+  const handleSaveBilling = async () => {
+    setSavingBilling(true);
+    try {
+      const session = (await supabase.auth.getSession()).data.session;
+      if (!session) throw new Error("Usuário não autenticado");
+      await updateBillingSettings({
+        data: {
+          idToken: session.access_token,
+          asaasApiKey,
+          asaasEnv,
+          asaasWebhookToken,
+          mercadoPagoAccessToken,
+        },
+      });
+      toast.success("Configurações globais de pagamento salvas!");
+    } catch (e: unknown) {
+      toast.error(e instanceof Error ? e.message : "Erro ao salvar configurações de pagamento");
+    } finally {
+      setSavingBilling(false);
+    }
+  };
+
   if (loading) {
     return (
       <div className="flex items-center justify-center h-64">
@@ -386,6 +434,86 @@ function Page() {
                 plataforma. Você não precisa fazer nada — basta criar suas instâncias WhatsApp
                 normalmente.
               </p>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {isMaster && (
+        <Card className="bg-gradient-card border-border">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Crown className="size-4 text-amber-400" />
+              Configuração Global de Pagamentos (Asaas / Mercado Pago)
+            </CardTitle>
+            <CardDescription>
+              Insira as credenciais de pagamento que serão usadas por todas as assinaturas automáticas da plataforma.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-6">
+            {/* Seção Asaas */}
+            <div className="space-y-4 border-b border-border/50 pb-4">
+              <h3 className="text-sm font-semibold text-foreground">Integração Asaas</h3>
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor="asaasEnv">Ambiente Asaas</Label>
+                  <select
+                    id="asaasEnv"
+                    value={asaasEnv}
+                    onChange={(e) => setAsaasEnv(e.target.value)}
+                    className="w-full h-10 rounded-lg bg-secondary border border-border text-sm px-3 focus:outline-none focus:ring-1 focus:ring-ring"
+                  >
+                    <option value="sandbox">Homologação (Sandbox)</option>
+                    <option value="production">Produção</option>
+                  </select>
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="asaasApiKey">Asaas API Key</Label>
+                  <Input
+                    id="asaasApiKey"
+                    type="password"
+                    placeholder="Sua API Key do Asaas"
+                    value={asaasApiKey}
+                    onChange={(e) => setAsaasApiKey(e.target.value)}
+                  />
+                </div>
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="asaasWebhookToken">Asaas Webhook Token</Label>
+                <Input
+                  id="asaasWebhookToken"
+                  type="password"
+                  placeholder="Token configurado na fila de webhooks do Asaas"
+                  value={asaasWebhookToken}
+                  onChange={(e) => setAsaasWebhookToken(e.target.value)}
+                />
+              </div>
+            </div>
+
+            {/* Seção Mercado Pago */}
+            <div className="space-y-4">
+              <h3 className="text-sm font-semibold text-foreground">Integração Mercado Pago</h3>
+              <div className="space-y-2">
+                <Label htmlFor="mpToken">Mercado Pago Access Token</Label>
+                <Input
+                  id="mpToken"
+                  type="password"
+                  placeholder="Seu Access Token do Mercado Pago (prod ou sandbox)"
+                  value={mercadoPagoAccessToken}
+                  onChange={(e) => setMercadoPagoAccessToken(e.target.value)}
+                />
+              </div>
+            </div>
+
+            <div className="flex items-center gap-3 pt-2">
+              <Button onClick={handleSaveBilling} disabled={savingBilling}>
+                {savingBilling ? (
+                  <Loader2 className="size-4 animate-spin mr-1.5" />
+                ) : (
+                  <Save className="size-4 mr-1.5" />
+                )}
+                Salvar Configurações de Pagamento
+              </Button>
             </div>
           </CardContent>
         </Card>

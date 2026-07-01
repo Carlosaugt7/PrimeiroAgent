@@ -1,4 +1,6 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
+import { useServerFn } from "@tanstack/react-start";
+import { useEffect, useState, useMemo } from "react";
 import { useAppStore } from "@/lib/app-store";
 import {
   ArrowUpRight,
@@ -12,16 +14,189 @@ import {
   Smartphone,
   TrendingUp,
   Users,
+  Crown,
+  Activity,
+  History,
+  Loader2,
+  ShieldCheck,
+  CreditCard,
+  MessageSquare,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { useAuth } from "@/lib/auth";
-import { useMemo } from "react";
+import { supabase } from "@/integrations/supabase/client";
+import { getMasterDashboardMetrics } from "@/lib/master.functions";
 import { Area, AreaChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 
 export const Route = createFileRoute("/app/")({
-  component: Overview,
+  component: OverviewGate,
 });
+
+function OverviewGate() {
+  const { isMaster, profile, tenant } = useAuth();
+  const impersonating = isMaster && profile && tenant && profile.tenantId !== tenant.id;
+
+  if (isMaster && !impersonating) {
+    return <MasterDashboard />;
+  }
+
+  return <Overview />;
+}
+
+function MasterDashboard() {
+  const getMetrics = useServerFn(getMasterDashboardMetrics);
+  const [loading, setLoading] = useState(true);
+  const [metrics, setMetrics] = useState<{
+    totalTenants: number;
+    totalAgents: number;
+    totalInstances: number;
+    onlineInstances: number;
+    offlineInstances: number;
+    totalMessages: number;
+    activeSubs: number;
+    recentAudits: { action: string; targetLabel: string | null; actorEmail: string | null; createdAt: string }[];
+  } | null>(null);
+
+  useEffect(() => {
+    (async () => {
+      try {
+        const session = (await supabase.auth.getSession()).data.session;
+        if (session) {
+          const res = await getMetrics({ data: { idToken: session.access_token } });
+          setMetrics(res);
+        }
+      } catch (err) {
+        console.error("Erro ao carregar métricas master:", err);
+      } finally {
+        setLoading(false);
+      }
+    })();
+  }, []);
+
+  if (loading) {
+    return (
+      <div className="flex flex-col items-center justify-center h-64 gap-2">
+        <Loader2 className="size-8 animate-spin text-muted-foreground" />
+        <p className="text-sm text-muted-foreground">Carregando painel master...</p>
+      </div>
+    );
+  }
+
+  if (!metrics) {
+    return (
+      <div className="p-6 text-center text-muted-foreground border border-border rounded-2xl bg-card/20">
+        Não foi possível carregar as métricas do painel master.
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-8">
+      <div>
+        <h1 className="font-display text-3xl font-bold flex items-center gap-2">
+          <Crown className="size-7 text-amber-500" /> Painel de Gerenciamento Master
+        </h1>
+        <p className="text-muted-foreground mt-1">
+          Visão global da infraestrutura e dos clientes da plataforma.
+        </p>
+      </div>
+
+      {/* Cards de Métricas */}
+      <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-4">
+        <div className="rounded-2xl bg-gradient-card border border-border p-5 shadow-card">
+          <div className="flex items-center justify-between">
+            <div className="size-10 rounded-xl bg-gradient-primary grid place-items-center shadow-glow">
+              <Users className="size-5 text-primary-foreground" />
+            </div>
+          </div>
+          <p className="mt-4 text-sm text-muted-foreground">Total de Clientes (Workspaces)</p>
+          <p className="font-display text-3xl font-bold mt-1">{metrics.totalTenants}</p>
+        </div>
+
+        <div className="rounded-2xl bg-gradient-card border border-border p-5 shadow-card">
+          <div className="flex items-center justify-between">
+            <div className="size-10 rounded-xl bg-gradient-primary grid place-items-center shadow-glow">
+              <Bot className="size-5 text-primary-foreground" />
+            </div>
+          </div>
+          <p className="mt-4 text-sm text-muted-foreground">Total de Agentes de IA</p>
+          <p className="font-display text-3xl font-bold mt-1">{metrics.totalAgents}</p>
+        </div>
+
+        <div className="rounded-2xl bg-gradient-card border border-border p-5 shadow-card">
+          <div className="flex items-center justify-between">
+            <div className="size-10 rounded-xl bg-gradient-primary grid place-items-center shadow-glow">
+              <Smartphone className="size-5 text-primary-foreground" />
+            </div>
+            <span className="text-xs text-muted-foreground flex items-center gap-1.5 bg-emerald-500/15 text-emerald-400 border border-emerald-500/20 px-2 py-0.5 rounded-full">
+              {metrics.onlineInstances} Online
+            </span>
+          </div>
+          <p className="mt-4 text-sm text-muted-foreground">Instâncias WhatsApp</p>
+          <p className="font-display text-3xl font-bold mt-1">{metrics.totalInstances}</p>
+        </div>
+
+        <div className="rounded-2xl bg-gradient-card border border-border p-5 shadow-card">
+          <div className="flex items-center justify-between">
+            <div className="size-10 rounded-xl bg-gradient-primary grid place-items-center shadow-glow">
+              <CreditCard className="size-5 text-primary-foreground" />
+            </div>
+          </div>
+          <p className="mt-4 text-sm text-muted-foreground">Assinaturas Ativas</p>
+          <p className="font-display text-3xl font-bold mt-1">{metrics.activeSubs}</p>
+        </div>
+      </div>
+
+      <div className="grid gap-6 lg:grid-cols-3">
+        {/* Gráficos / Outros Painéis */}
+        <div className="lg:col-span-2 rounded-2xl border border-border bg-card/20 p-6 space-y-4">
+          <h2 className="font-display font-semibold text-lg flex items-center gap-2">
+            <Activity className="size-4 text-primary" /> Volumetria Geral de Mensagens
+          </h2>
+          <div className="h-64 flex flex-col justify-center items-center text-center p-6 border border-dashed border-border rounded-xl bg-secondary/20">
+            <MessageSquare className="size-8 text-muted-foreground mb-2" />
+            <p className="font-semibold text-sm">Total de Mensagens Processadas</p>
+            <p className="font-display text-4xl font-bold text-gradient mt-2">
+              {metrics.totalMessages.toLocaleString("pt-BR")}
+            </p>
+            <p className="text-xs text-muted-foreground mt-1.5 max-w-sm">
+              Mensagens tratadas e respondidas de forma automatizada pelos agentes em todas as instâncias ativas.
+            </p>
+          </div>
+        </div>
+
+        {/* Auditoria / Logs Recentes */}
+        <div className="rounded-2xl border border-border bg-card/20 p-6 space-y-4">
+          <h2 className="font-display font-semibold text-lg flex items-center gap-2">
+            <History className="size-4 text-primary" /> Atividades Recentes
+          </h2>
+          {metrics.recentAudits.length === 0 ? (
+            <p className="text-sm text-muted-foreground text-center py-8">Nenhuma atividade registrada.</p>
+          ) : (
+            <div className="space-y-3.5 max-h-[300px] overflow-y-auto pr-1">
+              {metrics.recentAudits.map((a, i) => (
+                <div key={i} className="text-xs border-b border-border/40 pb-2.5 last:border-0 last:pb-0">
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="font-medium text-foreground capitalize truncate">
+                      {a.action.replace(/_/g, " ")}
+                    </span>
+                    <span className="text-[10px] text-muted-foreground shrink-0">
+                      {new Date(a.createdAt).toLocaleDateString("pt-BR")} {new Date(a.createdAt).toLocaleTimeString("pt-BR", { hour: '2-digit', minute: '2-digit' })}
+                    </span>
+                  </div>
+                  <p className="text-muted-foreground mt-0.5 truncate">
+                    {a.targetLabel || "Sem alvo específico"} · {a.actorEmail}
+                  </p>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
 
 function StatCard({
   icon: Icon,

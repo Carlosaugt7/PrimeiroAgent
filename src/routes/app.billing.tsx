@@ -44,7 +44,7 @@ import {
 } from "recharts";
 
 export const Route = createFileRoute("/app/billing")({
-  head: () => ({ meta: [{ title: "Planos & faturamento — AgentFlow IA" }] }),
+  head: () => ({ meta: [{ title: "Planos & faturamento — Primeiro Agent" }] }),
   component: BillingPage,
 });
 

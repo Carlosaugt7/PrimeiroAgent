@@ -18,7 +18,7 @@ import { Crown, Mail, Trash2, UserPlus, Users } from "lucide-react";
 import { toast } from "sonner";
 
 export const Route = createFileRoute("/app/team")({
-  head: () => ({ meta: [{ title: "Equipe — AgentFlow IA" }] }),
+  head: () => ({ meta: [{ title: "Equipe — Primeiro Agent" }] }),
   component: Team,
 });
 

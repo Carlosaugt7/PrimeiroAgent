@@ -49,7 +49,7 @@ import * as XLSX from "xlsx";
 import { Button as UIButton } from "@/components/ui/button";
 
 export const Route = createFileRoute("/app/campaigns")({
-  head: () => ({ meta: [{ title: "Campanhas em Massa — AgentFlow IA" }] }),
+  head: () => ({ meta: [{ title: "Campanhas em Massa — Primeiro Agent" }] }),
   component: CampaignsPage,
 });
 

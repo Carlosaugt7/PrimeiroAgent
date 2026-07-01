@@ -220,7 +220,7 @@ export async function googleCalendarCreateEvent(
       },
       body: JSON.stringify({
         summary: title,
-        description: description || `Agendamento criado via AgentFlow IA`,
+        description: description || `Agendamento criado via Primeiro Agent`,
         start: { dateTime: startDateTime, timeZone: "America/Sao_Paulo" },
         end: { dateTime: endDateTime, timeZone: "America/Sao_Paulo" },
       }),

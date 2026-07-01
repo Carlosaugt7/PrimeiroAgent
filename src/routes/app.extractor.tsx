@@ -27,7 +27,7 @@ import { toast } from "sonner";
 import * as XLSX from "xlsx";
 
 export const Route = createFileRoute("/app/extractor")({
-  head: () => ({ meta: [{ title: "Extrator de Contatos — AgentFlow IA" }] }),
+  head: () => ({ meta: [{ title: "Extrator de Contatos — Primeiro Agent" }] }),
   component: ExtractorPage,
 });
 

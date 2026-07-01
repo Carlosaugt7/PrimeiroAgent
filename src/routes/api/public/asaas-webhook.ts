@@ -10,7 +10,18 @@ export const Route = createFileRoute("/api/public/asaas-webhook")({
     handlers: {
       POST: async ({ request }) => {
         try {
-          const expected = process.env.ASAAS_WEBHOOK_TOKEN;
+          let expected = process.env.ASAAS_WEBHOOK_TOKEN;
+          try {
+            const { data: gs } = await supabase
+              .from("global_settings")
+              .select("value")
+              .eq("key", "asaasWebhookToken")
+              .maybeSingle();
+            if (gs?.value) expected = gs.value;
+          } catch (e) {
+            console.error("[asaas-webhook] erro ao obter token no global_settings:", e);
+          }
+
           if (expected) {
             const got = request.headers.get("asaas-access-token");
             if (got !== expected) return new Response("unauthorized", { status: 401 });

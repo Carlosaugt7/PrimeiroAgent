@@ -9,7 +9,7 @@ import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 
 export const Route = createFileRoute("/app/crm")({
-  head: () => ({ meta: [{ title: "Contatos (CRM) — AgentFlow IA" }] }),
+  head: () => ({ meta: [{ title: "Contatos (CRM) — Primeiro Agent" }] }),
   component: CRM,
 });
 

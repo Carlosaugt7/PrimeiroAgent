@@ -11,7 +11,7 @@ import { Plus, Trash2, Save, MessageSquareText } from "lucide-react";
 import { toast } from "sonner";
 
 export const Route = createFileRoute("/app/templates")({
-  head: () => ({ meta: [{ title: "Templates de mensagem — AgentFlow IA" }] }),
+  head: () => ({ meta: [{ title: "Templates de mensagem — Primeiro Agent" }] }),
   component: Templates,
 });
 

@@ -16,7 +16,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { Button } from "@/components/ui/button";
 
 export const Route = createFileRoute("/app")({
-  head: () => ({ meta: [{ title: "Console — AgentFlow IA" }] }),
+  head: () => ({ meta: [{ title: "Console — Primeiro Agent" }] }),
   component: AppLayout,
 });
 

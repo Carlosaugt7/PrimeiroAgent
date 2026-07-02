@@ -10,16 +10,17 @@ async function loadGlobalBillingSettings() {
       .from("global_settings")
       .select("key, value")
       .in("key", ["asaasApiKey", "asaasEnv", "asaasWebhookToken", "mercadoPagoAccessToken"]);
-    
+
     const map = Object.fromEntries(
-      (data ?? []).map((r: { key: string; value: string }) => [r.key, r.value])
+      (data ?? []).map((r: { key: string; value: string }) => [r.key, r.value]),
     );
 
     return {
       asaasApiKey: map.asaasApiKey || process.env.ASAAS_API_KEY || "",
       asaasEnv: map.asaasEnv || process.env.ASAAS_ENV || "sandbox",
       asaasWebhookToken: map.asaasWebhookToken || process.env.ASAAS_WEBHOOK_TOKEN || "",
-      mercadoPagoAccessToken: map.mercadoPagoAccessToken || process.env.MERCADOPAGO_ACCESS_TOKEN || "",
+      mercadoPagoAccessToken:
+        map.mercadoPagoAccessToken || process.env.MERCADOPAGO_ACCESS_TOKEN || "",
     };
   } catch (e) {
     console.error("[billing] Falha ao carregar global_settings:", e);
@@ -35,7 +36,8 @@ async function loadGlobalBillingSettings() {
 // ---------- Asaas ----------
 
 async function asaas<T>(path: string, apiKey: string, env: string, init?: RequestInit): Promise<T> {
-  const base = env === "production" ? "https://api.asaas.com/v3" : "https://api-sandbox.asaas.com/v3";
+  const base =
+    env === "production" ? "https://api.asaas.com/v3" : "https://api-sandbox.asaas.com/v3";
   if (!apiKey) throw new Error("ASAAS_API_KEY ausente ou não configurada");
 
   const r = await fetch(`${base}${path}`, {
@@ -116,17 +118,22 @@ export const createCheckout = createServerFn({ method: "POST" })
       });
       // 2) Cria payment com checkout link
       const due = new Date(Date.now() + 7 * 86400_000).toISOString().slice(0, 10);
-      const pay = await asaas<{ id: string; invoiceUrl: string }>("/payments", keys.asaasApiKey, keys.asaasEnv, {
-        method: "POST",
-        body: JSON.stringify({
-          customer: cust.id,
-          billingType: "UNDEFINED", // deixa o cliente escolher PIX/Boleto/Cartão
-          value: plan.priceBRL,
-          dueDate: due,
-          description: `Primeiro Agent — Plano ${plan.name}`,
-          externalReference: ref,
-        }),
-      });
+      const pay = await asaas<{ id: string; invoiceUrl: string }>(
+        "/payments",
+        keys.asaasApiKey,
+        keys.asaasEnv,
+        {
+          method: "POST",
+          body: JSON.stringify({
+            customer: cust.id,
+            billingType: "UNDEFINED", // deixa o cliente escolher PIX/Boleto/Cartão
+            value: plan.priceBRL,
+            dueDate: due,
+            description: `Primeiro Agent — Plano ${plan.name}`,
+            externalReference: ref,
+          }),
+        },
+      );
       // 3) Registra intent em Supabase
       try {
         await supabase.from("billing_intents").upsert({

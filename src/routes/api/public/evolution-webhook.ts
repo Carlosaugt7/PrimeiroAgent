@@ -1526,6 +1526,32 @@ async function runBridge(
       "\n\n";
   }
 
+  // Buscar planilhas integradas do tenant para informar ao agente
+  let sheetsContext = "";
+  try {
+    const { data: sheetsInteg } = await supabase
+      .from("google_integrations")
+      .select("title, spreadsheetId, sheetName")
+      .eq("tenantId", tenantId)
+      .eq("serviceType", "sheets")
+      .eq("enabled", true);
+
+    if (sheetsInteg && sheetsInteg.length > 0) {
+      sheetsContext =
+        `## PLANILHAS DO GOOGLE SHEETS DISPONÍVEIS\n` +
+        `Você tem acesso às seguintes planilhas para consulta e adição de dados. Sempre indique o "spreadsheetId" correto da planilha que deseja utilizar em suas ações:\n` +
+        sheetsInteg
+          .map(
+            (s) =>
+              `- Título: "${s.title || "Planilha Sem Nome"}" | ID da Planilha (spreadsheetId): "${s.spreadsheetId}" | Aba (sheetName): "${s.sheetName || "Sheet1"}"`,
+          )
+          .join("\n") +
+        "\n\n";
+    }
+  } catch (err) {
+    console.warn("[bridge] Falha ao carregar planilhas para prompt:", err);
+  }
+
   // 4) Chamar LLM com instruções de Agendamento + Google integrations
   const systemPromptComAgendamento =
     `${systemPrompt}\n\n` +
@@ -1533,6 +1559,7 @@ async function runBridge(
     (profileContext ? `${profileContext}` : "") +
     (triageContext ? `${triageContext}` : "") +
     (historyContext ? `${historyContext}` : "") +
+    (sheetsContext ? `${sheetsContext}` : "") +
     `## AGENDAMENTO INTELIGENTE (SUPERPODERES)\n` +
     `Você é integrado em tempo real ao banco de dados da clínica. Sempre que precisar consultar vagas, criar ou cancelar agendamentos, emita a tag correspondente EXATAMENTE no final da sua resposta, e o sistema executará a ação:\n` +
     `1. Consultar horários livres para uma especialidade e data:\n` +
@@ -1549,12 +1576,12 @@ async function runBridge(
     `   [ACTION: google_calendar_book { "title": "Título", "date": "AAAA-MM-DD", "time": "HH:MM", "duration": 60 }]\n` +
     `6. Cancelar evento no Google Calendar:\n` +
     `   [ACTION: google_calendar_cancel { "eventId": "id_do_evento" }]\n\n` +
-    `## GOOGLE SHEETS (PLANILHA DE CLIENTES)\n` +
-    `Você pode consultar e adicionar dados na planilha de clientes:\n` +
-    `7. Buscar cliente na planilha:\n` +
-    `   [ACTION: google_sheets_search { "query": "nome ou telefone" }]\n` +
+    `## GOOGLE SHEETS (PLANILHAS DO GOOGLE)\n` +
+    `Você pode consultar e adicionar dados em planilhas do Google Sheets. Indique o "spreadsheetId" correspondente à planilha desejada listada na seção "PLANILHAS DO GOOGLE SHEETS DISPONÍVEIS" (se houver):\n` +
+    `7. Buscar dados na planilha:\n` +
+    `   [ACTION: google_sheets_search { "spreadsheetId": "ID_DA_PLANILHA_AQUI", "query": "nome ou telefone", "sheetName": "nome_da_aba" }]\n` +
     `8. Adicionar novo registro na planilha:\n` +
-    `   [ACTION: google_sheets_add { "values": ["Nome", "Telefone", "Email", "Observação"] }]\n\n` +
+    `   [ACTION: google_sheets_add { "spreadsheetId": "ID_DA_PLANILHA_AQUI", "values": ["Nome", "Telefone", "Email", "Observação"], "sheetName": "nome_da_aba" }]\n\n` +
     `## CATÁLOGO DE PRODUTOS\n` +
     `Você pode pesquisar produtos do estoque/loja no catálogo para tirar dúvidas e fechar vendas:\n` +
     `9. Buscar produtos no catálogo:\n` +
@@ -1681,7 +1708,12 @@ async function runBridge(
             actionResult = `Falha ao cancelar evento: ${res.error}`;
           }
         } else if (actionType === "google_sheets_search") {
-          const res = await googleSheetsSearch(tenantId, args.query);
+          const res = await googleSheetsSearch(
+            tenantId,
+            args.query,
+            args.spreadsheetId,
+            args.sheetName,
+          );
           if (res.error) {
             actionResult = `Erro ao buscar na planilha: ${res.error}`;
           } else if (res.rows.length === 0) {
@@ -1693,7 +1725,12 @@ async function runBridge(
           }
         } else if (actionType === "google_sheets_add") {
           const values = Array.isArray(args.values) ? args.values : [args.values];
-          const res = await googleSheetsAppendRow(tenantId, values);
+          const res = await googleSheetsAppendRow(
+            tenantId,
+            values,
+            args.spreadsheetId,
+            args.sheetName,
+          );
           if (res.ok) {
             actionResult = `Registro adicionado com sucesso na planilha.`;
           } else {
@@ -1960,8 +1997,9 @@ async function handleMessage(
   // Compare only the phone number part (strip @s.whatsapp.net, @lid, etc.) for robustness
   const remoteNumber = remoteJid.split("@")[0];
   const ownerNumber = ownerJid ? ownerJid.split("@")[0] : undefined;
-  
-  const isDirectLineCommand = fromMe && (text.toLowerCase().startsWith('/admin') || text.toLowerCase().startsWith('/bot'));
+
+  const isDirectLineCommand =
+    fromMe && (text.toLowerCase().startsWith("/admin") || text.toLowerCase().startsWith("/bot"));
   const isSelfChat = fromMe && !!ownerNumber && remoteNumber === ownerNumber;
   const isDirectLine = isSelfChat || isDirectLineCommand;
 

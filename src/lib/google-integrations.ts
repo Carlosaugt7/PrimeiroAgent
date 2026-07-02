@@ -77,9 +77,56 @@ async function getGoogleIntegration(tenantId: string, serviceType: "calendar" | 
     .eq("tenantId", tenantId)
     .eq("serviceType", serviceType)
     .eq("enabled", true)
-    .single();
+    .limit(1)
+    .maybeSingle();
 
   if (error || !data) return null;
+  return data as {
+    id: string;
+    tenantId: string;
+    serviceType: string;
+    credentialsJson: string | null;
+    calendarId: string | null;
+    spreadsheetId: string | null;
+    sheetName: string | null;
+    enabled: boolean;
+  };
+}
+
+async function getGoogleIntegrationForSheets(tenantId: string, spreadsheetId?: string) {
+  let query = supabase
+    .from("google_integrations")
+    .select("*")
+    .eq("tenantId", tenantId)
+    .eq("serviceType", "sheets")
+    .eq("enabled", true);
+
+  if (spreadsheetId) {
+    query = query.eq("spreadsheetId", spreadsheetId);
+  }
+
+  const { data, error } = await query.limit(1).maybeSingle();
+  if (error || !data) {
+    // Fallback para a primeira planilha se nenhuma específica for encontrada
+    const { data: fallbackData } = await supabase
+      .from("google_integrations")
+      .select("*")
+      .eq("tenantId", tenantId)
+      .eq("serviceType", "sheets")
+      .eq("enabled", true)
+      .limit(1)
+      .maybeSingle();
+    return fallbackData as {
+      id: string;
+      tenantId: string;
+      serviceType: string;
+      credentialsJson: string | null;
+      calendarId: string | null;
+      spreadsheetId: string | null;
+      sheetName: string | null;
+      enabled: boolean;
+    } | null;
+  }
   return data as {
     id: string;
     tenantId: string;
@@ -277,9 +324,11 @@ export async function googleCalendarCancelEvent(
 export async function googleSheetsSearch(
   tenantId: string,
   query: string,
+  spreadsheetId?: string,
+  sheetName?: string,
 ): Promise<{ rows: string[][]; headers: string[]; error?: string }> {
   try {
-    const integration = await getGoogleIntegration(tenantId, "sheets");
+    const integration = await getGoogleIntegrationForSheets(tenantId, spreadsheetId);
     if (!integration?.credentialsJson || !integration?.spreadsheetId) {
       return { rows: [], headers: [], error: "Google Sheets não configurado" };
     }
@@ -288,10 +337,10 @@ export async function googleSheetsSearch(
     if (!creds) return { rows: [], headers: [], error: "Credenciais inválidas" };
 
     const token = await getGoogleAccessToken(creds);
-    const sheetName = encodeURIComponent(integration.sheetName || "Sheet1");
+    const selectedSheetName = encodeURIComponent(sheetName || integration.sheetName || "Sheet1");
 
     const r = await fetch(
-      `https://sheets.googleapis.com/v4/spreadsheets/${integration.spreadsheetId}/values/${sheetName}`,
+      `https://sheets.googleapis.com/v4/spreadsheets/${integration.spreadsheetId}/values/${selectedSheetName}`,
       { headers: { Authorization: `Bearer ${token}` } },
     );
 
@@ -327,9 +376,11 @@ export async function googleSheetsSearch(
 export async function googleSheetsAppendRow(
   tenantId: string,
   values: string[],
+  spreadsheetId?: string,
+  sheetName?: string,
 ): Promise<{ ok: boolean; error?: string }> {
   try {
-    const integration = await getGoogleIntegration(tenantId, "sheets");
+    const integration = await getGoogleIntegrationForSheets(tenantId, spreadsheetId);
     if (!integration?.credentialsJson || !integration?.spreadsheetId) {
       return { ok: false, error: "Google Sheets não configurado" };
     }
@@ -338,10 +389,10 @@ export async function googleSheetsAppendRow(
     if (!creds) return { ok: false, error: "Credenciais inválidas" };
 
     const token = await getGoogleAccessToken(creds);
-    const sheetName = encodeURIComponent(integration.sheetName || "Sheet1");
+    const selectedSheetName = encodeURIComponent(sheetName || integration.sheetName || "Sheet1");
 
     const r = await fetch(
-      `https://sheets.googleapis.com/v4/spreadsheets/${integration.spreadsheetId}/values/${sheetName}:append?valueInputOption=USER_ENTERED&insertDataOption=INSERT_ROWS`,
+      `https://sheets.googleapis.com/v4/spreadsheets/${integration.spreadsheetId}/values/${selectedSheetName}:append?valueInputOption=USER_ENTERED&insertDataOption=INSERT_ROWS`,
       {
         method: "POST",
         headers: {
@@ -368,9 +419,11 @@ export async function googleSheetsAppendRow(
 export const saveGoogleIntegration = createServerFn({ method: "POST" })
   .inputValidator(
     (d: {
+      id?: string;
       tenantId: string;
       serviceType: "calendar" | "sheets";
       credentialsJson: string;
+      title?: string;
       calendarId?: string;
       spreadsheetId?: string;
       sheetName?: string;
@@ -394,21 +447,71 @@ export const saveGoogleIntegration = createServerFn({ method: "POST" })
       }
     }
 
-    const { error } = await supabase.from("google_integrations").upsert(
-      {
-        tenantId: data.tenantId,
-        serviceType: data.serviceType,
-        credentialsJson: data.credentialsJson || null,
-        calendarId: data.calendarId || "primary",
-        spreadsheetId: data.spreadsheetId || null,
-        sheetName: data.sheetName || "Sheet1",
-        enabled: true,
-        updatedAt: new Date().toISOString(),
-      },
-      { onConflict: "tenantId,serviceType" },
-    );
+    if (data.id) {
+      // Atualizar integração existente pelo id
+      const { error } = await supabase
+        .from("google_integrations")
+        .update({
+          credentialsJson: data.credentialsJson || null,
+          title: data.title || null,
+          calendarId: data.calendarId || "primary",
+          spreadsheetId: data.spreadsheetId || null,
+          sheetName: data.sheetName || "Sheet1",
+          enabled: true,
+          updatedAt: new Date().toISOString(),
+        })
+        .eq("id", data.id);
 
-    if (error) throw new Error(error.message);
+      if (error) throw new Error(error.message);
+    } else {
+      if (data.serviceType === "calendar") {
+        // Obter se já existe calendar para manter apenas 1 por tenant
+        const { data: existing } = await supabase
+          .from("google_integrations")
+          .select("id")
+          .eq("tenantId", data.tenantId)
+          .eq("serviceType", "calendar")
+          .limit(1)
+          .maybeSingle();
+
+        if (existing?.id) {
+          const { error } = await supabase
+            .from("google_integrations")
+            .update({
+              credentialsJson: data.credentialsJson || null,
+              calendarId: data.calendarId || "primary",
+              enabled: true,
+              updatedAt: new Date().toISOString(),
+            })
+            .eq("id", existing.id);
+          if (error) throw new Error(error.message);
+        } else {
+          const { error } = await supabase.from("google_integrations").insert({
+            tenantId: data.tenantId,
+            serviceType: "calendar",
+            credentialsJson: data.credentialsJson || null,
+            calendarId: data.calendarId || "primary",
+            enabled: true,
+            updatedAt: new Date().toISOString(),
+          });
+          if (error) throw new Error(error.message);
+        }
+      } else {
+        // Múltiplas planilhas são inseridas livremente
+        const { error } = await supabase.from("google_integrations").insert({
+          tenantId: data.tenantId,
+          serviceType: "sheets",
+          credentialsJson: data.credentialsJson || null,
+          title: data.title || "Planilha Sem Nome",
+          spreadsheetId: data.spreadsheetId || null,
+          sheetName: data.sheetName || "Sheet1",
+          enabled: true,
+          updatedAt: new Date().toISOString(),
+        });
+        if (error) throw new Error(error.message);
+      }
+    }
+
     return { ok: true };
   });
 
@@ -424,6 +527,18 @@ export const getGoogleIntegrations = createServerFn({ method: "POST" })
       .eq("tenantId", data.tenantId);
 
     return { integrations: integrations || [] };
+  });
+
+export const deleteGoogleIntegration = createServerFn({ method: "POST" })
+  .inputValidator((d: { id: string }) => {
+    if (!d?.id) throw new Error("id ausente");
+    return d;
+  })
+  .handler(async ({ data }) => {
+    const { error } = await supabase.from("google_integrations").delete().eq("id", data.id);
+
+    if (error) throw new Error(error.message);
+    return { ok: true };
   });
 
 export const testGoogleConnection = createServerFn({ method: "POST" })

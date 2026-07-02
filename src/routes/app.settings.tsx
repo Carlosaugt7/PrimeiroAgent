@@ -93,11 +93,21 @@ function Settings() {
           <form onSubmit={handleSaveProfile} className="space-y-4">
             <div className="space-y-2">
               <Label htmlFor="s-email">E-mail (Login)</Label>
-              <Input id="s-email" value={profile?.email ?? "—"} disabled className="bg-secondary/40" />
+              <Input
+                id="s-email"
+                value={profile?.email ?? "—"}
+                disabled
+                className="bg-secondary/40"
+              />
             </div>
             <div className="space-y-2">
               <Label htmlFor="s-role">Papel / Acesso</Label>
-              <Input id="s-role" value={profile?.role ?? "—"} disabled className="bg-secondary/40 capitalize" />
+              <Input
+                id="s-role"
+                value={profile?.role ?? "—"}
+                disabled
+                className="bg-secondary/40 capitalize"
+              />
             </div>
             <div className="space-y-2">
               <Label htmlFor="s-name">Nome de Exibição</Label>
@@ -141,7 +151,12 @@ function Settings() {
                 placeholder="Repita a nova senha"
               />
             </div>
-            <Button type="submit" variant="outline" disabled={savingPassword} className="w-full border-primary/30 text-foreground hover:bg-primary/10">
+            <Button
+              type="submit"
+              variant="outline"
+              disabled={savingPassword}
+              className="w-full border-primary/30 text-foreground hover:bg-primary/10"
+            >
               {savingPassword ? (
                 <Loader2 className="size-4 animate-spin mr-1.5" />
               ) : (

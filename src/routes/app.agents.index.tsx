@@ -121,7 +121,9 @@ const empty = {
 
 function AgentsList() {
   const { agents, providers, createAgent, updateAgent, deleteAgent, instances } = useAppStore();
-  const [open, setOpen] = useState(() => localStorage.getItem("primeiro_agent_draft_open") === "true");
+  const [open, setOpen] = useState(
+    () => localStorage.getItem("primeiro_agent_draft_open") === "true",
+  );
   const [q, setQ] = useState("");
   const [step, setStep] = useState<"basic" | "persona" | "prompt" | "model">(() => {
     const s = localStorage.getItem("primeiro_agent_draft_step");

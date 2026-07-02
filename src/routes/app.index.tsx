@@ -55,7 +55,12 @@ function MasterDashboard() {
     offlineInstances: number;
     totalMessages: number;
     activeSubs: number;
-    recentAudits: { action: string; targetLabel: string | null; actorEmail: string | null; createdAt: string }[];
+    recentAudits: {
+      action: string;
+      targetLabel: string | null;
+      actorEmail: string | null;
+      createdAt: string;
+    }[];
   } | null>(null);
 
   useEffect(() => {
@@ -156,12 +161,13 @@ function MasterDashboard() {
           </h2>
           <div className="h-64 flex flex-col justify-center items-center text-center p-6 border border-dashed border-border rounded-xl bg-secondary/20">
             <MessageSquare className="size-8 text-muted-foreground mb-2" />
-            <p className="font-semibold text-sm">Total de Mensagens Processadas</p>
+            <p className="font-semibold text-sm">Total de Mensagens Processadas por Instâncias</p>
             <p className="font-display text-4xl font-bold text-gradient mt-2">
               {metrics.totalMessages.toLocaleString("pt-BR")}
             </p>
             <p className="text-xs text-muted-foreground mt-1.5 max-w-sm">
-              Mensagens tratadas e respondidas de forma automatizada pelos agentes em todas as instâncias ativas.
+              Mensagens tratadas e respondidas de forma automatizada pelos agentes em todas as
+              instâncias ativas.
             </p>
           </div>
         </div>
@@ -172,17 +178,26 @@ function MasterDashboard() {
             <History className="size-4 text-primary" /> Atividades Recentes
           </h2>
           {metrics.recentAudits.length === 0 ? (
-            <p className="text-sm text-muted-foreground text-center py-8">Nenhuma atividade registrada.</p>
+            <p className="text-sm text-muted-foreground text-center py-8">
+              Nenhuma atividade registrada.
+            </p>
           ) : (
             <div className="space-y-3.5 max-h-[300px] overflow-y-auto pr-1">
               {metrics.recentAudits.map((a, i) => (
-                <div key={i} className="text-xs border-b border-border/40 pb-2.5 last:border-0 last:pb-0">
+                <div
+                  key={i}
+                  className="text-xs border-b border-border/40 pb-2.5 last:border-0 last:pb-0"
+                >
                   <div className="flex items-center justify-between gap-2">
                     <span className="font-medium text-foreground capitalize truncate">
                       {a.action.replace(/_/g, " ")}
                     </span>
                     <span className="text-[10px] text-muted-foreground shrink-0">
-                      {new Date(a.createdAt).toLocaleDateString("pt-BR")} {new Date(a.createdAt).toLocaleTimeString("pt-BR", { hour: '2-digit', minute: '2-digit' })}
+                      {new Date(a.createdAt).toLocaleDateString("pt-BR")}{" "}
+                      {new Date(a.createdAt).toLocaleTimeString("pt-BR", {
+                        hour: "2-digit",
+                        minute: "2-digit",
+                      })}
                     </span>
                   </div>
                   <p className="text-muted-foreground mt-0.5 truncate">

@@ -12,11 +12,17 @@ import {
   saveGoogleIntegration,
   getGoogleIntegrations,
   testGoogleConnection,
+  deleteGoogleIntegration,
 } from "@/lib/google-integrations";
 import {
-  getGlobalBillingSettings,
-  updateGlobalBillingSettings,
-} from "@/lib/master.functions";
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { getGlobalBillingSettings, updateGlobalBillingSettings } from "@/lib/master.functions";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -25,6 +31,20 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Badge } from "@/components/ui/badge";
 import { Loader2, Lock, Save, Wifi, WifiOff, Crown, Mic, Calendar, Table } from "lucide-react";
 import { toast } from "sonner";
+
+interface GoogleIntegration {
+  id: string;
+  tenantId: string;
+  serviceType: string;
+  credentialsJson: string | null;
+  calendarId: string | null;
+  spreadsheetId: string | null;
+  sheetName: string | null;
+  title: string | null;
+  enabled: boolean;
+  createdAt?: string;
+  updatedAt?: string;
+}
 
 export const Route = createFileRoute("/app/integrations")({ component: Page });
 
@@ -36,6 +56,7 @@ function Page() {
   const saveGoogle = useServerFn(saveGoogleIntegration);
   const getGoogle = useServerFn(getGoogleIntegrations);
   const testGoogle = useServerFn(testGoogleConnection);
+  const deleteGoogle = useServerFn(deleteGoogleIntegration);
   const getBillingSettings = useServerFn(getGlobalBillingSettings);
   const updateBillingSettings = useServerFn(updateGlobalBillingSettings);
 
@@ -64,15 +85,17 @@ function Page() {
   const [testingCal, setTestingCal] = useState(false);
   const [calStatus, setCalStatus] = useState<"unknown" | "connected" | "disconnected">("unknown");
 
-  // Google Sheets
-  const [sheetsCredentials, setSheetsCredentials] = useState("");
-  const [spreadsheetId, setSpreadsheetId] = useState("");
-  const [sheetName, setSheetName] = useState("Sheet1");
+  // Google Sheets (Múltiplas planilhas)
+  const [sheetsList, setSheetsList] = useState<GoogleIntegration[]>([]);
+  const [dialogOpen, setDialogOpen] = useState(false);
+  const [editingSheetId, setEditingSheetId] = useState<string | null>(null);
+  const [sheetTitle, setSheetTitle] = useState("");
+  const [sheetCreds, setSheetCreds] = useState("");
+  const [sheetSpreadId, setSheetSpreadId] = useState("");
+  const [sheetTabName, setSheetTabName] = useState("Sheet1");
   const [savingSheets, setSavingSheets] = useState(false);
   const [testingSheets, setTestingSheets] = useState(false);
-  const [sheetsStatus, setSheetsStatus] = useState<"unknown" | "connected" | "disconnected">(
-    "unknown",
-  );
+  const [testingSheetSingleId, setTestingSheetSingleId] = useState<string | null>(null);
 
   useEffect(() => {
     (async () => {
@@ -89,7 +112,9 @@ function Page() {
           try {
             const session = (await supabase.auth.getSession()).data.session;
             if (session) {
-              const bSettings = await getBillingSettings({ data: { idToken: session.access_token } });
+              const bSettings = await getBillingSettings({
+                data: { idToken: session.access_token },
+              });
               setAsaasApiKey(bSettings.asaasApiKey);
               setAsaasEnv(bSettings.asaasEnv);
               setAsaasWebhookToken(bSettings.asaasWebhookToken);
@@ -114,6 +139,7 @@ function Page() {
           // Carrega integrações Google
           try {
             const { integrations } = await getGoogle({ data: { tenantId: tenant.id } });
+            const sheets = [];
             for (const integ of integrations) {
               if (integ.serviceType === "calendar") {
                 setCalCredentials(integ.credentialsJson || "");
@@ -121,12 +147,10 @@ function Page() {
                 if (integ.credentialsJson) setCalStatus("connected");
               }
               if (integ.serviceType === "sheets") {
-                setSheetsCredentials(integ.credentialsJson || "");
-                setSpreadsheetId(integ.spreadsheetId || "");
-                setSheetName(integ.sheetName || "Sheet1");
-                if (integ.credentialsJson && integ.spreadsheetId) setSheetsStatus("connected");
+                sheets.push(integ);
               }
             }
+            setSheetsList(sheets);
           } catch {
             /* ignore */
           }
@@ -247,54 +271,121 @@ function Page() {
   };
 
   // Google Sheets handlers
-  const handleTestSheets = async () => {
-    if (!sheetsCredentials.trim()) {
+  const refreshIntegrations = async () => {
+    if (!tenant?.id) return;
+    try {
+      const { integrations } = await getGoogle({ data: { tenantId: tenant.id } });
+      const sheets = [];
+      for (const integ of integrations) {
+        if (integ.serviceType === "calendar") {
+          setCalCredentials(integ.credentialsJson || "");
+          setCalendarId(integ.calendarId || "primary");
+          if (integ.credentialsJson) setCalStatus("connected");
+        }
+        if (integ.serviceType === "sheets") {
+          sheets.push(integ);
+        }
+      }
+      setSheetsList(sheets);
+    } catch {
+      /* ignore */
+    }
+  };
+
+  const handleOpenAddSheet = () => {
+    setEditingSheetId(null);
+    setSheetTitle("");
+    setSheetCreds(calCredentials || "");
+    setSheetSpreadId("");
+    setSheetTabName("Sheet1");
+    setDialogOpen(true);
+  };
+
+  const handleOpenEditSheet = (sheet: GoogleIntegration) => {
+    setEditingSheetId(sheet.id);
+    setSheetTitle(sheet.title || "");
+    setSheetCreds(sheet.credentialsJson || "");
+    setSheetSpreadId(sheet.spreadsheetId || "");
+    setSheetTabName(sheet.sheetName || "Sheet1");
+    setDialogOpen(true);
+  };
+
+  const handleTestSheetSingle = async (creds: string, spreadId: string, id: string | null) => {
+    if (!creds.trim()) {
       toast.error("Cole o JSON da Service Account.");
       return;
     }
-    if (!spreadsheetId.trim()) {
+    if (!spreadId.trim()) {
       toast.error("Informe o ID da planilha.");
       return;
     }
-    setTestingSheets(true);
+    if (id) {
+      setTestingSheetSingleId(id);
+    } else {
+      setTestingSheets(true);
+    }
     try {
       const res = await testGoogle({
-        data: { credentialsJson: sheetsCredentials, serviceType: "sheets", spreadsheetId },
+        data: { credentialsJson: creds, serviceType: "sheets", spreadsheetId: spreadId },
       });
       if (res.ok) {
-        setSheetsStatus("connected");
         toast.success(`Conexão OK! ${res.info}`);
       } else {
-        setSheetsStatus("disconnected");
         toast.error(res.error || "Falha na conexão");
       }
     } catch (e: unknown) {
-      setSheetsStatus("disconnected");
       toast.error(e instanceof Error ? e.message : "Erro");
     } finally {
+      setTestingSheetSingleId(null);
       setTestingSheets(false);
     }
   };
 
-  const handleSaveSheets = async () => {
+  const handleSaveSheetSingle = async () => {
     if (!tenant?.id) return;
+    if (!sheetTitle.trim()) {
+      toast.error("Informe o apelido/título da planilha.");
+      return;
+    }
+    if (!sheetCreds.trim()) {
+      toast.error("Cole o JSON da Service Account.");
+      return;
+    }
+    if (!sheetSpreadId.trim()) {
+      toast.error("Informe o ID da planilha.");
+      return;
+    }
     setSavingSheets(true);
     try {
       await saveGoogle({
         data: {
+          id: editingSheetId || undefined,
           tenantId: tenant.id,
           serviceType: "sheets",
-          credentialsJson: sheetsCredentials,
-          spreadsheetId,
-          sheetName,
+          credentialsJson: sheetCreds,
+          title: sheetTitle,
+          spreadsheetId: sheetSpreadId,
+          sheetName: sheetTabName,
         },
       });
-      toast.success("Google Sheets configurado com sucesso!");
-      setSheetsStatus("connected");
+      toast.success("Planilha configurada com sucesso!");
+      setDialogOpen(false);
+      await refreshIntegrations();
     } catch (e: unknown) {
       toast.error(e instanceof Error ? e.message : "Erro ao salvar");
     } finally {
       setSavingSheets(false);
+    }
+  };
+
+  const handleDeleteSheet = async (id: string) => {
+    if (!confirm("Tem certeza que deseja excluir esta planilha?")) return;
+    try {
+      await deleteGoogle({ data: { id } });
+      toast.success("Planilha excluída com sucesso.");
+      await refreshIntegrations();
+    } catch (e: unknown) {
+      toast.error(e instanceof Error ? e.message : "Erro ao excluir planilha");
     }
   };
 
@@ -447,7 +538,8 @@ function Page() {
               Configuração Global de Pagamentos (Asaas / Mercado Pago)
             </CardTitle>
             <CardDescription>
-              Insira as credenciais de pagamento que serão usadas por todas as assinaturas automáticas da plataforma.
+              Insira as credenciais de pagamento que serão usadas por todas as assinaturas
+              automáticas da plataforma.
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-6">
@@ -651,77 +743,165 @@ function Page() {
                 <Table className="size-5 text-green-400" />
               </div>
               <div>
-                <CardTitle>Google Sheets (Planilha de Clientes)</CardTitle>
+                <CardTitle>Google Sheets (Planilhas do Google)</CardTitle>
                 <CardDescription>
-                  Permite que os agentes consultem e adicionem dados na planilha de clientes via
+                  Permite que os agentes consultem e adicionem dados em planilhas configuradas via
                   WhatsApp.
                 </CardDescription>
               </div>
             </div>
-            {sheetsStatus === "connected" && (
-              <Badge className="bg-emerald-500/15 text-emerald-400 border-emerald-500/30 gap-1.5 py-1">
-                <Wifi className="size-3.5" /> Conectado
-              </Badge>
-            )}
-            {sheetsStatus === "disconnected" && (
-              <Badge className="bg-destructive/15 text-destructive border-destructive/30 gap-1.5 py-1">
-                <WifiOff className="size-3.5" /> Falha
-              </Badge>
-            )}
           </div>
         </CardHeader>
         <CardContent className="space-y-4">
-          <div className="space-y-2">
-            <Label>Service Account JSON</Label>
-            <Textarea
-              rows={4}
-              placeholder="Cole aqui o conteúdo do arquivo JSON da Service Account do Google Cloud..."
-              value={sheetsCredentials}
-              onChange={(e) => setSheetsCredentials(e.target.value)}
-              className="font-mono text-xs"
-            />
-            <p className="text-xs text-muted-foreground">
-              Pode ser a mesma Service Account usada no Calendar. Compartilhe a planilha com o email
-              da Service Account.
+          <div className="flex items-center justify-between">
+            <p className="text-sm text-muted-foreground">
+              Configure as planilhas que o agente pode ler ou editar.
             </p>
-          </div>
-          <div className="grid grid-cols-2 gap-3">
-            <div className="space-y-2">
-              <Label>Spreadsheet ID</Label>
-              <Input
-                placeholder="ID da planilha (da URL)"
-                value={spreadsheetId}
-                onChange={(e) => setSpreadsheetId(e.target.value)}
-              />
-              <p className="text-xs text-muted-foreground">
-                O ID fica na URL: docs.google.com/spreadsheets/d/<strong>ID_AQUI</strong>/edit
-              </p>
-            </div>
-            <div className="space-y-2">
-              <Label>Nome da Aba</Label>
-              <Input
-                placeholder="Sheet1"
-                value={sheetName}
-                onChange={(e) => setSheetName(e.target.value)}
-              />
-              <p className="text-xs text-muted-foreground">
-                Nome da aba/sheet que contém os dados dos clientes.
-              </p>
-            </div>
-          </div>
-          <div className="flex items-center gap-3 pt-2">
-            <Button onClick={handleSaveSheets} disabled={savingSheets}>
-              {savingSheets ? (
-                <Loader2 className="size-4 animate-spin mr-1.5" />
-              ) : (
-                <Save className="size-4 mr-1.5" />
-              )}
-              Salvar Sheets
+            <Button size="sm" onClick={handleOpenAddSheet}>
+              Adicionar Planilha
             </Button>
+          </div>
+
+          {sheetsList.length === 0 ? (
+            <div className="text-center p-8 border border-dashed border-border rounded-xl bg-secondary/10">
+              <Table className="size-8 text-muted-foreground mx-auto mb-2 opacity-50" />
+              <p className="text-sm font-medium text-foreground">Nenhuma planilha configurada</p>
+              <p className="text-xs text-muted-foreground mt-1">
+                Adicione sua primeira planilha para o agente consultar ou editar dados.
+              </p>
+            </div>
+          ) : (
+            <div className="space-y-3">
+              {sheetsList.map((sheet) => (
+                <div
+                  key={sheet.id}
+                  className="flex flex-col sm:flex-row sm:items-center justify-between p-4 rounded-xl border border-border bg-card/25 hover:bg-card/45 transition-colors gap-3"
+                >
+                  <div className="space-y-1 flex-1 min-w-0">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className="font-semibold text-sm truncate">
+                        {sheet.title || "Planilha Sem Nome"}
+                      </span>
+                      <span className="text-[10px] bg-secondary px-2 py-0.5 rounded text-muted-foreground font-mono">
+                        {sheet.sheetName || "Sheet1"}
+                      </span>
+                    </div>
+                    <p className="text-xs text-muted-foreground font-mono truncate">
+                      ID: {sheet.spreadsheetId}
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-2 shrink-0">
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      disabled={testingSheetSingleId === sheet.id}
+                      onClick={() =>
+                        handleTestSheetSingle(
+                          sheet.credentialsJson || "",
+                          sheet.spreadsheetId || "",
+                          sheet.id,
+                        )
+                      }
+                    >
+                      {testingSheetSingleId === sheet.id ? (
+                        <Loader2 className="size-3 animate-spin mr-1" />
+                      ) : null}
+                      Testar
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="secondary"
+                      onClick={() => handleOpenEditSheet(sheet)}
+                    >
+                      Editar
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="destructive"
+                      onClick={() => handleDeleteSheet(sheet.id)}
+                    >
+                      Excluir
+                    </Button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* DIALOG ADICIONAR / EDITAR PLANILHA */}
+      <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
+        <DialogContent className="sm:max-w-lg bg-card border-border text-foreground">
+          <DialogHeader>
+            <DialogTitle>
+              {editingSheetId
+                ? "Editar Planilha Google Sheets"
+                : "Adicionar Planilha Google Sheets"}
+            </DialogTitle>
+            <DialogDescription>
+              Insira as informações de acesso da planilha para que o agente possa interagir com ela.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <div className="space-y-2">
+              <Label htmlFor="sheet-title">Apelido / Título da Planilha</Label>
+              <Input
+                id="sheet-title"
+                placeholder="Ex: Planilha de Leads, Agendamentos"
+                value={sheetTitle}
+                onChange={(e) => setSheetTitle(e.target.value)}
+              />
+              <p className="text-xs text-muted-foreground">
+                Um nome amigável para identificar esta planilha no sistema e no prompt do agente.
+              </p>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="sheet-creds">Service Account JSON</Label>
+              <Textarea
+                id="sheet-creds"
+                rows={4}
+                placeholder="Cole aqui o conteúdo do arquivo JSON da Service Account..."
+                value={sheetCreds}
+                onChange={(e) => setSheetCreds(e.target.value)}
+                className="font-mono text-xs"
+              />
+              <p className="text-xs text-muted-foreground">
+                Compartilhe a planilha com o e-mail da Service Account (client_email).
+              </p>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-2">
+                <Label htmlFor="sheet-spread-id">Spreadsheet ID</Label>
+                <Input
+                  id="sheet-spread-id"
+                  placeholder="ID da planilha (da URL)"
+                  value={sheetSpreadId}
+                  onChange={(e) => setSheetSpreadId(e.target.value)}
+                />
+                <p className="text-[10px] text-muted-foreground leading-tight">
+                  Disponível na URL: docs.google.com/spreadsheets/d/<strong>ID_AQUI</strong>/edit
+                </p>
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="sheet-tab-name">Nome da Aba</Label>
+                <Input
+                  id="sheet-tab-name"
+                  placeholder="Sheet1"
+                  value={sheetTabName}
+                  onChange={(e) => setSheetTabName(e.target.value)}
+                />
+                <p className="text-[10px] text-muted-foreground leading-tight">
+                  A aba que contém os dados (padrão: Sheet1).
+                </p>
+              </div>
+            </div>
+          </div>
+          <DialogFooter className="flex items-center gap-2">
             <Button
               variant="outline"
-              onClick={handleTestSheets}
-              disabled={testingSheets || !sheetsCredentials || !spreadsheetId}
+              onClick={() => handleTestSheetSingle(sheetCreds, sheetSpreadId, null)}
+              disabled={testingSheets || !sheetCreds || !sheetSpreadId}
             >
               {testingSheets ? (
                 <Loader2 className="size-4 animate-spin mr-1.5" />
@@ -730,9 +910,17 @@ function Page() {
               )}
               Testar Conexão
             </Button>
-          </div>
-        </CardContent>
-      </Card>
+            <Button onClick={handleSaveSheetSingle} disabled={savingSheets}>
+              {savingSheets ? (
+                <Loader2 className="size-4 animate-spin mr-1.5" />
+              ) : (
+                <Save className="size-4 mr-1.5" />
+              )}
+              Salvar Planilha
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

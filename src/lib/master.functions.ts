@@ -34,7 +34,11 @@ async function lookupUser(accessToken: string) {
 async function requireMaster(accessToken: string) {
   const u = await lookupUser(accessToken);
   const allowed = MASTER_ADMINS.map((e) => e.toLowerCase()).includes(u.email);
-  const { data: doc } = await supabaseAdmin.from("master_admins").select("id").eq("id", u.uid).maybeSingle();
+  const { data: doc } = await supabaseAdmin
+    .from("master_admins")
+    .select("id")
+    .eq("id", u.uid)
+    .maybeSingle();
   if (!allowed && !doc) throw new Error("Acesso negado: não é Master Admin");
   return u;
 }
@@ -104,9 +108,7 @@ export const getMasterDashboardMetrics = createServerFn({ method: "POST" })
       .select("*", { count: "exact", head: true });
 
     // 3. WhatsApp Instances status counts
-    const { data: instances } = await supabaseAdmin
-      .from("instances")
-      .select("status");
+    const { data: instances } = await supabaseAdmin.from("instances").select("status");
 
     const totalInstances = instances?.length ?? 0;
     const onlineInstances = instances?.filter((i) => i.status === "online").length ?? 0;
@@ -151,9 +153,9 @@ export const getGlobalBillingSettings = createServerFn({ method: "POST" })
       .from("global_settings")
       .select("key, value")
       .in("key", ["asaasApiKey", "asaasEnv", "asaasWebhookToken", "mercadoPagoAccessToken"]);
-    
+
     const map = Object.fromEntries(
-      (rows ?? []).map((r: { key: string; value: string }) => [r.key, r.value])
+      (rows ?? []).map((r: { key: string; value: string }) => [r.key, r.value]),
     );
 
     return {
@@ -165,16 +167,18 @@ export const getGlobalBillingSettings = createServerFn({ method: "POST" })
   });
 
 export const updateGlobalBillingSettings = createServerFn({ method: "POST" })
-  .inputValidator((d: {
-    idToken: string;
-    asaasApiKey: string;
-    asaasEnv: string;
-    asaasWebhookToken: string;
-    mercadoPagoAccessToken: string;
-  }) => d)
+  .inputValidator(
+    (d: {
+      idToken: string;
+      asaasApiKey: string;
+      asaasEnv: string;
+      asaasWebhookToken: string;
+      mercadoPagoAccessToken: string;
+    }) => d,
+  )
   .handler(async ({ data }) => {
     await requireMaster(data.idToken);
-    
+
     const settings = [
       { key: "asaasApiKey", value: data.asaasApiKey.trim() },
       { key: "asaasEnv", value: data.asaasEnv.trim() },
@@ -191,4 +195,3 @@ export const updateGlobalBillingSettings = createServerFn({ method: "POST" })
 
     return { ok: true };
   });
-

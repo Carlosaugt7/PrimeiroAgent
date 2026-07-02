@@ -1,6 +1,7 @@
 import { createServerFn } from "@tanstack/react-start";
 import { MASTER_ADMINS } from "@/lib/master";
 import { supabase } from "@/integrations/supabase/client";
+import { supabaseAdmin } from "@/integrations/supabase/client.server";
 import { createClient } from "@supabase/supabase-js";
 
 function getAuthSupabase(accessToken: string) {
@@ -33,7 +34,7 @@ async function lookupUser(accessToken: string) {
 async function requireMaster(accessToken: string) {
   const u = await lookupUser(accessToken);
   const allowed = MASTER_ADMINS.map((e) => e.toLowerCase()).includes(u.email);
-  const { data: doc } = await supabase.from("master_admins").select("id").eq("id", u.uid).single();
+  const { data: doc } = await supabaseAdmin.from("master_admins").select("id").eq("id", u.uid).maybeSingle();
   if (!allowed && !doc) throw new Error("Acesso negado: não é Master Admin");
   return u;
 }
@@ -93,17 +94,17 @@ export const getMasterDashboardMetrics = createServerFn({ method: "POST" })
     await requireMaster(data.idToken);
 
     // 1. Total Tenants
-    const { count: totalTenants } = await supabase
+    const { count: totalTenants } = await supabaseAdmin
       .from("tenants")
       .select("*", { count: "exact", head: true });
 
     // 2. Total Agents
-    const { count: totalAgents } = await supabase
+    const { count: totalAgents } = await supabaseAdmin
       .from("agents")
       .select("*", { count: "exact", head: true });
 
     // 3. WhatsApp Instances status counts
-    const { data: instances } = await supabase
+    const { data: instances } = await supabaseAdmin
       .from("instances")
       .select("status");
 
@@ -112,19 +113,19 @@ export const getMasterDashboardMetrics = createServerFn({ method: "POST" })
     const offlineInstances = totalInstances - onlineInstances;
 
     // 4. Message Volume / Logs
-    const { count: totalMessages } = await supabase
+    const { count: totalMessages } = await supabaseAdmin
       .from("ai_logs")
       .select("*", { count: "exact", head: true });
 
     // 5. Active Subscriptions Count (non-trial plan tenants)
-    const { count: activeSubs } = await supabase
+    const { count: activeSubs } = await supabaseAdmin
       .from("tenants")
       .select("*", { count: "exact", head: true })
       .neq("plan", "trial")
       .eq("status", "active");
 
     // 6. Recent Audit logs
-    const { data: recentAudits } = await supabase
+    const { data: recentAudits } = await supabaseAdmin
       .from("audit")
       .select("action, targetLabel, actorEmail, createdAt")
       .order("createdAt", { ascending: false })
@@ -146,7 +147,7 @@ export const getGlobalBillingSettings = createServerFn({ method: "POST" })
   .inputValidator((d: { idToken: string }) => d)
   .handler(async ({ data }) => {
     await requireMaster(data.idToken);
-    const { data: rows } = await supabase
+    const { data: rows } = await supabaseAdmin
       .from("global_settings")
       .select("key, value")
       .in("key", ["asaasApiKey", "asaasEnv", "asaasWebhookToken", "mercadoPagoAccessToken"]);
@@ -182,7 +183,7 @@ export const updateGlobalBillingSettings = createServerFn({ method: "POST" })
     ];
 
     for (const item of settings) {
-      const { error } = await supabase
+      const { error } = await supabaseAdmin
         .from("global_settings")
         .upsert(item, { onConflict: "key" });
       if (error) throw new Error(error.message);

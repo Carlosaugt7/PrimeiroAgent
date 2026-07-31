@@ -21,7 +21,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { Cpu, Plus, RefreshCw, Trash2, Loader2, CheckCircle2 } from "lucide-react";
+import { Cpu, Plus, RefreshCw, Trash2, Loader2, CheckCircle2, Pencil } from "lucide-react";
 import { toast } from "sonner";
 
 export const Route = createFileRoute("/app/llm-providers")({
@@ -72,6 +72,90 @@ function ProvidersPage() {
   const [detectedModelsForRefresh, setDetectedModelsForRefresh] = useState<
     (LLMProvider["models"][number] & { selected?: boolean })[]
   >([]);
+
+  const [editingProvider, setEditingProvider] = useState<LLMProvider | null>(null);
+  const [editForm, setEditForm] = useState<{
+    name: string;
+    kind: LLMProvider["kind"];
+    baseUrl: string;
+    apiKey: string;
+    models: (LLMProvider["models"][number] & { selected?: boolean })[];
+  }>({
+    name: "",
+    kind: "openai",
+    baseUrl: "",
+    apiKey: "",
+    models: [],
+  });
+
+  const handleStartEdit = (p: LLMProvider) => {
+    setEditingProvider(p);
+    setEditForm({
+      name: p.name,
+      kind: p.kind,
+      baseUrl: p.baseUrl,
+      apiKey: p.apiKey,
+      models: (p.models ?? []).map((m) => ({ ...m, selected: true })),
+    });
+  };
+
+  const handleEditKind = (k: LLMProvider["kind"]) =>
+    setEditForm((f) => ({ ...f, kind: k, baseUrl: DEFAULT_URLS[k] || f.baseUrl }));
+
+  const handleEditDetect = async () => {
+    if (!editForm.apiKey) {
+      toast.error("Informe a API key");
+      return;
+    }
+    setBusy(true);
+    try {
+      const r = await detect({
+        data: { kind: editForm.kind, baseUrl: editForm.baseUrl, apiKey: editForm.apiKey },
+      });
+      if (r.error) toast.error(r.error);
+      const currentSelectedIds = new Set(
+        editForm.models.filter((m) => m.selected !== false).map((m) => m.id),
+      );
+      const modelsWithSelection = (r.models ?? []).map((m) => ({
+        ...m,
+        selected: currentSelectedIds.size === 0 || currentSelectedIds.has(m.id),
+      }));
+      setEditForm((f) => ({ ...f, models: modelsWithSelection }));
+      if (r.models.length) toast.success(`${r.models.length} modelos detectados`);
+      else if (!r.error) toast.warning("Nenhum modelo retornado");
+    } catch (e: unknown) {
+      toast.error(e instanceof Error ? e.message : "Falha ao detectar modelos");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const submitEdit = async () => {
+    if (!editingProvider) return;
+    if (!editForm.name.trim() || !editForm.apiKey) {
+      toast.error("Nome e API key são obrigatórios");
+      return;
+    }
+    setBusy(true);
+    try {
+      const selectedModels = editForm.models
+        .filter((m) => m.selected !== false)
+        .map(({ id, contextWindow }) => ({ id, contextWindow }));
+      await updateProvider(editingProvider.id, {
+        name: editForm.name,
+        kind: editForm.kind,
+        baseUrl: editForm.baseUrl,
+        apiKey: editForm.apiKey,
+        models: selectedModels,
+      });
+      toast.success("Provedor atualizado com sucesso!");
+      setEditingProvider(null);
+    } catch (e: unknown) {
+      toast.error(e instanceof Error ? e.message : "Erro ao atualizar provedor");
+    } finally {
+      setBusy(false);
+    }
+  };
 
   const handleKind = (k: LLMProvider["kind"]) =>
     setForm({ ...form, kind: k, baseUrl: DEFAULT_URLS[k] });
@@ -189,9 +273,18 @@ function ProvidersPage() {
                 </div>
                 <div className="flex gap-1">
                   <button
+                    onClick={() => handleStartEdit(p)}
+                    disabled={busy}
+                    className="size-8 grid place-items-center rounded-md hover:bg-secondary/60 text-muted-foreground hover:text-foreground"
+                    title="Editar provedor"
+                  >
+                    <Pencil className="size-4" />
+                  </button>
+                  <button
                     onClick={() => handleStartRefresh(p)}
                     disabled={busy}
                     className="size-8 grid place-items-center rounded-md hover:bg-secondary/60 text-muted-foreground hover:text-foreground"
+                    title="Atualizar modelos"
                   >
                     <RefreshCw className={`size-4 ${busy ? "animate-spin" : ""}`} />
                   </button>
@@ -203,6 +296,7 @@ function ProvidersPage() {
                       }
                     }}
                     className="size-8 grid place-items-center rounded-md hover:bg-destructive/10 text-muted-foreground hover:text-destructive"
+                    title="Excluir"
                   >
                     <Trash2 className="size-4" />
                   </button>
@@ -478,6 +572,151 @@ function ProvidersPage() {
                 }
               }}
             >
+              Salvar alterações
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* DIALOG DE EDIÇÃO DO PROVEDOR */}
+      <Dialog
+        open={!!editingProvider}
+        onOpenChange={(open) => {
+          if (!open) setEditingProvider(null);
+        }}
+      >
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle>Editar provedor LLM</DialogTitle>
+            <DialogDescription>
+              Atualize o nome, chave de API, base URL ou a seleção de modelos disponíveis.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-3">
+            <div>
+              <Label>Nome interno</Label>
+              <Input
+                value={editForm.name}
+                onChange={(e) => setEditForm({ ...editForm, name: e.target.value })}
+                placeholder="Ex: OpenAI Produção"
+                className="mt-1"
+              />
+            </div>
+            <div>
+              <Label>Provedor</Label>
+              <Select
+                value={editForm.kind}
+                onValueChange={(v) => handleEditKind(v as LLMProvider["kind"])}
+              >
+                <SelectTrigger className="mt-1">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {Object.entries(KIND_LABEL).map(([k, v]) => (
+                    <SelectItem key={k} value={k}>
+                      {v}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <Label>Base URL</Label>
+              <Input
+                value={editForm.baseUrl}
+                onChange={(e) => setEditForm({ ...editForm, baseUrl: e.target.value })}
+                className="mt-1 font-mono text-xs"
+              />
+            </div>
+            <div>
+              <Label>API Key</Label>
+              <Input
+                type="password"
+                value={editForm.apiKey}
+                onChange={(e) => setEditForm({ ...editForm, apiKey: e.target.value })}
+                className="mt-1 font-mono text-xs"
+              />
+            </div>
+
+            <Button variant="outline" onClick={handleEditDetect} disabled={busy} className="w-full">
+              {busy ? (
+                <Loader2 className="animate-spin size-4" />
+              ) : (
+                <RefreshCw className="size-4" />
+              )}
+              Detectar modelos
+            </Button>
+
+            {editForm.models.length > 0 && (
+              <div className="rounded-lg border border-border p-3 space-y-2">
+                <div className="flex items-center justify-between">
+                  <p className="text-xs font-medium text-success flex items-center gap-1.5">
+                    <CheckCircle2 className="size-3" /> {editForm.models.length} modelos na lista
+                  </p>
+                  <div className="flex gap-2 text-[10px]">
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setEditForm((f) => ({
+                          ...f,
+                          models: f.models.map((m) => ({ ...m, selected: true })),
+                        }))
+                      }
+                      className="text-primary hover:underline font-medium"
+                    >
+                      Selecionar todos
+                    </button>
+                    <span className="text-muted-foreground">|</span>
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setEditForm((f) => ({
+                          ...f,
+                          models: f.models.map((m) => ({ ...m, selected: false })),
+                        }))
+                      }
+                      className="text-muted-foreground hover:text-foreground hover:underline"
+                    >
+                      Limpar
+                    </button>
+                  </div>
+                </div>
+                <div className="grid grid-cols-2 gap-1.5 max-h-48 overflow-y-auto pr-1">
+                  {editForm.models.map((m, idx) => (
+                    <label
+                      key={m.id}
+                      className={`flex items-center gap-2 px-2 py-1.5 rounded-lg border text-[11px] font-mono cursor-pointer transition-colors ${
+                        m.selected !== false
+                          ? "bg-primary/5 border-primary/40 text-foreground"
+                          : "bg-secondary/20 border-border text-muted-foreground hover:bg-secondary/40"
+                      }`}
+                    >
+                      <input
+                        type="checkbox"
+                        checked={m.selected !== false}
+                        onChange={(e) => {
+                          const updated = [...editForm.models];
+                          updated[idx] = { ...updated[idx], selected: e.target.checked };
+                          setEditForm({ ...editForm, models: updated });
+                        }}
+                        className="rounded border-border text-primary focus:ring-primary size-3.5"
+                      />
+                      <span className="truncate" title={m.id}>
+                        {m.id}
+                      </span>
+                    </label>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setEditingProvider(null)}>
+              Cancelar
+            </Button>
+            <Button variant="hero" onClick={submitEdit} disabled={busy}>
               Salvar alterações
             </Button>
           </DialogFooter>

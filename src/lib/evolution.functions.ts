@@ -85,15 +85,35 @@ async function authHeaders(tenantId?: string) {
 
 async function evo<T = unknown>(path: string, tenantId?: string, init?: RequestInit): Promise<T> {
   const cfg = await getTenantEvoConfig(tenantId);
-  const r = await fetch(`${cfg.url}${path}`, {
-    ...init,
-    headers: {
-      ...(await authHeaders(tenantId)),
-      ...(init?.headers as Record<string, string> | undefined),
-    },
-  });
+  let r: Response;
+  try {
+    r = await fetch(`${cfg.url}${path}`, {
+      ...init,
+      headers: {
+        ...(await authHeaders(tenantId)),
+        ...(init?.headers as Record<string, string> | undefined),
+      },
+    });
+  } catch (err) {
+    throw new Error(
+      `Não foi possível conectar à Evolution API em ${cfg.url}. Verifique se a API está online e acessível.`,
+    );
+  }
+
   const text = await r.text();
-  if (!r.ok) throw new Error(`Evolution ${r.status}: ${text.slice(0, 400)}`);
+  if (!r.ok) {
+    const errorMap: Record<number, string> = {
+      401: "Erro de autenticação na Evolution API. Verifique a API Key configurada.",
+      403: "Acesso negado pela Evolution API. Verifique permissões da chave.",
+      404: "Endpoint ou instância não encontrada na Evolution API.",
+      409: "Instância já existe na Evolution API.",
+      422: "Dados inválidos enviados para a Evolution API.",
+      500: "Erro interno no servidor da Evolution API.",
+      503: "Serviço da Evolution API indisponível no momento.",
+    };
+    const msg = errorMap[r.status] || `Evolution API retornou erro ${r.status}`;
+    throw new Error(`${msg} (${text.slice(0, 150)})`);
+  }
   try {
     return JSON.parse(text) as T;
   } catch {
@@ -178,6 +198,26 @@ export const createInstance = createServerFn({ method: "POST" })
     return d;
   })
   .handler(async ({ data }) => {
+    // 1. Valida se a instância já está vinculada no Supabase (instance_index)
+    const { data: existingIdx } = await supabase
+      .from("instance_index")
+      .select("tenantId")
+      .eq("instanceName", data.instanceName)
+      .maybeSingle();
+
+    if (existingIdx) {
+      if (existingIdx.tenantId === data.tenantId) {
+        throw new Error(
+          `Esta instância "${data.instanceName}" já está vinculada a este workspace.`,
+        );
+      } else {
+        throw new Error(
+          `A instância "${data.instanceName}" já está vinculada a outro workspace. Escolha outro nome ou desvincule-a primeiro.`,
+        );
+      }
+    }
+
+    // 2. Cria a instância na Evolution API
     await evo("/instance/create", data.tenantId, {
       method: "POST",
       body: JSON.stringify({
@@ -190,6 +230,37 @@ export const createInstance = createServerFn({ method: "POST" })
       }),
     });
     return { ok: true };
+  });
+
+export const unlinkInstanceFromTenant = createServerFn({ method: "POST" })
+  .inputValidator((d: { tenantId: string; instanceName: string }) => d)
+  .handler(async ({ data }) => {
+    const { data: existingIdx } = await supabase
+      .from("instance_index")
+      .select("tenantId")
+      .eq("instanceName", data.instanceName)
+      .maybeSingle();
+
+    if (!existingIdx || existingIdx.tenantId !== data.tenantId) {
+      throw new Error(`Instância "${data.instanceName}" não está vinculada a este workspace.`);
+    }
+
+    try {
+      await evo(`/instance/delete/${encodeURIComponent(data.instanceName)}`, data.tenantId, {
+        method: "DELETE",
+      });
+    } catch (e) {
+      console.warn("[unlinkInstanceFromTenant] Aviso ao excluir na Evolution API:", e);
+    }
+
+    await supabase.from("instance_index").delete().eq("instanceName", data.instanceName);
+    await supabase
+      .from("instances")
+      .delete()
+      .eq("id", data.instanceName)
+      .eq("tenantId", data.tenantId);
+
+    return { ok: true, message: "Instância desvinculada com sucesso" };
   });
 
 export const setWebhook = createServerFn({ method: "POST" })

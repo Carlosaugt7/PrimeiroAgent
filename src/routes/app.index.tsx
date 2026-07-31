@@ -47,6 +47,7 @@ function OverviewGate() {
 function MasterDashboard() {
   const getMetrics = useServerFn(getMasterDashboardMetrics);
   const [loading, setLoading] = useState(true);
+  const [volTab, setVolTab] = useState<"workspace" | "instance">("workspace");
   const [metrics, setMetrics] = useState<{
     totalTenants: number;
     totalAgents: number;
@@ -54,6 +55,8 @@ function MasterDashboard() {
     onlineInstances: number;
     offlineInstances: number;
     totalMessages: number;
+    messagesByWorkspace?: { tenantId: string; name: string; count: number }[];
+    messagesByInstance?: { instanceName: string; tenantName: string; count: number }[];
     activeSubs: number;
     recentAudits: {
       action: string;
@@ -154,22 +157,134 @@ function MasterDashboard() {
       </div>
 
       <div className="grid gap-6 lg:grid-cols-3">
-        {/* Gráficos / Outros Painéis */}
+        {/* Volumetria Geral de Mensagens */}
         <div className="lg:col-span-2 rounded-2xl border border-border bg-card/20 p-6 space-y-4">
-          <h2 className="font-display font-semibold text-lg flex items-center gap-2">
-            <Activity className="size-4 text-primary" /> Volumetria Geral de Mensagens
-          </h2>
-          <div className="h-64 flex flex-col justify-center items-center text-center p-6 border border-dashed border-border rounded-xl bg-secondary/20">
-            <MessageSquare className="size-8 text-muted-foreground mb-2" />
-            <p className="font-semibold text-sm">Total de Mensagens Processadas por Instâncias</p>
-            <p className="font-display text-4xl font-bold text-gradient mt-2">
-              {metrics.totalMessages.toLocaleString("pt-BR")}
-            </p>
-            <p className="text-xs text-muted-foreground mt-1.5 max-w-sm">
-              Mensagens tratadas e respondidas de forma automatizada pelos agentes em todas as
-              instâncias ativas.
-            </p>
+          <div className="flex items-center justify-between flex-wrap gap-2">
+            <div>
+              <h2 className="font-display font-semibold text-lg flex items-center gap-2">
+                <Activity className="size-4 text-primary" /> Volumetria Geral de Mensagens
+              </h2>
+              <p className="text-xs text-muted-foreground mt-0.5">
+                Total consolidado:{" "}
+                <span className="font-bold text-foreground font-mono">
+                  {metrics.totalMessages.toLocaleString("pt-BR")}
+                </span>{" "}
+                mensagens processadas
+              </p>
+            </div>
+            <div className="flex items-center bg-secondary/50 p-1 rounded-xl border border-border">
+              <button
+                type="button"
+                onClick={() => setVolTab("workspace")}
+                className={`text-xs font-medium px-3 py-1.5 rounded-lg transition-all ${
+                  volTab === "workspace"
+                    ? "bg-background text-foreground shadow-sm"
+                    : "text-muted-foreground hover:text-foreground"
+                }`}
+              >
+                Por Workspace ({metrics.messagesByWorkspace?.length || 0})
+              </button>
+              <button
+                type="button"
+                onClick={() => setVolTab("instance")}
+                className={`text-xs font-medium px-3 py-1.5 rounded-lg transition-all ${
+                  volTab === "instance"
+                    ? "bg-background text-foreground shadow-sm"
+                    : "text-muted-foreground hover:text-foreground"
+                }`}
+              >
+                Por Instância ({metrics.messagesByInstance?.length || 0})
+              </button>
+            </div>
           </div>
+
+          {volTab === "workspace" ? (
+            !metrics.messagesByWorkspace || metrics.messagesByWorkspace.length === 0 ? (
+              <div className="p-8 text-center text-sm text-muted-foreground border border-dashed border-border rounded-xl">
+                Nenhum log de mensagem registrado por workspace.
+              </div>
+            ) : (
+              <div className="space-y-3 max-h-[320px] overflow-y-auto pr-1">
+                {metrics.messagesByWorkspace.map((item) => {
+                  const pct =
+                    metrics.totalMessages > 0
+                      ? Math.round((item.count / metrics.totalMessages) * 100)
+                      : 0;
+                  return (
+                    <div
+                      key={item.tenantId}
+                      className="p-3.5 rounded-xl border border-border bg-card/30 space-y-2 hover:bg-card/50 transition-colors"
+                    >
+                      <div className="flex items-center justify-between text-sm">
+                        <div className="min-w-0">
+                          <p className="font-semibold text-foreground truncate">{item.name}</p>
+                          <p className="text-[10px] text-muted-foreground font-mono truncate">
+                            ID: {item.tenantId}
+                          </p>
+                        </div>
+                        <div className="text-right shrink-0">
+                          <span className="font-display font-bold text-foreground">
+                            {item.count.toLocaleString("pt-BR")} msgs
+                          </span>
+                          <span className="text-xs text-muted-foreground block">
+                            {pct}% do total
+                          </span>
+                        </div>
+                      </div>
+                      <div className="h-1.5 w-full bg-secondary rounded-full overflow-hidden">
+                        <div
+                          className="h-full bg-primary rounded-full transition-all duration-500"
+                          style={{ width: `${Math.max(pct, 2)}%` }}
+                        />
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )
+          ) : !metrics.messagesByInstance || metrics.messagesByInstance.length === 0 ? (
+            <div className="p-8 text-center text-sm text-muted-foreground border border-dashed border-border rounded-xl">
+              Nenhum log de mensagem registrado por instância.
+            </div>
+          ) : (
+            <div className="space-y-3 max-h-[320px] overflow-y-auto pr-1">
+              {metrics.messagesByInstance.map((item) => {
+                const pct =
+                  metrics.totalMessages > 0
+                    ? Math.round((item.count / metrics.totalMessages) * 100)
+                    : 0;
+                return (
+                  <div
+                    key={item.instanceName}
+                    className="p-3.5 rounded-xl border border-border bg-card/30 space-y-2 hover:bg-card/50 transition-colors"
+                  >
+                    <div className="flex items-center justify-between text-sm">
+                      <div className="min-w-0">
+                        <p className="font-semibold text-foreground truncate">
+                          {item.instanceName}
+                        </p>
+                        <p className="text-[10px] text-muted-foreground truncate">
+                          Workspace: {item.tenantName}
+                        </p>
+                      </div>
+                      <div className="text-right shrink-0">
+                        <span className="font-display font-bold text-foreground">
+                          {item.count.toLocaleString("pt-BR")} msgs
+                        </span>
+                        <span className="text-xs text-muted-foreground block">{pct}% do total</span>
+                      </div>
+                    </div>
+                    <div className="h-1.5 w-full bg-secondary rounded-full overflow-hidden">
+                      <div
+                        className="h-full bg-emerald-500 rounded-full transition-all duration-500"
+                        style={{ width: `${Math.max(pct, 2)}%` }}
+                      />
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
         </div>
 
         {/* Auditoria / Logs Recentes */}

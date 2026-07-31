@@ -29,7 +29,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Loader2, Lock, Save, Wifi, WifiOff, Crown, Mic, Calendar, Table } from "lucide-react";
+import { Loader2, Save, Wifi, WifiOff, Crown, Mic, Calendar, Table } from "lucide-react";
 import { toast } from "sonner";
 
 interface GoogleIntegration {
@@ -430,8 +430,8 @@ function Page() {
         </p>
       </div>
 
-      {/* CARD EVOLUTION API (WHATSAPP) */}
-      {isMaster ? (
+      {/* CARD EVOLUTION API (WHATSAPP) - Visível apenas no Painel Master */}
+      {isMaster && (
         <Card className="bg-gradient-card border-border">
           <CardHeader>
             <div className="flex items-center justify-between flex-wrap gap-2">
@@ -499,33 +499,6 @@ function Page() {
               Clientes com configuração própria continuam usando a deles. Os demais herdam esta
               configuração automaticamente.
             </p>
-          </CardContent>
-        </Card>
-      ) : (
-        <Card className="bg-gradient-card border-border">
-          <CardHeader>
-            <div className="flex items-center gap-3">
-              <div className="size-10 rounded-xl bg-emerald-500/10 grid place-items-center">
-                <Wifi className="size-5 text-emerald-400" />
-              </div>
-              <div>
-                <CardTitle>Evolution API (WhatsApp)</CardTitle>
-                <CardDescription>Integração gerenciada pela plataforma.</CardDescription>
-              </div>
-              <Badge className="ml-auto bg-emerald-500/15 text-emerald-400 border-emerald-500/30 gap-1.5 py-1">
-                <Wifi className="size-3.5" /> Ativo
-              </Badge>
-            </div>
-          </CardHeader>
-          <CardContent>
-            <div className="flex items-start gap-3 rounded-xl border border-border bg-secondary/30 p-4">
-              <Lock className="size-4 mt-0.5 text-muted-foreground shrink-0" />
-              <p className="text-sm text-muted-foreground">
-                A integração com o Evolution API é configurada globalmente pelo administrador da
-                plataforma. Você não precisa fazer nada — basta criar suas instâncias WhatsApp
-                normalmente.
-              </p>
-            </div>
           </CardContent>
         </Card>
       )}

@@ -115,9 +115,48 @@ export const getMasterDashboardMetrics = createServerFn({ method: "POST" })
     const offlineInstances = totalInstances - onlineInstances;
 
     // 4. Message Volume / Logs
-    const { count: totalMessages } = await supabaseAdmin
-      .from("ai_logs")
-      .select("*", { count: "exact", head: true });
+    const { data: logsData } = await supabaseAdmin.from("ai_logs").select("tenantId, instanceName");
+
+    const totalMessages = logsData?.length ?? 0;
+
+    const { data: tenantsData } = await supabaseAdmin.from("tenants").select("id, name");
+
+    const tenantNameMap = new Map<string, string>();
+    (tenantsData ?? []).forEach((t: { id: string; name: string }) => {
+      tenantNameMap.set(t.id, t.name);
+    });
+
+    const tenantCounts = new Map<string, number>();
+    const instanceCounts = new Map<string, { count: number; tenantId?: string }>();
+
+    (logsData ?? []).forEach((log: { tenantId?: string; instanceName?: string }) => {
+      if (log.tenantId) {
+        tenantCounts.set(log.tenantId, (tenantCounts.get(log.tenantId) || 0) + 1);
+      }
+      const instName = log.instanceName?.trim() || "Instância Padrão";
+      const currentInst = instanceCounts.get(instName) || { count: 0, tenantId: log.tenantId };
+      currentInst.count += 1;
+      if (!currentInst.tenantId && log.tenantId) {
+        currentInst.tenantId = log.tenantId;
+      }
+      instanceCounts.set(instName, currentInst);
+    });
+
+    const messagesByWorkspace = Array.from(tenantCounts.entries())
+      .map(([tId, count]) => ({
+        tenantId: tId,
+        name: tenantNameMap.get(tId) || tId,
+        count,
+      }))
+      .sort((a, b) => b.count - a.count);
+
+    const messagesByInstance = Array.from(instanceCounts.entries())
+      .map(([instName, info]) => ({
+        instanceName: instName,
+        tenantName: info.tenantId ? tenantNameMap.get(info.tenantId) || info.tenantId : "Global",
+        count: info.count,
+      }))
+      .sort((a, b) => b.count - a.count);
 
     // 5. Active Subscriptions Count (non-trial plan tenants)
     const { count: activeSubs } = await supabaseAdmin
@@ -140,6 +179,8 @@ export const getMasterDashboardMetrics = createServerFn({ method: "POST" })
       onlineInstances,
       offlineInstances,
       totalMessages: totalMessages || 0,
+      messagesByWorkspace,
+      messagesByInstance,
       activeSubs: activeSubs || 0,
       recentAudits: recentAudits || [],
     };

@@ -5,10 +5,21 @@ import { getRequest } from "@tanstack/react-start/server";
 
 const EVO_BASE_FALLBACK = "https://evolution-api.rsconsultoria.pro";
 
+// Helper para usar cliente admin do Supabase em operações globais no servidor (bypassa RLS)
+async function getAdminClient() {
+  try {
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    return supabaseAdmin;
+  } catch {
+    return supabase;
+  }
+}
+
 // Busca a configuração global da Evolution API (definida pelo Master Admin)
 async function getGlobalEvoConfig(): Promise<{ url: string; key: string | undefined }> {
   try {
-    const { data } = await supabase
+    const db = await getAdminClient();
+    const { data } = await db
       .from("global_settings")
       .select("key, value")
       .in("key", ["evolutionApiUrl", "evolutionApiKey"]);
@@ -124,12 +135,13 @@ async function evo<T = unknown>(path: string, tenantId?: string, init?: RequestI
 export const updateGlobalEvolutionSettings = createServerFn({ method: "POST" })
   .inputValidator((d: { url: string; key: string }) => d)
   .handler(async ({ data }) => {
-    const { error: e1 } = await supabase
+    const db = await getAdminClient();
+    const { error: e1 } = await db
       .from("global_settings")
       .upsert({ key: "evolutionApiUrl", value: data.url.trim() }, { onConflict: "key" });
     if (e1) throw new Error(e1.message);
 
-    const { error: e2 } = await supabase
+    const { error: e2 } = await db
       .from("global_settings")
       .upsert({ key: "evolutionApiKey", value: data.key.trim() }, { onConflict: "key" });
     if (e2) throw new Error(e2.message);
@@ -138,7 +150,8 @@ export const updateGlobalEvolutionSettings = createServerFn({ method: "POST" })
   });
 
 export const getGlobalEvolutionSettings = createServerFn({ method: "GET" }).handler(async () => {
-  const { data } = await supabase
+  const db = await getAdminClient();
+  const { data } = await db
     .from("global_settings")
     .select("key, value")
     .in("key", ["evolutionApiUrl", "evolutionApiKey"]);
@@ -181,14 +194,21 @@ export const updateEvolutionSettings = createServerFn({ method: "POST" })
 export const listInstances = createServerFn({ method: "GET" })
   .inputValidator((d: { tenantId: string }) => d)
   .handler(async ({ data }) => {
-    const res = await evo<any>("/instance/fetchInstances", data.tenantId);
+    const res = await evo<Record<string, unknown> | Record<string, unknown>[]>(
+      "/instance/fetchInstances",
+      data.tenantId,
+    );
     const arr = Array.isArray(res) ? res : [res];
-    return arr.map((i: any) => ({
-      instanceName: i?.name ?? i?.instance?.instanceName ?? i?.instanceName,
-      status: i?.connectionStatus ?? i?.instance?.status ?? "unknown",
-      ownerJid: i?.ownerJid ?? i?.instance?.owner ?? null,
-      profileName: i?.profileName ?? null,
-    }));
+    return arr.map((item) => {
+      const i = item as Record<string, unknown>;
+      const instanceObj = i?.instance as Record<string, unknown> | undefined;
+      return {
+        instanceName: (i?.name ?? instanceObj?.instanceName ?? i?.instanceName) as string,
+        status: (i?.connectionStatus ?? instanceObj?.status ?? "unknown") as string,
+        ownerJid: (i?.ownerJid ?? instanceObj?.owner ?? null) as string | null,
+        profileName: (i?.profileName ?? null) as string | null,
+      };
+    });
   });
 
 export const createInstance = createServerFn({ method: "POST" })
@@ -284,13 +304,14 @@ export const setWebhook = createServerFn({ method: "POST" })
 export const connectInstance = createServerFn({ method: "POST" })
   .inputValidator((d: { tenantId: string; instanceName: string }) => d)
   .handler(async ({ data }) => {
-    const r = await evo<any>(
+    const r = (await evo<Record<string, unknown>>(
       `/instance/connect/${encodeURIComponent(data.instanceName)}`,
       data.tenantId,
-    );
+    )) as Record<string, unknown>;
+    const qrcodeObj = r?.qrcode as Record<string, unknown> | undefined;
     return {
-      base64: (r?.base64 ?? r?.qrcode?.base64 ?? null) as string | null,
-      code: (r?.code ?? r?.qrcode?.code ?? null) as string | null,
+      base64: (r?.base64 ?? qrcodeObj?.base64 ?? null) as string | null,
+      code: (r?.code ?? qrcodeObj?.code ?? null) as string | null,
       pairingCode: (r?.pairingCode ?? null) as string | null,
     };
   });
@@ -298,19 +319,42 @@ export const connectInstance = createServerFn({ method: "POST" })
 export const instanceState = createServerFn({ method: "POST" })
   .inputValidator((d: { tenantId: string; instanceName: string }) => d)
   .handler(async ({ data }) => {
-    const r = await evo<any>(
+    const r = (await evo<Record<string, unknown>>(
       `/instance/connectionState/${encodeURIComponent(data.instanceName)}`,
       data.tenantId,
-    );
-    return { state: (r?.instance?.state ?? r?.state ?? "unknown") as string };
+    )) as Record<string, unknown>;
+    const inst = r?.instance as Record<string, unknown> | undefined;
+    return { state: (inst?.state ?? r?.state ?? "unknown") as string };
   });
 
 export const restartInstance = createServerFn({ method: "POST" })
   .inputValidator((d: { tenantId: string; instanceName: string }) => d)
   .handler(async ({ data }) => {
-    await evo(`/instance/restart/${encodeURIComponent(data.instanceName)}`, data.tenantId, {
-      method: "PUT",
-    });
+    try {
+      await evo(`/instance/restart/${encodeURIComponent(data.instanceName)}`, data.tenantId, {
+        method: "PUT",
+      });
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : String(e);
+      if (msg.includes("Cannot PUT") || msg.includes("404")) {
+        try {
+          await evo(`/instance/restart/${encodeURIComponent(data.instanceName)}`, data.tenantId, {
+            method: "POST",
+          });
+          return { ok: true };
+        } catch (e2: unknown) {
+          const msg2 = e2 instanceof Error ? e2.message : String(e2);
+          if (msg2.includes("Cannot POST") || msg2.includes("404")) {
+            await evo(`/instance/restart/${encodeURIComponent(data.instanceName)}`, data.tenantId, {
+              method: "GET",
+            });
+            return { ok: true };
+          }
+          throw e2;
+        }
+      }
+      throw e;
+    }
     return { ok: true };
   });
 
@@ -349,16 +393,19 @@ export const listGroups = createServerFn({ method: "POST" })
   .inputValidator((d: { tenantId: string; instanceName: string }) => d)
   .handler(async ({ data }) => {
     try {
-      const res = await evo<any>(
+      const res = await evo<Record<string, unknown>[]>(
         `/group/fetchAllGroups/${encodeURIComponent(data.instanceName)}?getParticipants=false`,
         data.tenantId,
       );
       const arr = Array.isArray(res) ? res : [];
-      return arr.map((g: any) => ({
-        id: g?.id ?? g?.jid,
-        name: g?.subject ?? g?.name ?? "Grupo sem nome",
-        size: g?.size ?? null,
-      }));
+      return arr.map((item) => {
+        const g = item as Record<string, unknown>;
+        return {
+          id: (g?.id ?? g?.jid) as string,
+          name: (g?.subject ?? g?.name ?? "Grupo sem nome") as string,
+          size: (g?.size ?? null) as number | null,
+        };
+      });
     } catch (e) {
       console.warn("[listGroups] falhou:", e);
       return [];
@@ -427,7 +474,7 @@ export const fetchInstanceContacts = createServerFn({ method: "POST" })
   .inputValidator((d: { tenantId: string; instanceName: string }) => d)
   .handler(async ({ data }) => {
     try {
-      const res = await evo<any>(
+      const res = await evo<Record<string, unknown>[]>(
         `/chat/findContacts/${encodeURIComponent(data.instanceName)}`,
         data.tenantId,
         {
@@ -436,12 +483,15 @@ export const fetchInstanceContacts = createServerFn({ method: "POST" })
         },
       );
       const arr = Array.isArray(res) ? res : [];
-      return arr.map((c: any) => ({
-        id: c?.remoteJid ?? c?.jid ?? c?.id ?? "",
-        name: c?.name ?? null,
-        pushName: c?.pushName ?? c?.pushname ?? null,
-        verifiedName: c?.verifiedName ?? null,
-      }));
+      return arr.map((item) => {
+        const c = item as Record<string, unknown>;
+        return {
+          id: (c?.remoteJid ?? c?.jid ?? c?.id ?? "") as string,
+          name: (c?.name ?? null) as string | null,
+          pushName: (c?.pushName ?? c?.pushname ?? null) as string | null,
+          verifiedName: (c?.verifiedName ?? null) as string | null,
+        };
+      });
     } catch (e) {
       console.warn("[fetchInstanceContacts] falhou:", e);
       return [];
@@ -452,19 +502,25 @@ export const fetchGroupParticipants = createServerFn({ method: "POST" })
   .inputValidator((d: { tenantId: string; instanceName: string; groupJid: string }) => d)
   .handler(async ({ data }) => {
     try {
-      const res = await evo<any>(
+      const res = await evo<Record<string, unknown> | Record<string, unknown>[]>(
         `/group/participants/${encodeURIComponent(data.instanceName)}?groupJid=${encodeURIComponent(data.groupJid)}`,
         data.tenantId,
       );
-      const participants = Array.isArray(res) ? res : res?.participants || [];
-      return participants.map((p: any) => ({
-        id: p?.phoneNumber ?? p?.id ?? p?.jid ?? p?.number ?? "",
-        name: p?.name ?? null,
-        pushName: p?.pushName ?? p?.pushname ?? null,
-        verifiedName: p?.verifiedName ?? null,
-        isAdmin: !!(p?.admin || p?.isAdmin || p?.adminJid),
-        isSuperAdmin: !!p?.isSuperAdmin,
-      }));
+      const resObj = res as Record<string, unknown>;
+      const participants = Array.isArray(res)
+        ? res
+        : (resObj?.participants as Record<string, unknown>[]) || [];
+      return participants.map((item) => {
+        const p = item as Record<string, unknown>;
+        return {
+          id: (p?.phoneNumber ?? p?.id ?? p?.jid ?? p?.number ?? "") as string,
+          name: (p?.name ?? null) as string | null,
+          pushName: (p?.pushName ?? p?.pushname ?? null) as string | null,
+          verifiedName: (p?.verifiedName ?? null) as string | null,
+          isAdmin: !!(p?.admin || p?.isAdmin || p?.adminJid),
+          isSuperAdmin: !!p?.isSuperAdmin,
+        };
+      });
     } catch (e) {
       console.warn("[fetchGroupParticipants] falhou:", e);
       return [];

@@ -772,8 +772,8 @@ async function cancelAppointment(tenantId: string, patientPhone: string): Promis
 
 // ===== LLM callers =====
 
-// Retry com backoff exponencial para erros transitórios (503, 429, 502)
-async function withRetry<T>(fn: () => Promise<T>, maxAttempts = 3, baseDelayMs = 1500): Promise<T> {
+// Retry com backoff exponencial para erros transitórios (503, 502, 500, 429)
+async function withRetry<T>(fn: () => Promise<T>, maxAttempts = 4, baseDelayMs = 1500): Promise<T> {
   let lastError: unknown;
   for (let attempt = 1; attempt <= maxAttempts; attempt++) {
     try {
@@ -781,12 +781,27 @@ async function withRetry<T>(fn: () => Promise<T>, maxAttempts = 3, baseDelayMs =
     } catch (e) {
       lastError = e;
       const msg = e instanceof Error ? e.message : String(e);
-      const isTransient = /503|502|429|UNAVAILABLE|high demand|overloaded|rate.?limit/i.test(msg);
+      const isTransient =
+        /503|502|500|429|UNAVAILABLE|high demand|overloaded|rate.?limit|upstream|temporarily/i.test(
+          msg,
+        );
       if (!isTransient || attempt === maxAttempts) throw e;
       await new Promise((r) => setTimeout(r, baseDelayMs * Math.pow(2, attempt - 1)));
     }
   }
   throw lastError;
+}
+
+function normalizeOpenAIBaseUrl(url: string, defaultBase = "https://api.openai.com/v1"): string {
+  let clean = (url || "").trim().replace(/\/+$/, "");
+  if (!clean) return defaultBase;
+  if (!/^https?:\/\//i.test(clean)) {
+    clean = `https://${clean}`;
+  }
+  if (!/\/v\d+$/i.test(clean) && !clean.includes("/chat/completions")) {
+    clean = `${clean}/v1`;
+  }
+  return clean;
 }
 
 async function getSHA256Hash(text: string): Promise<string> {
@@ -1038,7 +1053,7 @@ async function callOpenAICompat(
   imageBase64?: string | null,
 ): Promise<{ text: string; inputTokens: number; outputTokens: number }> {
   const baseUrl = (provider.baseUrl as string)?.trim() || "";
-  const base = (baseUrl || "https://api.openai.com/v1").replace(/\/$/, "");
+  const base = normalizeOpenAIBaseUrl(baseUrl);
   return withRetry(async () => {
     let contentPayload: any = userText;
     if (imageBase64) {
@@ -1068,7 +1083,18 @@ async function callOpenAICompat(
         temperature: agent.temperature ?? 0.5,
       }),
     });
-    if (!r.ok) throw new Error(`LLM ${r.status}: ${(await r.text()).slice(0, 300)}`);
+    if (!r.ok) {
+      const errText = await r.text().catch(() => "");
+      try {
+        const parsed = JSON.parse(errText);
+        if (parsed?.error?.message) {
+          throw new Error(`LLM ${r.status}: ${parsed.error.message}`);
+        }
+      } catch (pErr) {
+        if (pErr instanceof Error && pErr.message.startsWith("LLM ")) throw pErr;
+      }
+      throw new Error(`LLM ${r.status}: ${errText.slice(0, 300)}`);
+    }
     const j = (await r.json()) as {
       choices: Array<{ message: { content: string } }>;
       usage?: { prompt_tokens: number; completion_tokens: number };

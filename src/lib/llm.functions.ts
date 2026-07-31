@@ -3,7 +3,7 @@ import { createServerFn } from "@tanstack/react-start";
 type Kind = "openai" | "anthropic" | "google" | "groq" | "deepseek" | "openrouter" | "custom";
 
 // Retry com backoff exponencial para erros transitórios (503, 429, 502)
-async function withRetry<T>(fn: () => Promise<T>, maxAttempts = 3, baseDelayMs = 1500): Promise<T> {
+async function withRetry<T>(fn: () => Promise<T>, maxAttempts = 4, baseDelayMs = 1500): Promise<T> {
   let lastError: unknown;
   for (let attempt = 1; attempt <= maxAttempts; attempt++) {
     try {
@@ -11,13 +11,28 @@ async function withRetry<T>(fn: () => Promise<T>, maxAttempts = 3, baseDelayMs =
     } catch (e) {
       lastError = e;
       const msg = e instanceof Error ? e.message : String(e);
-      const isTransient = /503|502|429|UNAVAILABLE|high demand|overloaded|rate.?limit/i.test(msg);
+      const isTransient =
+        /503|502|500|429|UNAVAILABLE|high demand|overloaded|rate.?limit|upstream|temporarily/i.test(
+          msg,
+        );
       if (!isTransient || attempt === maxAttempts) throw e;
-      const delay = baseDelayMs * Math.pow(2, attempt - 1); // 1.5s, 3s, 6s
+      const delay = baseDelayMs * Math.pow(2, attempt - 1);
       await new Promise((r) => setTimeout(r, delay));
     }
   }
   throw lastError;
+}
+
+function normalizeOpenAIBaseUrl(url: string, defaultBase = "https://api.openai.com/v1"): string {
+  let clean = (url || "").trim().replace(/\/+$/, "");
+  if (!clean) return defaultBase;
+  if (!/^https?:\/\//i.test(clean)) {
+    clean = `https://${clean}`;
+  }
+  if (!/\/v\d+$/i.test(clean) && !clean.includes("/chat/completions")) {
+    clean = `${clean}/v1`;
+  }
+  return clean;
 }
 
 interface DetectInput {
@@ -49,10 +64,7 @@ const STATIC_ANTHROPIC: ModelInfo[] = [
 ];
 
 async function fetchOpenAICompatible(baseUrl: string, apiKey: string): Promise<ModelInfo[]> {
-  const clean = baseUrl.replace(/\/+$/, "");
-  if (!/^https?:\/\//i.test(clean)) {
-    throw new Error(`Base URL inválida: "${baseUrl}". Use uma URL absoluta começando com https://`);
-  }
+  const clean = normalizeOpenAIBaseUrl(baseUrl);
   const url = `${clean}/models`;
   let r: Response;
   try {
@@ -64,7 +76,16 @@ async function fetchOpenAICompatible(baseUrl: string, apiKey: string): Promise<M
   }
   if (!r.ok) {
     const body = await r.text().catch(() => "");
-    throw new Error(`HTTP ${r.status} em ${url}: ${body.slice(0, 300)}`);
+    let errorMsg = `HTTP ${r.status} em ${url}: ${body.slice(0, 300)}`;
+    try {
+      const parsed = JSON.parse(body);
+      if (parsed?.error?.message) {
+        errorMsg = `Erro da API (${parsed.error.type || r.status}): ${parsed.error.message}`;
+      }
+    } catch {
+      /* fallback */
+    }
+    throw new Error(errorMsg);
   }
   const data = (await r.json()) as {
     data?: Array<{ id: string; context_length?: number; context_window?: number }>;
@@ -127,7 +148,10 @@ export const chatCompletion = createServerFn({ method: "POST" })
   })
   .handler(async ({ data }) => {
     const started = Date.now();
-    const base = data.baseUrl?.trim() || DEFAULT_BASE[data.kind] || "";
+    const base = normalizeOpenAIBaseUrl(
+      data.baseUrl?.trim() || DEFAULT_BASE[data.kind] || "",
+      DEFAULT_BASE[data.kind],
+    );
 
     if (data.kind === "anthropic") {
       const r = await fetch(`${base.replace(/\/$/, "")}/messages`, {
@@ -189,7 +213,7 @@ export const chatCompletion = createServerFn({ method: "POST" })
 
     // OpenAI-compatível
     return await withRetry(async () => {
-      const r = await fetch(`${base.replace(/\/$/, "")}/chat/completions`, {
+      const r = await fetch(`${base}/chat/completions`, {
         method: "POST",
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${data.apiKey}` },
         body: JSON.stringify({
@@ -198,7 +222,18 @@ export const chatCompletion = createServerFn({ method: "POST" })
           temperature: data.temperature ?? 0.5,
         }),
       });
-      if (!r.ok) throw new Error(await r.text());
+      if (!r.ok) {
+        const errText = await r.text().catch(() => "");
+        try {
+          const parsed = JSON.parse(errText);
+          if (parsed?.error?.message) {
+            throw new Error(`LLM ${r.status}: ${parsed.error.message}`);
+          }
+        } catch (pErr) {
+          if (pErr instanceof Error && pErr.message.startsWith("LLM ")) throw pErr;
+        }
+        throw new Error(`HTTP ${r.status}: ${errText.slice(0, 300)}`);
+      }
       const j = (await r.json()) as {
         choices: Array<{ message: { content: string } }>;
         usage?: { prompt_tokens: number; completion_tokens: number };

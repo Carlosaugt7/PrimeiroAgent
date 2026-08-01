@@ -35,8 +35,13 @@ async function getGlobalEvoConfig(): Promise<{ url: string; key: string | undefi
   return { url: EVO_BASE_FALLBACK, key: process.env.EVOLUTION_API_KEY };
 }
 
+function cleanPhoneNumber(num: string): string {
+  if (!num) return "";
+  return num.replace(/@.*$/, "").replace(/\D/g, "");
+}
+
 async function evoSendText(tenantId: string, instanceName: string, number: string, text: string) {
-  const targetNumber = number.includes("@") ? number : `${number.replace(/\D/g, "")}@s.whatsapp.net`;
+  const targetNumber = cleanPhoneNumber(number);
   const payload = { number: targetNumber, text, delay: 1200 };
 
   // 1. Tenant tem config própria → usa ela
@@ -330,7 +335,7 @@ async function evoSendAudio(
   const cfg = await getEvoConfig(tenantId);
   if (!cfg.key) throw new Error("EVOLUTION_API_KEY ausente ou não configurada");
 
-  const targetNumber = number.includes("@") ? number : `${number.replace(/\D/g, "")}@s.whatsapp.net`;
+  const targetNumber = cleanPhoneNumber(number);
   const r = await fetch(`${cfg.url}/message/sendAudio/${encodeURIComponent(instanceName)}`, {
     method: "POST",
     headers: { apikey: cfg.key, "Content-Type": "application/json" },
@@ -348,7 +353,7 @@ async function evoSendPresence(
   try {
     const cfg = await getEvoConfig(tenantId);
     if (!cfg.key) return;
-    const targetNumber = number.includes("@") ? number : `${number.replace(/\D/g, "")}@s.whatsapp.net`;
+    const targetNumber = cleanPhoneNumber(number);
     await fetch(`${cfg.url}/chat/sendPresence/${encodeURIComponent(instanceName)}`, {
       method: "POST",
       headers: { apikey: cfg.key, "Content-Type": "application/json" },
@@ -370,7 +375,7 @@ async function evoSendButtons(
     const cfg = await getEvoConfig(tenantId);
     if (!cfg.key) throw new Error("EVOLUTION_API_KEY ausente ou não configurada");
 
-    const targetNumber = number.includes("@") ? number : `${number.replace(/\D/g, "")}@s.whatsapp.net`;
+    const targetNumber = cleanPhoneNumber(number);
     const r = await fetch(`${cfg.url}/message/sendButtons/${encodeURIComponent(instanceName)}`, {
       method: "POST",
       headers: { apikey: cfg.key, "Content-Type": "application/json" },

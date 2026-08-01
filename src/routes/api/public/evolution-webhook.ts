@@ -36,6 +36,9 @@ async function getGlobalEvoConfig(): Promise<{ url: string; key: string | undefi
 }
 
 async function evoSendText(tenantId: string, instanceName: string, number: string, text: string) {
+  const targetNumber = number.includes("@") ? number : `${number.replace(/\D/g, "")}@s.whatsapp.net`;
+  const payload = { number: targetNumber, text, delay: 1200 };
+
   // 1. Tenant tem config própria → usa ela
   if (tenantId) {
     const { data: tenant } = await supabase
@@ -49,7 +52,7 @@ async function evoSendText(tenantId: string, instanceName: string, number: strin
       const r = await fetch(`${url}/message/sendText/${encodeURIComponent(instanceName)}`, {
         method: "POST",
         headers: { apikey: key, "Content-Type": "application/json" },
-        body: JSON.stringify({ number, text }),
+        body: JSON.stringify(payload),
       });
       if (!r.ok) throw new Error(`sendText ${r.status}: ${(await r.text()).slice(0, 200)}`);
       return;
@@ -62,7 +65,7 @@ async function evoSendText(tenantId: string, instanceName: string, number: strin
   const r = await fetch(`${cfg.url}/message/sendText/${encodeURIComponent(instanceName)}`, {
     method: "POST",
     headers: { apikey: cfg.key, "Content-Type": "application/json" },
-    body: JSON.stringify({ number, text }),
+    body: JSON.stringify(payload),
   });
   if (!r.ok) throw new Error(`sendText ${r.status}: ${(await r.text()).slice(0, 200)}`);
 }
@@ -327,10 +330,11 @@ async function evoSendAudio(
   const cfg = await getEvoConfig(tenantId);
   if (!cfg.key) throw new Error("EVOLUTION_API_KEY ausente ou não configurada");
 
+  const targetNumber = number.includes("@") ? number : `${number.replace(/\D/g, "")}@s.whatsapp.net`;
   const r = await fetch(`${cfg.url}/message/sendAudio/${encodeURIComponent(instanceName)}`, {
     method: "POST",
     headers: { apikey: cfg.key, "Content-Type": "application/json" },
-    body: JSON.stringify({ number, audio: audioUrl }),
+    body: JSON.stringify({ number: targetNumber, audio: audioUrl }),
   });
   if (!r.ok) throw new Error(`sendAudio ${r.status}: ${(await r.text()).slice(0, 200)}`);
 }
@@ -344,10 +348,11 @@ async function evoSendPresence(
   try {
     const cfg = await getEvoConfig(tenantId);
     if (!cfg.key) return;
+    const targetNumber = number.includes("@") ? number : `${number.replace(/\D/g, "")}@s.whatsapp.net`;
     await fetch(`${cfg.url}/chat/sendPresence/${encodeURIComponent(instanceName)}`, {
       method: "POST",
       headers: { apikey: cfg.key, "Content-Type": "application/json" },
-      body: JSON.stringify({ number, presence }),
+      body: JSON.stringify({ number: targetNumber, presence }),
     });
   } catch (e) {
     console.warn("[evoSendPresence] erro:", e);
@@ -365,11 +370,12 @@ async function evoSendButtons(
     const cfg = await getEvoConfig(tenantId);
     if (!cfg.key) throw new Error("EVOLUTION_API_KEY ausente ou não configurada");
 
+    const targetNumber = number.includes("@") ? number : `${number.replace(/\D/g, "")}@s.whatsapp.net`;
     const r = await fetch(`${cfg.url}/message/sendButtons/${encodeURIComponent(instanceName)}`, {
       method: "POST",
       headers: { apikey: cfg.key, "Content-Type": "application/json" },
       body: JSON.stringify({
-        number,
+        number: targetNumber,
         title: "Opções disponíveis",
         description: text,
         footerText: "Primeiro Agent",
@@ -387,7 +393,7 @@ async function evoSendButtons(
       await evoSendText(
         tenantId,
         instanceName,
-        number,
+        targetNumber,
         `${text}\n\n*Escolha uma opção:*\n${buttons.map((b) => `👉 *${b}*`).join("\n")}`,
       );
     }
@@ -1345,8 +1351,7 @@ Caso contrário, apenas responda de forma prestativa confirmando que entendeu ou
   reply = reply.replace(/\[ACTION:.*?\]/g, "").trim();
 
   // Enviar de volta ao dono
-  const number = remoteJid.split("@")[0];
-  await evoSendText(tenantId, instanceName, number, reply);
+  await evoSendText(tenantId, instanceName, remoteJid, reply);
 
   // Registrar mensagem do bot
   const replyId = `bot_owner_${Date.now()}`;
@@ -1848,7 +1853,7 @@ async function runBridge(
   if (!reply) return { skipped: "empty-reply", latencyMs };
 
   // 6) Enviar via WhatsApp ou Voz
-  const number = remoteJid.split("@")[0];
+  const targetDestination = remoteJid;
   let sentAudioUrl: string | null = null;
 
   const { data: tenant } = await supabase
@@ -1875,29 +1880,17 @@ async function runBridge(
       if (audioUrl) {
         sentAudioUrl = audioUrl;
         console.log(`[bridge] Áudio gerado: ${audioUrl}. Enviando ao WhatsApp...`);
-        // Presença de gravação humana
-        await evoSendPresence(tenantId, instanceName, number, "recording");
-        await new Promise((r) => setTimeout(r, 4000));
-        await evoSendPresence(tenantId, instanceName, number, "paused");
-
-        await evoSendAudio(tenantId, instanceName, number, audioUrl);
+        evoSendPresence(tenantId, instanceName, targetDestination, "recording").catch(() => {});
+        await evoSendAudio(tenantId, instanceName, targetDestination, audioUrl);
       } else {
         console.warn("[bridge] Falha na geração do áudio. Usando texto de fallback.");
-        // Presença de digitação humana
-        await evoSendPresence(tenantId, instanceName, number, "composing");
-        await new Promise((r) => setTimeout(r, Math.min(3000, reply.length * 15)));
-        await evoSendPresence(tenantId, instanceName, number, "paused");
-
-        await evoSendText(tenantId, instanceName, number, reply);
+        evoSendPresence(tenantId, instanceName, targetDestination, "composing").catch(() => {});
+        await evoSendText(tenantId, instanceName, targetDestination, reply);
       }
     } catch (e) {
       console.error("[bridge] Erro ao enviar áudio. Usando texto de fallback:", e);
-      // Presença de digitação humana
-      await evoSendPresence(tenantId, instanceName, number, "composing");
-      await new Promise((r) => setTimeout(r, Math.min(3000, reply.length * 15)));
-      await evoSendPresence(tenantId, instanceName, number, "paused");
-
-      await evoSendText(tenantId, instanceName, number, reply);
+      evoSendPresence(tenantId, instanceName, targetDestination, "composing").catch(() => {});
+      await evoSendText(tenantId, instanceName, targetDestination, reply);
     }
   } else {
     // Verificar se a resposta tem a tag de botões interativos
@@ -1910,19 +1903,11 @@ async function runBridge(
         .filter(Boolean);
       const cleanReply = reply.replace(buttonRegex, "").trim();
 
-      // Presença de digitação humana
-      await evoSendPresence(tenantId, instanceName, number, "composing");
-      await new Promise((r) => setTimeout(r, Math.min(3000, cleanReply.length * 15)));
-      await evoSendPresence(tenantId, instanceName, number, "paused");
-
-      await evoSendButtons(tenantId, instanceName, number, cleanReply, buttons);
+      evoSendPresence(tenantId, instanceName, targetDestination, "composing").catch(() => {});
+      await evoSendButtons(tenantId, instanceName, targetDestination, cleanReply, buttons);
     } else {
-      // Presença de digitação humana
-      await evoSendPresence(tenantId, instanceName, number, "composing");
-      await new Promise((r) => setTimeout(r, Math.min(3000, reply.length * 15)));
-      await evoSendPresence(tenantId, instanceName, number, "paused");
-
-      await evoSendText(tenantId, instanceName, number, reply);
+      evoSendPresence(tenantId, instanceName, targetDestination, "composing").catch(() => {});
+      await evoSendText(tenantId, instanceName, targetDestination, reply);
     }
   }
 
@@ -2175,11 +2160,10 @@ async function handleMessage(
           `[webhook] 🔄 Comando global: Bot reativado em ${unpaused?.length || 0} conversas da instância "${instanceName}"`,
         );
         // Enviar confirmação ao dono
-        const number = remoteJid.split("@")[0];
         await evoSendText(
           tenantId,
           instanceName,
-          number,
+          remoteJid,
           `✅ Bot reativado em ${unpaused?.length || 0} conversa(s) da instância "${instanceName}". O agente IA voltará a responder automaticamente.`,
         );
       } else {
@@ -2273,8 +2257,7 @@ async function handleMessage(
       );
       transferMsg = linkedAgent.awayMessage;
     }
-    const number = remoteJid.split("@")[0];
-    await evoSendText(tenantId, instanceName, number, transferMsg);
+    await evoSendText(tenantId, instanceName, remoteJid, transferMsg);
 
     // 3. Salva a mensagem no banco
     const replyId = `bot_handoff_${Date.now()}`;
@@ -2329,12 +2312,8 @@ async function handleMessage(
         const nextQuestion = questions[currentIndex];
 
         // Simular digitação humana
-        const number = remoteJid.split("@")[0];
-        await evoSendPresence(tenantId, instanceName, number, "composing");
-        await new Promise((r) => setTimeout(r, Math.min(2500, nextQuestion.length * 15)));
-        await evoSendPresence(tenantId, instanceName, number, "paused");
-
-        await evoSendText(tenantId, instanceName, number, nextQuestion);
+        evoSendPresence(tenantId, instanceName, remoteJid, "composing").catch(() => {});
+        await evoSendText(tenantId, instanceName, remoteJid, nextQuestion);
 
         // Atualizar estado no banco de dados
         await supabase

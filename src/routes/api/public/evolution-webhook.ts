@@ -2035,10 +2035,55 @@ async function handleMessage(
   const remoteNumber = remoteJid.split("@")[0];
   const ownerNumber = ownerJid ? ownerJid.split("@")[0] : undefined;
 
+  // 🤖 0. Verificar se é eco de mensagem enviada pelo próprio Bot (evita pausar o bot sozinho!)
+  if (fromMe) {
+    let isBotEcho = messageId.startsWith("bot_") || messageId.startsWith("auto_");
+    if (!isBotEcho) {
+      try {
+        const { data: recentBot } = await supabase
+          .from("messages")
+          .select("text, createdAt")
+          .eq("conversationId", convId)
+          .eq("fromMe", true)
+          .eq("bot", true)
+          .order("createdAt", { ascending: false })
+          .limit(1);
+
+        if (recentBot && recentBot.length > 0) {
+          const botTime = new Date(recentBot[0].createdAt).getTime();
+          const diffMs = Date.now() - botTime;
+          if (diffMs < 30000) {
+            const cleanBotText = recentBot[0].text.replace(/^\[áudio\]\s*/, "").trim();
+            const cleanIncomingText = text.replace(/^\[áudio\]\s*/, "").trim();
+            if (
+              cleanBotText === cleanIncomingText ||
+              (cleanBotText.length > 15 && cleanIncomingText.startsWith(cleanBotText.slice(0, 30)))
+            ) {
+              isBotEcho = true;
+            }
+          }
+        }
+      } catch (echoErr) {
+        console.warn("[webhook] Erro ao verificar bot echo:", echoErr);
+      }
+    }
+
+    if (isBotEcho) {
+      console.log(`[webhook] 🤖 Eco do próprio Bot para ${convId}. Ignorando para não pausar.`);
+      return Response.json({ ok: true, ignored: "bot_echo" });
+    }
+  }
+
   // Detectar comandos de reativação do bot ANTES de qualquer roteamento
   const cleanTextLower = text.trim().toLowerCase();
-  const ACTIVATION_COMMANDS = ["#ia", "#voltar", "/ia", "/voltar"];
-  const isActivationCommand = fromMe && ACTIVATION_COMMANDS.includes(cleanTextLower);
+  const ACTIVATION_COMMANDS = ["#ia", "#voltar", "/ia", "/voltar", "voltar", "#despausar", "/despausar"];
+  const isActivationCommand = fromMe && (
+    ACTIVATION_COMMANDS.includes(cleanTextLower) ||
+    cleanTextLower.startsWith("#ia") ||
+    cleanTextLower.startsWith("/ia") ||
+    cleanTextLower.startsWith("#voltar") ||
+    cleanTextLower.startsWith("/voltar")
+  );
 
   const isDirectLineCommand =
     fromMe && !isActivationCommand && (cleanTextLower.startsWith("/admin") || cleanTextLower.startsWith("/bot"));

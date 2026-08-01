@@ -1988,7 +1988,8 @@ async function handleMessage(
   instanceName: string,
   body: Record<string, unknown>,
 ) {
-  const m = (body?.data ?? body?.message ?? body) as Record<string, unknown>;
+  const rawData = body?.data ?? body?.message ?? body;
+  const m = (Array.isArray(rawData) ? rawData[0] : rawData) as Record<string, unknown>;
   const key = (m?.key ?? {}) as Record<string, unknown>;
   const remoteJid: string | undefined = (key.remoteJid ?? m?.remoteJid) as string | undefined;
   if (!remoteJid) return new Response("no remoteJid", { status: 200 });
@@ -2004,6 +2005,31 @@ async function handleMessage(
     return Response.json({ ok: true, ignored: "newsletter_or_broadcast" });
   }
 
+  const messageId: string = (key.id as string) ?? `${Date.now()}`;
+  const msgData = m?.message as Record<string, unknown> | undefined;
+  const isAudio = !!msgData?.audioMessage;
+  const isImage = !!msgData?.imageMessage;
+  const isVideo = !!msgData?.videoMessage;
+  const isDocument = !!msgData?.documentMessage;
+
+  const buttonText =
+    (msgData?.buttonsResponseMessage as any)?.selectedButtonId ??
+    (msgData?.templateButtonReplyMessage as any)?.selectedId ??
+    (msgData?.interactiveResponseMessage as any)?.nativeFlowResponseMessage?.paramsJson;
+
+  let text: string =
+    (msgData?.conversation as string) ??
+    ((msgData?.extendedTextMessage as Record<string, unknown>)?.text as string) ??
+    ((msgData?.imageMessage as any)?.caption as string) ??
+    ((msgData?.videoMessage as any)?.caption as string) ??
+    ((msgData?.documentMessage as any)?.caption as string) ??
+    buttonText ??
+    (m?.text as string) ??
+    (isAudio ? "[áudio]" : isImage ? "[imagem]" : isVideo ? "[vídeo]" : isDocument ? "[documento]" : "[mídia]");
+
+  const pushName: string = (m?.pushName as string) ?? remoteJid.split("@")[0];
+  const convId = remoteJid.replace(/[^a-zA-Z0-9_-]/g, "_");
+
   // 🛡️ Filtro de Spam / Propaganda de Robôs (mensagens encaminhadas ou cheias de links)
   const contextInfo =
     (msgData?.extendedTextMessage as any)?.contextInfo ??
@@ -2015,19 +2041,6 @@ async function handleMessage(
     console.log(`[webhook] 🚫 Ignorando provável propaganda/spam de ${remoteJid}`);
     return Response.json({ ok: true, ignored: "likely_spam" });
   }
-
-  const messageId: string = (key.id as string) ?? `${Date.now()}`;
-  const msgData = m?.message as Record<string, unknown> | undefined;
-  const isAudio = !!msgData?.audioMessage;
-  const isImage = !!msgData?.imageMessage;
-  let text: string =
-    (msgData?.conversation as string) ??
-    ((msgData?.extendedTextMessage as Record<string, unknown>)?.text as string) ??
-    ((msgData?.imageMessage as any)?.caption as string) ??
-    (m?.text as string) ??
-    (isAudio ? "[áudio]" : isImage ? "[imagem]" : "[mídia]");
-  const pushName: string = (m?.pushName as string) ?? remoteJid.split("@")[0];
-  const convId = remoteJid.replace(/[^a-zA-Z0-9_-]/g, "_");
 
   const fromMe: boolean = !!key.fromMe;
   const rawSender = body?.sender ?? (body as any)?.data?.sender ?? (body as any)?.instance?.owner;
@@ -2078,13 +2091,12 @@ async function handleMessage(
   // Detectar comandos de reativação do bot ANTES de qualquer roteamento
   const cleanTextLower = text.trim().toLowerCase();
   const ACTIVATION_COMMANDS = ["#ia", "#voltar", "/ia", "/voltar", "voltar", "#despausar", "/despausar"];
-  const isActivationCommand = fromMe && (
+  const isActivationCommand =
     ACTIVATION_COMMANDS.includes(cleanTextLower) ||
     cleanTextLower.startsWith("#ia") ||
     cleanTextLower.startsWith("/ia") ||
     cleanTextLower.startsWith("#voltar") ||
-    cleanTextLower.startsWith("/voltar")
-  );
+    cleanTextLower.startsWith("/voltar");
 
   const isDirectLineCommand =
     fromMe && !isActivationCommand && (cleanTextLower.startsWith("/admin") || cleanTextLower.startsWith("/bot"));
@@ -2162,40 +2174,79 @@ async function handleMessage(
 
   // Lógica de controle do Bot via WhatsApp (atendente interage pelo celular ou Dono envia comandos)
   if (fromMe) {
-    // 🔑 Interceptar comandos de reativação ANTES de tudo (inclusive DirectLine)
+    // 🔑 Interceptação de comandos de reativação (#ia, /ia, #voltar, etc)
     if (isActivationCommand) {
-      if (isSelfChat) {
-        // Self-chat: despausar TODAS as conversas desta instância
+      // 1. Buscar se existe alguma mensagem de cliente (fromMe = false) nesta conversa
+      const { data: customerMsgs } = await supabase
+        .from("messages")
+        .select("text")
+        .eq("conversationId", convId)
+        .eq("fromMe", false)
+        .order("createdAt", { ascending: false })
+        .limit(1);
+
+      // É considerado self-chat (chat do dono com seu próprio número / "Você") se:
+      // - isSelfChat for true, OU
+      // - remoteNumber for igual ao ownerNumber, OU
+      // - a conversa não tiver NENHUMA mensagem recebida de cliente (fromMe = false)
+      const isSelfOrOwnerChat =
+        isSelfChat ||
+        (!!ownerNumber && remoteNumber === ownerNumber) ||
+        !customerMsgs ||
+        customerMsgs.length === 0;
+
+      if (isSelfOrOwnerChat) {
+        // Self-chat: despausar TODAS as conversas desta instância no banco de dados
         const { data: unpaused } = await supabase
           .from("conversations")
           .update({ botPaused: false, status: "aberta", updatedAt: new Date().toISOString() })
           .eq("instanceName", instanceName)
           .eq("tenantId", tenantId)
           .select("id");
+
+        const count = unpaused?.length || 0;
         console.log(
-          `[webhook] 🔄 Comando global: Bot reativado em ${unpaused?.length || 0} conversas da instância "${instanceName}"`,
+          `[webhook] 🔄 Comando global (self-chat #ia): Bot reativado em ${count} conversa(s) da instância "${instanceName}"`,
         );
-        // Enviar confirmação ao dono
-        await evoSendText(
-          tenantId,
-          instanceName,
-          remoteJid,
-          `✅ Bot reativado em ${unpaused?.length || 0} conversa(s) da instância "${instanceName}". O agente IA voltará a responder automaticamente.`,
-        );
+
+        // Enviar confirmação via WhatsApp diretamente nesta conversa com o dono
+        const confirmMsg = `✅ Bot reativado em ${count} conversa(s) da instância "${instanceName}". O agente IA voltará a responder automaticamente aos clientes.`;
+        await evoSendText(tenantId, instanceName, remoteJid, confirmMsg);
+        await evoDeleteMessage(tenantId, instanceName, remoteJid, messageId);
+
+        return Response.json({ ok: true, botReactivated: true, global: true, unpausedCount: count });
       } else {
-        // Conversa específica: despausar apenas esta
+        // Conversa específica com cliente: despausar apenas este chat e responder à mensagem do cliente
         await supabase
           .from("conversations")
           .update({ botPaused: false, status: "aberta", updatedAt: new Date().toISOString() })
           .eq("id", convId)
           .eq("tenantId", tenantId);
+
         console.log(
-          `[webhook] 🔄 Comando local: Bot reativado na conversa ${convId}`,
+          `[webhook] 🔄 Comando local (#ia): Bot reativado na conversa ${convId}. Buscando última mensagem do cliente...`,
         );
+
+        // Apagar mensagem #ia para manter o chat limpo
+        await evoDeleteMessage(tenantId, instanceName, remoteJid, messageId);
+
+        const promptToRun = customerMsgs[0].text;
+        console.log(
+          `[webhook] 🤖 Executando resposta da IA pós-#ia para a mensagem do cliente: "${promptToRun}"`,
+        );
+
+        const bridgeResult = await runBridge(
+          tenantId,
+          instanceName,
+          remoteJid,
+          promptToRun,
+          convId,
+          isAudio,
+          null,
+        );
+
+        return Response.json({ ok: true, botReactivated: true, bridge: bridgeResult });
       }
-      // Apagar a mensagem de comando para não poluir o chat
-      await evoDeleteMessage(tenantId, instanceName, remoteJid, messageId);
-      return Response.json({ ok: true, botReactivated: true });
     }
 
     if (isDirectLine) {
@@ -2219,7 +2270,9 @@ async function handleMessage(
       }
     }
 
-    if (text && text !== "[mídia]" && text !== "[áudio]") {
+    // Não pausar o bot se a mensagem enviada for de teste reverso ou comando do sistema
+    const isTestMsg = text.toLowerCase().includes("teste reverso") || text.startsWith("[test]");
+    if (text && text !== "[mídia]" && text !== "[áudio]" && !isTestMsg) {
       await supabase
         .from("conversations")
         .update({ botPaused: true, updatedAt: new Date().toISOString() })
@@ -2227,6 +2280,37 @@ async function handleMessage(
         .eq("tenantId", tenantId);
     }
     return Response.json({ ok: true });
+  }
+
+  // Se a mensagem veio do CLIENTE (fromMe = false) e é um comando de ativação (#ia)
+  if (isActivationCommand) {
+    await supabase
+      .from("conversations")
+      .update({ botPaused: false, status: "aberta", updatedAt: new Date().toISOString() })
+      .eq("id", convId)
+      .eq("tenantId", tenantId);
+
+    // Buscar a mensagem anterior ao #ia (se houver) ou usar o prompt padrão
+    const { data: prevMsgs } = await supabase
+      .from("messages")
+      .select("text")
+      .eq("conversationId", convId)
+      .eq("fromMe", false)
+      .neq("text", text)
+      .order("createdAt", { ascending: false })
+      .limit(1);
+
+    const promptToRun = prevMsgs && prevMsgs.length > 0 ? prevMsgs[0].text : "Olá";
+    const bridgeResult = await runBridge(
+      tenantId,
+      instanceName,
+      remoteJid,
+      promptToRun,
+      convId,
+      isAudio,
+      null,
+    );
+    return Response.json({ ok: true, botReactivated: true, bridge: bridgeResult });
   }
 
   // Automações + Bridge IA: só para mensagens recebidas com texto transcrito/válido

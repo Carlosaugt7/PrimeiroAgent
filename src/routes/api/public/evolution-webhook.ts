@@ -2004,6 +2004,17 @@ async function handleMessage(
   if (!remoteJid) return new Response("no remoteJid", { status: 200 });
   if (remoteJid.endsWith("@g.us")) return Response.json({ ok: true, ignored: "group" });
 
+  // Filtrar newsletters, broadcasts, robôs comerciais e mensagens de sistema
+  if (
+    remoteJid.endsWith("@newsletter") ||
+    remoteJid.endsWith("@broadcast") ||
+    remoteJid.endsWith("@lid") ||
+    remoteJid === "status@broadcast" ||
+    remoteJid.startsWith("0@")
+  ) {
+    return Response.json({ ok: true, ignored: "newsletter_or_broadcast" });
+  }
+
   const messageId: string = (key.id as string) ?? `${Date.now()}`;
   const msgData = m?.message as Record<string, unknown> | undefined;
   const isAudio = !!msgData?.audioMessage;
@@ -2024,10 +2035,15 @@ async function handleMessage(
   const remoteNumber = remoteJid.split("@")[0];
   const ownerNumber = ownerJid ? ownerJid.split("@")[0] : undefined;
 
+  // Detectar comandos de reativação do bot ANTES de qualquer roteamento
+  const cleanTextLower = text.trim().toLowerCase();
+  const ACTIVATION_COMMANDS = ["#ia", "#voltar", "/ia", "/voltar"];
+  const isActivationCommand = fromMe && ACTIVATION_COMMANDS.includes(cleanTextLower);
+
   const isDirectLineCommand =
-    fromMe && (text.toLowerCase().startsWith("/admin") || text.toLowerCase().startsWith("/bot"));
+    fromMe && !isActivationCommand && (cleanTextLower.startsWith("/admin") || cleanTextLower.startsWith("/bot"));
   const isSelfChat = fromMe && !!ownerNumber && remoteNumber === ownerNumber;
-  const isDirectLine = isSelfChat || isDirectLineCommand;
+  const isDirectLine = (isSelfChat && !isActivationCommand) || isDirectLineCommand;
 
   // Transcrição de áudio recebido do cliente ou do dono (linha direta)
   if (isAudio && (!fromMe || isDirectLine)) {
@@ -2100,6 +2116,43 @@ async function handleMessage(
 
   // Lógica de controle do Bot via WhatsApp (atendente interage pelo celular ou Dono envia comandos)
   if (fromMe) {
+    // 🔑 Interceptar comandos de reativação ANTES de tudo (inclusive DirectLine)
+    if (isActivationCommand) {
+      if (isSelfChat) {
+        // Self-chat: despausar TODAS as conversas desta instância
+        const { data: unpaused } = await supabase
+          .from("conversations")
+          .update({ botPaused: false, status: "aberta", updatedAt: new Date().toISOString() })
+          .eq("instanceName", instanceName)
+          .eq("tenantId", tenantId)
+          .select("id");
+        console.log(
+          `[webhook] 🔄 Comando global: Bot reativado em ${unpaused?.length || 0} conversas da instância "${instanceName}"`,
+        );
+        // Enviar confirmação ao dono
+        const number = remoteJid.split("@")[0];
+        await evoSendText(
+          tenantId,
+          instanceName,
+          number,
+          `✅ Bot reativado em ${unpaused?.length || 0} conversa(s) da instância "${instanceName}". O agente IA voltará a responder automaticamente.`,
+        );
+      } else {
+        // Conversa específica: despausar apenas esta
+        await supabase
+          .from("conversations")
+          .update({ botPaused: false, status: "aberta", updatedAt: new Date().toISOString() })
+          .eq("id", convId)
+          .eq("tenantId", tenantId);
+        console.log(
+          `[webhook] 🔄 Comando local: Bot reativado na conversa ${convId}`,
+        );
+      }
+      // Apagar a mensagem de comando para não poluir o chat
+      await evoDeleteMessage(tenantId, instanceName, remoteJid, messageId);
+      return Response.json({ ok: true, botReactivated: true });
+    }
+
     if (isDirectLine) {
       console.log(`[webhook] ⚡ Linha Direta: Comando recebido do dono: "${text}"`);
       try {
@@ -2122,24 +2175,11 @@ async function handleMessage(
     }
 
     if (text && text !== "[mídia]" && text !== "[áudio]") {
-      const cleanText = text.trim().toLowerCase();
-      const isActivationCommand = ["#ia", "#voltar", "/ia", "/voltar"].includes(cleanText);
-
-      if (isActivationCommand) {
-        await supabase
-          .from("conversations")
-          .update({ botPaused: false, updatedAt: new Date().toISOString() })
-          .eq("id", convId)
-          .eq("tenantId", tenantId);
-
-        await evoDeleteMessage(tenantId, instanceName, remoteJid, messageId);
-      } else {
-        await supabase
-          .from("conversations")
-          .update({ botPaused: true, updatedAt: new Date().toISOString() })
-          .eq("id", convId)
-          .eq("tenantId", tenantId);
-      }
+      await supabase
+        .from("conversations")
+        .update({ botPaused: true, updatedAt: new Date().toISOString() })
+        .eq("id", convId)
+        .eq("tenantId", tenantId);
     }
     return Response.json({ ok: true });
   }
@@ -2283,7 +2323,54 @@ async function handleMessage(
 
   try {
     const auto = await runAutomations(tenantId, instanceName, remoteJid, text, convId, conv);
-    if (conv?.botPaused === true || auto.pauseBot) {
+
+    // Auto-reativação por timeout: se bot está pausado mas o humano não interage há 30+ min, reativar
+    let effectiveBotPaused = conv?.botPaused === true || auto.pauseBot;
+    if (effectiveBotPaused && conv?.botPaused === true && !auto.pauseBot) {
+      try {
+        const AUTO_UNPAUSE_MS = 30 * 60 * 1000; // 30 minutos
+        // Buscar a última mensagem humana (fromMe=true, bot=false) na conversa
+        const { data: lastHumanMsg } = await supabase
+          .from("messages")
+          .select("createdAt")
+          .eq("conversationId", convId)
+          .eq("fromMe", true)
+          .eq("bot", false)
+          .order("createdAt", { ascending: false })
+          .limit(1);
+
+        if (lastHumanMsg && lastHumanMsg.length > 0) {
+          const lastHumanTime = new Date(lastHumanMsg[0].createdAt).getTime();
+          const elapsed = Date.now() - lastHumanTime;
+          if (elapsed > AUTO_UNPAUSE_MS) {
+            console.log(
+              `[webhook] ⏰ Auto-reativação: Última interação humana há ${Math.round(elapsed / 60000)} min. Reativando bot na conversa ${convId}.`,
+            );
+            await supabase
+              .from("conversations")
+              .update({ botPaused: false, status: "aberta", updatedAt: new Date().toISOString() })
+              .eq("id", convId)
+              .eq("tenantId", tenantId);
+            effectiveBotPaused = false;
+          }
+        } else {
+          // Nenhuma msg humana encontrada — pode ter sido pausado por automação antiga. Reativar.
+          console.log(
+            `[webhook] ⏰ Auto-reativação: Nenhuma msg humana encontrada, reativando bot na conversa ${convId}.`,
+          );
+          await supabase
+            .from("conversations")
+            .update({ botPaused: false, status: "aberta", updatedAt: new Date().toISOString() })
+            .eq("id", convId)
+            .eq("tenantId", tenantId);
+          effectiveBotPaused = false;
+        }
+      } catch (timeoutErr) {
+        console.warn("[webhook] Erro ao verificar auto-reativação por timeout:", timeoutErr);
+      }
+    }
+
+    if (effectiveBotPaused) {
       console.log(
         `[webhook] Bot PAUSADO para conversa ${convId} (botPaused=${conv?.botPaused}, autoPause=${auto.pauseBot}). Use #ia ou /ia para reativar.`,
       );
@@ -2332,13 +2419,68 @@ export const Route = createFileRoute("/api/public/evolution-webhook")({
           }
           const { data: updated, error } = await supabase
             .from("conversations")
-            .update({ botPaused: false })
+            .update({ botPaused: false, status: "aberta" })
             .eq("instanceName", instanceName)
             .eq("tenantId", idx.tenantId)
             .select("id");
           return Response.json({
             ok: true,
             message: `Bot despausado em ${updated?.length || 0} conversas da instância "${instanceName}"`,
+            error: error?.message,
+          });
+        }
+
+        // Ação: fix-instances — registra no instance_index todas as instâncias que possuem agente mas estão ausentes
+        if (action === "fix-instances") {
+          const { data: allAgents } = await supabase
+            .from("agents")
+            .select("whatsappInstanceId, tenantId, name");
+          const { data: allIdx } = await supabase
+            .from("instance_index")
+            .select("instanceName");
+          const registeredSet = new Set((allIdx || []).map((i: any) => i.instanceName));
+          const fixed: string[] = [];
+          const errors: string[] = [];
+
+          for (const agent of (allAgents || []) as any[]) {
+            if (!agent.whatsappInstanceId || registeredSet.has(agent.whatsappInstanceId)) continue;
+            try {
+              await supabase.from("instance_index").upsert({
+                instanceName: agent.whatsappInstanceId,
+                tenantId: agent.tenantId,
+              });
+              await supabase.from("instances").upsert({
+                id: agent.whatsappInstanceId,
+                tenantId: agent.tenantId,
+                name: agent.whatsappInstanceId,
+                status: "online",
+                updatedAt: new Date().toISOString(),
+              });
+              fixed.push(`${agent.whatsappInstanceId} → tenant=${agent.tenantId} (agent=${agent.name})`);
+              registeredSet.add(agent.whatsappInstanceId);
+            } catch (e) {
+              errors.push(`${agent.whatsappInstanceId}: ${e instanceof Error ? e.message : String(e)}`);
+            }
+          }
+
+          return Response.json({
+            ok: true,
+            message: `Corrigidas ${fixed.length} instância(s)`,
+            fixed,
+            errors: errors.length > 0 ? errors : undefined,
+          });
+        }
+
+        // Ação: unpause-all — despausa todas as conversas de todas as instâncias
+        if (action === "unpause-all") {
+          const { data: updated, error } = await supabase
+            .from("conversations")
+            .update({ botPaused: false, status: "aberta" })
+            .eq("botPaused", true)
+            .select("id");
+          return Response.json({
+            ok: true,
+            message: `Bot despausado em ${updated?.length || 0} conversa(s) de todas as instâncias`,
             error: error?.message,
           });
         }
@@ -2435,12 +2577,48 @@ export const Route = createFileRoute("/api/public/evolution-webhook")({
           .select("tenantId")
           .eq("instanceName", instanceName)
           .single();
-        const tenantId: string | undefined = idx?.tenantId as string | undefined;
+        let tenantId: string | undefined = idx?.tenantId as string | undefined;
+
+        // Auto-heal: se a instância não está no instance_index, tentar resolver via agente vinculado
         if (!tenantId) {
           console.warn(
-            `[webhook] ❌ instance "${instanceName}" NOT FOUND in instance_index. Verifique se a instância foi registrada corretamente.`,
+            `[webhook] ⚠️ instance "${instanceName}" NOT FOUND in instance_index. Tentando auto-heal...`,
           );
-          return new Response("unknown instance", { status: 200 });
+          try {
+            const { data: linkedAgent } = await supabase
+              .from("agents")
+              .select("tenantId")
+              .eq("whatsappInstanceId", instanceName)
+              .limit(1)
+              .maybeSingle();
+
+            if (linkedAgent?.tenantId) {
+              tenantId = linkedAgent.tenantId;
+              // Registrar no instance_index para futuras requisições
+              await supabase.from("instance_index").upsert({
+                instanceName,
+                tenantId,
+              });
+              await supabase.from("instances").upsert({
+                id: instanceName,
+                tenantId,
+                name: instanceName,
+                status: "online",
+                updatedAt: new Date().toISOString(),
+              });
+              console.log(
+                `[webhook] ✅ Auto-heal: Instância "${instanceName}" registrada no instance_index com tenantId="${tenantId}"`,
+              );
+            } else {
+              console.warn(
+                `[webhook] ❌ Auto-heal falhou: Nenhum agente vinculado à instância "${instanceName}". Ignorando.`,
+              );
+              return new Response("unknown instance", { status: 200 });
+            }
+          } catch (healErr) {
+            console.error(`[webhook] ❌ Auto-heal erro:`, healErr);
+            return new Response("unknown instance", { status: 200 });
+          }
         }
 
         const { data: tenant } = await supabase

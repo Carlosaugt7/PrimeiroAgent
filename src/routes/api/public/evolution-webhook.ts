@@ -42,7 +42,7 @@ function cleanPhoneNumber(num: string): string {
 
 async function evoSendText(tenantId: string, instanceName: string, number: string, text: string) {
   const targetNumber = cleanPhoneNumber(number);
-  const payload = { number: targetNumber, text, delay: 1200 };
+  const payload = { number: targetNumber, text };
 
   // 1. Tenant tem config própria → usa ela
   if (tenantId) {

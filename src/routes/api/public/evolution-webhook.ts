@@ -1994,15 +1994,26 @@ async function handleMessage(
   if (!remoteJid) return new Response("no remoteJid", { status: 200 });
   if (remoteJid.endsWith("@g.us")) return Response.json({ ok: true, ignored: "group" });
 
-  // Filtrar newsletters, broadcasts, robôs comerciais e mensagens de sistema
+  // Filtrar newsletters, broadcasts e mensagens de sistema
   if (
     remoteJid.endsWith("@newsletter") ||
     remoteJid.endsWith("@broadcast") ||
-    remoteJid.endsWith("@lid") ||
     remoteJid === "status@broadcast" ||
     remoteJid.startsWith("0@")
   ) {
     return Response.json({ ok: true, ignored: "newsletter_or_broadcast" });
+  }
+
+  // 🛡️ Filtro de Spam / Propaganda de Robôs (mensagens encaminhadas ou cheias de links)
+  const contextInfo =
+    (msgData?.extendedTextMessage as any)?.contextInfo ??
+    (msgData?.imageMessage as any)?.contextInfo;
+  const forwardingScore = contextInfo?.forwardingScore ?? 0;
+  const isHighlyForwarded = forwardingScore >= 2;
+  const linkCount = (text.match(/https?:\/\/\S+/gi) || []).length;
+  if (isHighlyForwarded || linkCount >= 3) {
+    console.log(`[webhook] 🚫 Ignorando provável propaganda/spam de ${remoteJid}`);
+    return Response.json({ ok: true, ignored: "likely_spam" });
   }
 
   const messageId: string = (key.id as string) ?? `${Date.now()}`;

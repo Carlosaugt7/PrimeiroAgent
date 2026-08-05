@@ -13,6 +13,138 @@ import {
 
 const EVO_BASE_FALLBACK = "https://evolution-api.rsconsultoria.pro";
 
+// Debounce: acumula mensagens rápidas do mesmo contato antes de chamar o LLM
+// Evita múltiplas respostas quando cliente envia "olá", "boa tarde", "oi" em sequência
+const DEBOUNCE_MS = 3500;
+type DebounceEntry = {
+  timer: ReturnType<typeof setTimeout>;
+  texts: string[];
+  tenantId: string;
+  instanceName: string;
+  remoteJid: string;
+  convId: string;
+  isAudio: boolean;
+  imageBase64: string | null;
+};
+const messageDebounce = new Map<string, DebounceEntry>();
+
+type DeliveryResult = {
+  ok: boolean;
+  whatsappMessageId?: string | null;
+  attempts: number;
+  latencyMs: number;
+  httpStatus?: number;
+  errorMessage?: string;
+  rawResponse?: string;
+  errorType?: string;
+};
+
+function classifyDeliveryError(errMsg: string): string {
+  if (!errMsg) return "unknown";
+  if (/401|403|auth|api.?key|apikey/i.test(errMsg)) return "authentication";
+  if (/404|instanc|not.?found/i.test(errMsg)) return "instance_not_found";
+  if (/400|invalid.?number|numero|number/i.test(errMsg)) return "invalid_number";
+  if (/429|rate.?limit|too.?many/i.test(errMsg)) return "rate_limit";
+  if (/500|502|503|504|unavailable|timeout|econn|network|fetch failed/i.test(errMsg))
+    return "server_or_network";
+  if (/disconnected|not.?connected|close|offline/i.test(errMsg)) return "instance_disconnected";
+  if (/blocked|banned|spam|restriction/i.test(errMsg)) return "whatsapp_restriction";
+  return "other";
+}
+
+async function withEvoRetry<T extends { ok: boolean }>(
+  fn: () => Promise<T>,
+  maxAttempts = 3,
+  baseDelayMs = 1200,
+): Promise<T & { attempts: number }> {
+  let lastResult: (T & { attempts: number }) | null = null;
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    try {
+      const result = await fn();
+      lastResult = { ...result, attempts: attempt };
+      if (result.ok) return lastResult;
+      if (attempt === maxAttempts) break;
+      const isTransient =
+        result && typeof (result as any).errorType === "string"
+          ? /server_or_network|rate_limit|instance_disconnected/.test((result as any).errorType)
+          : true;
+      if (!isTransient) break;
+      await new Promise((r) => setTimeout(r, baseDelayMs * Math.pow(2, attempt - 1)));
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : String(e);
+      const isTransient =
+        /503|502|500|429|UNAVAILABLE|high demand|overloaded|rate.?limit|upstream|temporarily|timeout|econn|network|fetch failed/i.test(
+          msg,
+        );
+      lastResult = {
+        ok: false,
+        errorMessage: msg,
+        errorType: classifyDeliveryError(msg),
+        attempts: attempt,
+        latencyMs: 0,
+      } as unknown as T & { attempts: number };
+      if (!isTransient || attempt === maxAttempts) break;
+      await new Promise((r) => setTimeout(r, baseDelayMs * Math.pow(2, attempt - 1)));
+    }
+  }
+  return lastResult!;
+}
+
+async function registerDeliveryFailure(params: {
+  tenantId: string;
+  instanceName: string;
+  remoteJid: string;
+  conversationId?: string;
+  agentId?: string;
+  logId?: string;
+  errorType?: string;
+  errorMessage: string;
+  httpStatus?: number;
+  rawResponse?: string;
+  retryCount: number;
+}) {
+  try {
+    await supabase.from("delivery_failures").insert({
+      tenantId: params.tenantId,
+      instanceName: params.instanceName,
+      remoteJid: params.remoteJid,
+      conversationId: params.conversationId || null,
+      agentId: params.agentId || null,
+      logId: params.logId || null,
+      errorType: params.errorType || classifyDeliveryError(params.errorMessage),
+      errorMessage: params.errorMessage.slice(0, 2000),
+      httpStatus: params.httpStatus || null,
+      rawResponse: (params.rawResponse || "").slice(0, 5000) || null,
+      retryCount: params.retryCount,
+      resolved: false,
+      notificationSent: false,
+      createdAt: new Date().toISOString(),
+    });
+  } catch (e) {
+    console.warn("[registerDeliveryFailure] falhou ao salvar no banco:", e);
+  }
+}
+
+async function checkInstanceOnline(
+  tenantId: string,
+  instanceName: string,
+): Promise<{ online: boolean; state?: string }> {
+  try {
+    const cfg = await getEvoConfig(tenantId);
+    if (!cfg.key) return { online: false, state: "no_config" };
+    const r = await fetch(
+      `${cfg.url}/instance/connectionState/${encodeURIComponent(instanceName)}`,
+      { headers: { apikey: cfg.key } },
+    );
+    if (!r.ok) return { online: false, state: `http_${r.status}` };
+    const j = (await r.json()) as any;
+    const state: string = j?.instance?.state ?? j?.state ?? "unknown";
+    return { online: state === "open", state };
+  } catch {
+    return { online: false, state: "check_error" };
+  }
+}
+
 // Busca config global da tabela global_settings
 async function getGlobalEvoConfig(): Promise<{ url: string; key: string | undefined }> {
   try {
@@ -40,39 +172,109 @@ function cleanPhoneNumber(num: string): string {
   return num.replace(/@.*$/, "").replace(/\D/g, "");
 }
 
-async function evoSendText(tenantId: string, instanceName: string, number: string, text: string) {
+async function evoSendTextRaw(
+  tenantId: string,
+  instanceName: string,
+  number: string,
+  text: string,
+): Promise<DeliveryResult> {
+  const startedAt = performance.now();
   const targetNumber = cleanPhoneNumber(number);
   const payload = { number: targetNumber, text };
 
-  // 1. Tenant tem config própria → usa ela
+  let url = "";
+  let key: string | undefined;
+
   if (tenantId) {
-    const { data: tenant } = await supabase
-      .from("tenants")
-      .select("evolutionApiUrl, evolutionApiKey")
-      .eq("id", tenantId)
-      .single();
-    if (tenant?.evolutionApiUrl && tenant?.evolutionApiKey) {
-      const url = tenant.evolutionApiUrl.replace(/\/$/, "");
-      const key = tenant.evolutionApiKey;
-      const r = await fetch(`${url}/message/sendText/${encodeURIComponent(instanceName)}`, {
-        method: "POST",
-        headers: { apikey: key, "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
-      });
-      if (!r.ok) throw new Error(`sendText ${r.status}: ${(await r.text()).slice(0, 200)}`);
-      return;
+    try {
+      const { data: tenant } = await supabase
+        .from("tenants")
+        .select("evolutionApiUrl, evolutionApiKey")
+        .eq("id", tenantId)
+        .single();
+      if (tenant?.evolutionApiUrl && tenant?.evolutionApiKey) {
+        url = tenant.evolutionApiUrl.replace(/\/$/, "");
+        key = tenant.evolutionApiKey;
+      }
+    } catch {
+      /* ignora e usa global */
     }
   }
 
-  // 2. Sem config de tenant → usa config global
-  const cfg = await getGlobalEvoConfig();
-  if (!cfg.key) throw new Error("EVOLUTION_API_KEY ausente ou não configurada");
-  const r = await fetch(`${cfg.url}/message/sendText/${encodeURIComponent(instanceName)}`, {
-    method: "POST",
-    headers: { apikey: cfg.key, "Content-Type": "application/json" },
-    body: JSON.stringify(payload),
-  });
-  if (!r.ok) throw new Error(`sendText ${r.status}: ${(await r.text()).slice(0, 200)}`);
+  if (!url || !key) {
+    const cfg = await getGlobalEvoConfig();
+    if (!cfg.key) {
+      return {
+        ok: false,
+        errorMessage: "EVOLUTION_API_KEY ausente ou não configurada",
+        errorType: "authentication",
+        latencyMs: Math.round(performance.now() - startedAt),
+        attempts: 1,
+      };
+    }
+    url = cfg.url;
+    key = cfg.key;
+  }
+
+  let r: Response;
+  let rawResponseText = "";
+  try {
+    r = await fetch(`${url}/message/sendText/${encodeURIComponent(instanceName)}`, {
+      method: "POST",
+      headers: { apikey: key!, "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+      signal: AbortSignal.timeout(15000),
+    });
+    rawResponseText = await r.text();
+  } catch (e: unknown) {
+    const msg = e instanceof Error ? e.message : String(e);
+    return {
+      ok: false,
+      errorMessage: msg,
+      errorType: classifyDeliveryError(msg),
+      latencyMs: Math.round(performance.now() - startedAt),
+      attempts: 1,
+    };
+  }
+
+  const latencyMs = Math.round(performance.now() - startedAt);
+  if (!r.ok) {
+    const errMsg = `sendText ${r.status}: ${rawResponseText.slice(0, 300)}`;
+    return {
+      ok: false,
+      httpStatus: r.status,
+      errorMessage: errMsg,
+      errorType: classifyDeliveryError(errMsg),
+      rawResponse: rawResponseText.slice(0, 5000),
+      latencyMs,
+      attempts: 1,
+    };
+  }
+
+  let whatsappMessageId: string | null = null;
+  try {
+    const json = JSON.parse(rawResponseText);
+    whatsappMessageId =
+      json?.key?.id ||
+      json?.message?.key?.id ||
+      json?.data?.key?.id ||
+      json?.messages?.[0]?.key?.id ||
+      json?.id ||
+      null;
+  } catch {
+    /* json invalido, ignora id */
+  }
+
+  return { ok: true, whatsappMessageId, latencyMs, attempts: 1, httpStatus: r.status };
+}
+
+async function evoSendText(
+  tenantId: string,
+  instanceName: string,
+  number: string,
+  text: string,
+): Promise<DeliveryResult> {
+  return withEvoRetry(() => evoSendTextRaw(tenantId, instanceName, number, text), 3, 1200);
 }
 
 async function evoDeleteMessage(
@@ -326,22 +528,69 @@ async function generateElevenLabsAudio(
   }
 }
 
+async function evoSendAudioRaw(
+  tenantId: string,
+  instanceName: string,
+  number: string,
+  audioUrl: string,
+): Promise<DeliveryResult> {
+  const startedAt = performance.now();
+  const cfg = await getEvoConfig(tenantId);
+  if (!cfg.key) {
+    return {
+      ok: false,
+      errorMessage: "EVOLUTION_API_KEY ausente ou não configurada",
+      errorType: "authentication",
+      latencyMs: 0,
+      attempts: 1,
+    };
+  }
+
+  const targetNumber = cleanPhoneNumber(number);
+  let r: Response;
+  let rawResponseText = "";
+  try {
+    r = await fetch(`${cfg.url}/message/sendAudio/${encodeURIComponent(instanceName)}`, {
+      method: "POST",
+      headers: { apikey: cfg.key, "Content-Type": "application/json" },
+      body: JSON.stringify({ number: targetNumber, audio: audioUrl }),
+      signal: AbortSignal.timeout(20000),
+    });
+    rawResponseText = await r.text();
+  } catch (e: unknown) {
+    const msg = e instanceof Error ? e.message : String(e);
+    return {
+      ok: false,
+      errorMessage: msg,
+      errorType: classifyDeliveryError(msg),
+      latencyMs: Math.round(performance.now() - startedAt),
+      attempts: 1,
+    };
+  }
+
+  const latencyMs = Math.round(performance.now() - startedAt);
+  if (!r.ok) {
+    const errMsg = `sendAudio ${r.status}: ${rawResponseText.slice(0, 300)}`;
+    return {
+      ok: false,
+      httpStatus: r.status,
+      errorMessage: errMsg,
+      errorType: classifyDeliveryError(errMsg),
+      rawResponse: rawResponseText.slice(0, 5000),
+      latencyMs,
+      attempts: 1,
+    };
+  }
+  return { ok: true, latencyMs, attempts: 1, httpStatus: r.status };
+}
+
 async function evoSendAudio(
   tenantId: string,
   instanceName: string,
   number: string,
   audioUrl: string,
-) {
-  const cfg = await getEvoConfig(tenantId);
-  if (!cfg.key) throw new Error("EVOLUTION_API_KEY ausente ou não configurada");
-
-  const targetNumber = cleanPhoneNumber(number);
-  const r = await fetch(`${cfg.url}/message/sendAudio/${encodeURIComponent(instanceName)}`, {
-    method: "POST",
-    headers: { apikey: cfg.key, "Content-Type": "application/json" },
-    body: JSON.stringify({ number: targetNumber, audio: audioUrl }),
-  });
-  if (!r.ok) throw new Error(`sendAudio ${r.status}: ${(await r.text()).slice(0, 200)}`);
+): Promise<DeliveryResult> {
+  return withEvoRetry(() => evoSendAudioRaw(tenantId, instanceName, number, audioUrl), 3, 1500);
 }
 
 async function evoSendPresence(
@@ -358,6 +607,7 @@ async function evoSendPresence(
       method: "POST",
       headers: { apikey: cfg.key, "Content-Type": "application/json" },
       body: JSON.stringify({ number: targetNumber, presence }),
+      signal: AbortSignal.timeout(5000),
     });
   } catch (e) {
     console.warn("[evoSendPresence] erro:", e);
@@ -370,12 +620,20 @@ async function evoSendButtons(
   number: string,
   text: string,
   buttons: string[],
-) {
+): Promise<DeliveryResult> {
+  const targetNumber = cleanPhoneNumber(number);
   try {
     const cfg = await getEvoConfig(tenantId);
-    if (!cfg.key) throw new Error("EVOLUTION_API_KEY ausente ou não configurada");
+    if (!cfg.key) {
+      return {
+        ok: false,
+        errorMessage: "EVOLUTION_API_KEY ausente ou não configurada",
+        errorType: "authentication",
+        latencyMs: 0,
+        attempts: 1,
+      };
+    }
 
-    const targetNumber = cleanPhoneNumber(number);
     const r = await fetch(`${cfg.url}/message/sendButtons/${encodeURIComponent(instanceName)}`, {
       method: "POST",
       headers: { apikey: cfg.key, "Content-Type": "application/json" },
@@ -389,22 +647,23 @@ async function evoSendButtons(
           id: `btn_${index}_${Date.now()}`,
         })),
       }),
+      signal: AbortSignal.timeout(15000),
     });
 
     if (!r.ok) {
       const errText = await r.text();
-      console.warn("[EvoButtons] Erro ao enviar botões nativos:", errText);
-      // Fallback: enviar como texto comum formatado
-      await evoSendText(
+      console.warn("[EvoButtons] Erro ao enviar botões nativos, usando fallback texto:", errText);
+      return evoSendText(
         tenantId,
         instanceName,
         targetNumber,
         `${text}\n\n*Escolha uma opção:*\n${buttons.map((b) => `👉 *${b}*`).join("\n")}`,
       );
     }
+    return { ok: true, latencyMs: 0, attempts: 1, httpStatus: r.status };
   } catch (e) {
     console.error("[EvoButtons] erro no envio, usando fallback de texto:", e);
-    await evoSendText(
+    return evoSendText(
       tenantId,
       instanceName,
       number,
@@ -473,18 +732,48 @@ async function applyAction(
     ctx.updates.status = act.value;
   } else if (act.type === "reply" && act.value) {
     try {
-      await evoSendText(ctx.tenantId, ctx.instanceName, ctx.number, act.value);
+      const res = await evoSendText(ctx.tenantId, ctx.instanceName, ctx.number, act.value);
       const rid = `auto_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
-      await supabase.from("messages").upsert({
-        id: rid,
-        tenantId: ctx.tenantId,
-        conversationId: ctx.convId,
-        text: act.value,
-        fromMe: true,
-        createdAt: new Date().toISOString(),
-        automation: ruleName,
-      });
-      replied = true;
+      try {
+        await supabase.from("messages").upsert({
+          id: rid,
+          tenantId: ctx.tenantId,
+          conversationId: ctx.convId,
+          text: act.value,
+          fromMe: true,
+          createdAt: new Date().toISOString(),
+          automation: ruleName,
+          whatsappMessageId: res.whatsappMessageId || null,
+          deliveryStatus: res.ok ? "sent" : "failed",
+          deliveryError: res.ok ? null : (res.errorMessage || "").slice(0, 1000),
+        });
+      } catch {
+        await supabase.from("messages").upsert({
+          id: rid,
+          tenantId: ctx.tenantId,
+          conversationId: ctx.convId,
+          text: act.value,
+          fromMe: true,
+          createdAt: new Date().toISOString(),
+          automation: ruleName,
+        });
+      }
+      if (!res.ok) {
+        try {
+          await registerDeliveryFailure({
+            tenantId: ctx.tenantId,
+            instanceName: ctx.instanceName,
+            remoteJid: ctx.number,
+            conversationId: ctx.convId,
+            errorType: res.errorType,
+            errorMessage: res.errorMessage || "automation reply failure",
+            httpStatus: res.httpStatus,
+            rawResponse: res.rawResponse,
+            retryCount: res.attempts,
+          });
+        } catch {}
+      }
+      replied = res.ok;
     } catch (e) {
       console.error("[automation reply] erro:", e);
     }
@@ -1355,26 +1644,63 @@ Caso contrário, apenas responda de forma prestativa confirmando que entendeu ou
 
   reply = reply.replace(/\[ACTION:.*?\]/g, "").trim();
 
-  // Enviar de volta ao dono
-  await evoSendText(tenantId, instanceName, remoteJid, reply);
+  // Enviar de volta ao dono com tracking de delivery
+  const sendResult = await evoSendText(tenantId, instanceName, remoteJid, reply);
 
   // Registrar mensagem do bot
   const replyId = `bot_owner_${Date.now()}`;
-  await supabase.from("messages").upsert({
-    id: replyId,
-    tenantId,
-    conversationId: convId,
-    text: reply,
-    fromMe: true,
-    bot: true,
-    agentId: agent.id,
-    createdAt: new Date().toISOString(),
-  });
+  try {
+    await supabase.from("messages").upsert({
+      id: replyId,
+      tenantId,
+      conversationId: convId,
+      text: reply,
+      fromMe: true,
+      bot: true,
+      agentId: agent.id,
+      createdAt: new Date().toISOString(),
+      whatsappMessageId: sendResult.whatsappMessageId || null,
+      deliveryStatus: sendResult.ok ? "sent" : "failed",
+      deliveryError: sendResult.ok ? null : (sendResult.errorMessage || "").slice(0, 1000),
+    });
+  } catch {
+    await supabase.from("messages").upsert({
+      id: replyId,
+      tenantId,
+      conversationId: convId,
+      text: reply,
+      fromMe: true,
+      bot: true,
+      agentId: agent.id,
+      createdAt: new Date().toISOString(),
+    });
+  }
+
+  if (!sendResult.ok) {
+    try {
+      await registerDeliveryFailure({
+        tenantId,
+        instanceName,
+        remoteJid,
+        conversationId: convId,
+        agentId: agent.id,
+        errorType: sendResult.errorType,
+        errorMessage: sendResult.errorMessage || "directLine send failure",
+        httpStatus: sendResult.httpStatus,
+        rawResponse: sendResult.rawResponse,
+        retryCount: sendResult.attempts,
+      });
+    } catch {}
+  }
 
   // Registrar em ai_logs para faturamento/analytics
   const latencyMs = Date.now() - t0;
   try {
     const logId = `log_owner_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
+    const finalOk = !llmError && !!reply && sendResult.ok;
+    const finalError = finalOk
+      ? llmError
+      : (sendResult.errorMessage || llmError || "delivery failed").slice(0, 2000);
     await supabase.from("ai_logs").upsert({
       id: logId,
       tenantId,
@@ -1391,16 +1717,21 @@ Caso contrário, apenas responda de forma prestativa confirmando que entendeu ou
       reply: reply.slice(0, 4000),
       systemPromptChars: directLineSystemPrompt.length,
       latencyMs,
-      ok: !llmError && !!reply,
-      error: llmError,
+      ok: finalOk,
+      error: finalError,
       inputTokens,
       outputTokens,
+      deliveryStatus: sendResult.ok ? "sent" : "failed",
+      deliveryError: sendResult.ok ? null : (sendResult.errorMessage || "").slice(0, 2000),
+      deliveryLatencyMs: sendResult.latencyMs,
+      deliveryAttempts: sendResult.attempts,
+      whatsappMessageId: sendResult.whatsappMessageId || null,
     });
   } catch (e) {
     console.warn("[ai_logs] directLine log falhou:", e);
   }
 
-  return { ok: true };
+  return { ok: sendResult.ok, deliveryError: sendResult.errorMessage };
 }
 
 // ===== Bridge principal =====
@@ -1825,9 +2156,9 @@ async function runBridge(
 
   const ragSuccess = !reply.includes("Vou verificar isso para você agora.");
 
-  // 5) Log de trace
+  // 5) Log de trace - criado ANTES do envio com deliveryStatus=pending
+  let logId = `log_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
   try {
-    const logId = `log_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
     await supabase.from("ai_logs").upsert({
       id: logId,
       tenantId,
@@ -1849,17 +2180,39 @@ async function runBridge(
       inputTokens,
       outputTokens,
       ragSuccess,
+      deliveryStatus: "pending",
+      deliveryAttempts: 0,
     });
   } catch (e) {
-    console.warn("[ai_logs] falhou:", e);
+    console.warn("[ai_logs] falhou ao inserir log inicial:", e);
   }
 
-  if (llmError) return { error: llmError, latencyMs };
-  if (!reply) return { skipped: "empty-reply", latencyMs };
+  if (llmError) {
+    try {
+      await supabase
+        .from("ai_logs")
+        .update({
+          deliveryStatus: "failed",
+          deliveryError: `LLM error: ${(llmError || "").toString().slice(0, 2000)}`,
+        })
+        .eq("id", logId);
+    } catch {}
+    return { error: llmError, latencyMs };
+  }
+  if (!reply) {
+    try {
+      await supabase
+        .from("ai_logs")
+        .update({ deliveryStatus: "failed", deliveryError: "empty reply from LLM" })
+        .eq("id", logId);
+    } catch {}
+    return { skipped: "empty-reply", latencyMs };
+  }
 
-  // 6) Enviar via WhatsApp ou Voz
+  // 6) Enviar via WhatsApp ou Voz - AGORA CAPTURAMOS DELIVERY RESULT
   const targetDestination = remoteJid;
   let sentAudioUrl: string | null = null;
+  let lastDelivery: DeliveryResult = { ok: false, latencyMs: 0, attempts: 0 };
 
   const { data: tenant } = await supabase
     .from("tenants")
@@ -1886,19 +2239,25 @@ async function runBridge(
         sentAudioUrl = audioUrl;
         console.log(`[bridge] Áudio gerado: ${audioUrl}. Enviando ao WhatsApp...`);
         evoSendPresence(tenantId, instanceName, targetDestination, "recording").catch(() => {});
-        await evoSendAudio(tenantId, instanceName, targetDestination, audioUrl);
+        lastDelivery = await evoSendAudio(tenantId, instanceName, targetDestination, audioUrl);
+        if (!lastDelivery.ok) {
+          console.warn(
+            `[bridge] Falha ao enviar áudio (${lastDelivery.errorType}). Fallback para texto.`,
+          );
+          evoSendPresence(tenantId, instanceName, targetDestination, "composing").catch(() => {});
+          lastDelivery = await evoSendText(tenantId, instanceName, targetDestination, reply);
+        }
       } else {
         console.warn("[bridge] Falha na geração do áudio. Usando texto de fallback.");
         evoSendPresence(tenantId, instanceName, targetDestination, "composing").catch(() => {});
-        await evoSendText(tenantId, instanceName, targetDestination, reply);
+        lastDelivery = await evoSendText(tenantId, instanceName, targetDestination, reply);
       }
     } catch (e) {
       console.error("[bridge] Erro ao enviar áudio. Usando texto de fallback:", e);
       evoSendPresence(tenantId, instanceName, targetDestination, "composing").catch(() => {});
-      await evoSendText(tenantId, instanceName, targetDestination, reply);
+      lastDelivery = await evoSendText(tenantId, instanceName, targetDestination, reply);
     }
   } else {
-    // Verificar se a resposta tem a tag de botões interativos
     const buttonRegex = /\[BUTTONS:\s*(.*?)\s*\]/i;
     const btnMatch = reply.match(buttonRegex);
     if (btnMatch) {
@@ -1909,25 +2268,94 @@ async function runBridge(
       const cleanReply = reply.replace(buttonRegex, "").trim();
 
       evoSendPresence(tenantId, instanceName, targetDestination, "composing").catch(() => {});
-      await evoSendButtons(tenantId, instanceName, targetDestination, cleanReply, buttons);
+      lastDelivery = await evoSendButtons(
+        tenantId,
+        instanceName,
+        targetDestination,
+        cleanReply,
+        buttons,
+      );
     } else {
       evoSendPresence(tenantId, instanceName, targetDestination, "composing").catch(() => {});
-      await evoSendText(tenantId, instanceName, targetDestination, reply);
+      lastDelivery = await evoSendText(tenantId, instanceName, targetDestination, reply);
     }
+  }
+
+  // 6.5) ATUALIZAR ai_logs com STATUS DE ENTREGA DEPOIS DO ENVIO
+  try {
+    const finalOk = !llmError && !!reply && lastDelivery.ok;
+    const finalDeliveryErr = lastDelivery.ok
+      ? null
+      : (lastDelivery.errorMessage || "").slice(0, 2000) || "unknown delivery failure";
+    await supabase.from("ai_logs").upsert({
+      id: logId,
+      ok: finalOk,
+      deliveryStatus: lastDelivery.ok ? "sent" : "failed",
+      deliveryError: finalDeliveryErr,
+      deliveryLatencyMs: lastDelivery.latencyMs,
+      deliveryAttempts: lastDelivery.attempts,
+      whatsappMessageId: lastDelivery.whatsappMessageId || null,
+      error: finalOk ? llmError : finalDeliveryErr || llmError,
+    });
+  } catch (e) {
+    console.warn("[ai_logs] falhou ao atualizar status de entrega:", e);
+  }
+
+  // 6.6) Se FALHA de entrega → REGISTRAR EM delivery_failures para alerta
+  if (!lastDelivery.ok) {
+    console.error(
+      `[bridge] FALHA DE ENTREGA WhatsApp instance=${instanceName} remoteJid=${remoteJid} attempts=${lastDelivery.attempts} type=${lastDelivery.errorType} err=${lastDelivery.errorMessage}`,
+    );
+    await registerDeliveryFailure({
+      tenantId,
+      instanceName,
+      remoteJid,
+      conversationId: convId,
+      agentId: agent.id,
+      logId,
+      errorType: lastDelivery.errorType,
+      errorMessage: lastDelivery.errorMessage || "Erro de envio sem mensagem",
+      httpStatus: lastDelivery.httpStatus,
+      rawResponse: lastDelivery.rawResponse,
+      retryCount: lastDelivery.attempts,
+    });
   }
 
   // 7) Registrar resposta do bot no Supabase
   const replyId = `bot_${Date.now()}`;
-  await supabase.from("messages").upsert({
-    id: replyId,
-    tenantId,
-    conversationId: convId,
-    text: sentAudioUrl ? `[áudio] ${reply}` : reply,
-    fromMe: true,
-    bot: true,
-    agentId: agent.id,
-    createdAt: new Date().toISOString(),
-  });
+  try {
+    await supabase.from("messages").upsert({
+      id: replyId,
+      tenantId,
+      conversationId: convId,
+      text: sentAudioUrl ? `[áudio] ${reply}` : reply,
+      fromMe: true,
+      bot: true,
+      agentId: agent.id,
+      createdAt: new Date().toISOString(),
+      whatsappMessageId: lastDelivery.whatsappMessageId || null,
+      deliveryStatus: lastDelivery.ok ? "sent" : "failed",
+      deliveryError: lastDelivery.ok ? null : (lastDelivery.errorMessage || "").slice(0, 1000),
+    });
+  } catch (e) {
+    // Se as colunas whatsappMessageId/deliveryStatus não existirem ainda,
+    // faz insert fallback sem elas
+    console.warn("[messages] tentando fallback por coluna inexistente:", e);
+    try {
+      await supabase.from("messages").upsert({
+        id: replyId,
+        tenantId,
+        conversationId: convId,
+        text: sentAudioUrl ? `[áudio] ${reply}` : reply,
+        fromMe: true,
+        bot: true,
+        agentId: agent.id,
+        createdAt: new Date().toISOString(),
+      });
+    } catch (e2) {
+      console.warn("[messages] também falhou no fallback:", e2);
+    }
+  }
 
   // Verifica se a resposta da IA indica transferência para suporte especializado ou frustração
   const isFrustrated = reply.includes("[FRUSTRATED]");
@@ -2054,36 +2482,56 @@ async function handleMessage(
     let isBotEcho = messageId.startsWith("bot_") || messageId.startsWith("auto_");
     if (!isBotEcho) {
       try {
-        const { data: recentBot } = await supabase
+        // Estratégia 1: verificar pelo whatsappMessageId salvo na tabela messages (mais confiável)
+        const { data: byMsgId } = await supabase
           .from("messages")
-          .select("text, createdAt")
-          .eq("conversationId", convId)
-          .eq("fromMe", true)
+          .select("id")
+          .eq("whatsappMessageId", messageId)
           .eq("bot", true)
-          .order("createdAt", { ascending: false })
           .limit(1);
+        if (byMsgId && byMsgId.length > 0) {
+          isBotEcho = true;
+        }
+      } catch {
+        /* ignora, tenta estratégia 2 */
+      }
 
-        if (recentBot && recentBot.length > 0) {
-          const botTime = new Date(recentBot[0].createdAt).getTime();
-          const diffMs = Date.now() - botTime;
-          if (diffMs < 30000) {
-            const cleanBotText = recentBot[0].text.replace(/^\[áudio\]\s*/, "").trim();
-            const cleanIncomingText = text.replace(/^\[áudio\]\s*/, "").trim();
-            if (
-              cleanBotText === cleanIncomingText ||
-              (cleanBotText.length > 15 && cleanIncomingText.startsWith(cleanBotText.slice(0, 30)))
-            ) {
-              isBotEcho = true;
+      if (!isBotEcho) {
+        try {
+          // Estratégia 2: fallback por comparação de texto dentro de janela de 60s
+          const { data: recentBot } = await supabase
+            .from("messages")
+            .select("text, createdAt")
+            .eq("conversationId", convId)
+            .eq("fromMe", true)
+            .eq("bot", true)
+            .order("createdAt", { ascending: false })
+            .limit(3);
+
+          if (recentBot && recentBot.length > 0) {
+            for (const botMsg of recentBot) {
+              const botTime = new Date(botMsg.createdAt).getTime();
+              const diffMs = Date.now() - botTime;
+              if (diffMs > 60000) break;
+              const cleanBotText = botMsg.text.replace(/^\[áudio\]\s*/, "").trim();
+              const cleanIncomingText = text.replace(/^\[áudio\]\s*/, "").trim();
+              if (
+                cleanBotText === cleanIncomingText ||
+                (cleanBotText.length > 15 && cleanIncomingText.startsWith(cleanBotText.slice(0, 40)))
+              ) {
+                isBotEcho = true;
+                break;
+              }
             }
           }
+        } catch (echoErr) {
+          console.warn("[webhook] Erro ao verificar bot echo:", echoErr);
         }
-      } catch (echoErr) {
-        console.warn("[webhook] Erro ao verificar bot echo:", echoErr);
       }
     }
 
     if (isBotEcho) {
-      console.log(`[webhook] 🤖 Eco do próprio Bot para ${convId}. Ignorando para não pausar.`);
+      console.log(`[webhook] 🤖 Eco do próprio Bot para ${convId} (msgId=${messageId}). Ignorando para não pausar.`);
       return Response.json({ ok: true, ignored: "bot_echo" });
     }
   }
@@ -2500,20 +2948,64 @@ async function handleMessage(
       );
       return Response.json({ ok: true, automations: auto, bridge: { skipped: "bot-paused" } });
     }
-    console.log(
-      `[webhook] Encaminhando para bridge IA: instance=${instanceName}, convId=${convId}, text="${text.slice(0, 50)}..."`,
-    );
-    const bridge = await runBridge(
-      tenantId,
-      instanceName,
-      remoteJid,
-      text,
-      convId,
-      isAudio,
-      imageBase64,
-    );
-    console.log(`[webhook] Bridge result:`, JSON.stringify(bridge).slice(0, 300));
-    return Response.json({ ok: true, automations: auto, bridge });
+
+    // Debounce: acumula mensagens rápidas do mesmo contato (ex: "olá" + "boa tarde" + "oi")
+    // e chama o LLM apenas uma vez com o texto consolidado
+    const debounceKey = `${tenantId}:${convId}`;
+    const existing = messageDebounce.get(debounceKey);
+    if (existing) {
+      clearTimeout(existing.timer);
+      existing.texts.push(text);
+      // Atualizar isAudio/imageBase64 se a última mensagem for áudio ou imagem
+      if (isAudio) existing.isAudio = true;
+      if (imageBase64) existing.imageBase64 = imageBase64;
+      console.log(
+        `[webhook] Debounce: acumulando mensagem #${existing.texts.length} para ${convId}: "${text.slice(0, 40)}"`,
+      );
+    }
+
+    const accumulatedTexts = existing ? existing.texts : [text];
+    const debounceIsAudio = existing ? existing.isAudio : isAudio;
+    const debounceImageBase64 = existing ? existing.imageBase64 : imageBase64;
+
+    const timer = setTimeout(async () => {
+      messageDebounce.delete(debounceKey);
+      const finalText = accumulatedTexts.join("\n");
+      console.log(
+        `[webhook] Debounce disparado: ${accumulatedTexts.length} msg(s) consolidada(s) para ${convId}: "${finalText.slice(0, 80)}"`,
+      );
+      try {
+        const bridge = await runBridge(
+          tenantId,
+          instanceName,
+          remoteJid,
+          finalText,
+          convId,
+          debounceIsAudio,
+          debounceImageBase64,
+        );
+        console.log(`[webhook] Bridge result (debounce):`, JSON.stringify(bridge).slice(0, 300));
+      } catch (e) {
+        console.error("[bridge] erro (debounce):", e);
+      }
+    }, DEBOUNCE_MS);
+
+    if (existing) {
+      existing.timer = timer;
+    } else {
+      messageDebounce.set(debounceKey, {
+        timer,
+        texts: accumulatedTexts,
+        tenantId,
+        instanceName,
+        remoteJid,
+        convId,
+        isAudio,
+        imageBase64,
+      });
+    }
+
+    return Response.json({ ok: true, automations: auto, bridge: { debounced: true, pendingTexts: accumulatedTexts.length } });
   } catch (e) {
     console.error("[bridge] erro:", e);
     return Response.json({ ok: true, bridgeError: e instanceof Error ? e.message : String(e) });
@@ -2664,9 +3156,53 @@ export const Route = createFileRoute("/api/public/evolution-webhook")({
                 autoReply: linkedAgent.autoReply,
                 hasProvider: !!linkedAgent.providerId,
                 hasModel: !!linkedAgent.model,
+                status: linkedAgent.status,
               }
             : { found: false, error: "Nenhum agente vinculado a esta instância" };
+
+          // Verificar config Evolution API para este tenant
+          if (idx?.tenantId) {
+            const { data: tenantCfg } = await supabase
+              .from("tenants")
+              .select("evolutionApiUrl, evolutionApiKey, status, planExpiresAt")
+              .eq("id", idx.tenantId)
+              .single();
+            const globalCfg = await getGlobalEvoConfig();
+            diagnostics.evoConfig = {
+              source: tenantCfg?.evolutionApiUrl && tenantCfg?.evolutionApiKey ? "tenant" : "global",
+              url: tenantCfg?.evolutionApiUrl || globalCfg.url,
+              keyPresent: !!(tenantCfg?.evolutionApiKey || globalCfg.key),
+              tenantStatus: tenantCfg?.status,
+              planExpiresAt: tenantCfg?.planExpiresAt,
+              expired: tenantCfg?.planExpiresAt ? new Date() > new Date(tenantCfg.planExpiresAt) : false,
+            };
+
+            // Testar conectividade da instância na Evolution API
+            const connCheck = await checkInstanceOnline(idx.tenantId, instanceName);
+            diagnostics.instanceConnection = connCheck;
+
+            // Mostrar falhas de entrega recentes desta instância
+            const { data: recentFailures } = await supabase
+              .from("delivery_failures")
+              .select("errorType, errorMessage, httpStatus, createdAt")
+              .eq("instanceName", instanceName)
+              .order("createdAt", { ascending: false })
+              .limit(5);
+            diagnostics.recentDeliveryFailures = recentFailures || [];
+          }
         }
+
+        // Instâncias com agente mas sem entrada no instance_index (causa raiz mais comum)
+        const registeredInstanceNames = new Set(
+          ((allInstances || []) as any[]).map((i: any) => i.instanceName),
+        );
+        diagnostics.missingFromIndex = ((allAgents || []) as any[])
+          .filter((a: any) => a.whatsappInstanceId && !registeredInstanceNames.has(a.whatsappInstanceId))
+          .map((a: any) => ({
+            agentName: a.name,
+            whatsappInstanceId: a.whatsappInstanceId,
+            fix: `GET ?action=fix-instances`,
+          }));
 
         return Response.json(diagnostics);
       },

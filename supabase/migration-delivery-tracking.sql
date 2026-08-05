@@ -73,9 +73,18 @@ group by "tenantId", "instanceName";
 -- 5. POLICIES
 alter table public.delivery_failures enable row level security;
 
-create policy if not exists "delivery_failures_all"
-  on public.delivery_failures for all to authenticated
-  using (true) with check (true);
+do $$
+begin
+  if not exists (
+    select 1 from pg_policies 
+    where tablename = 'delivery_failures' 
+    and policyname = 'delivery_failures_all'
+  ) then
+    create policy "delivery_failures_all"
+      on public.delivery_failures for all to authenticated
+      using (true) with check (true);
+  end if;
+end $$;
 
 -- 6. Funcao auxiliar para classificar tipo de erro
 create or replace function public.classify_delivery_error(error_msg text)
